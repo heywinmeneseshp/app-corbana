@@ -1,7 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import {
+  FiPlus,
+  FiRefreshCw,
+  FiSettings,
+  FiSearch,
+  FiEye,
+  FiEdit2,
+  FiTrash2,
+  FiSave,
+  FiX,
+} from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
+import ModalShell from "@/components/ModalShell";
+import RequirePermission from "@/components/RequirePermission";
+import { hasPermission } from "@/lib/auth";
 
 export default function FincasPage() {
   const [fincas, setFincas] = useState([]);
@@ -72,6 +86,7 @@ export default function FincasPage() {
   };
 
   return (
+    <RequirePermission code="finca.ver">
     <div className="p-4 p-md-5">
       <div className="mb-4">
         <h1 className="fw-bold h3 mb-1">Fincas</h1>
@@ -79,25 +94,28 @@ export default function FincasPage() {
       </div>
 
       <div className="d-flex flex-column flex-sm-row gap-2 mb-3">
-        <div className="flex-grow-1">
+        <div className="flex-grow-1 position-relative">
+          <FiSearch className="position-absolute text-secondary" style={{ top: "0.65rem", left: "0.75rem" }} />
           <input
             type="text"
-            className="form-control rounded-3"
+            className="form-control rounded-3 ps-5"
             placeholder="Buscar por nombre o código..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && loadFincas()}
           />
         </div>
-        <button type="button" className="btn btn-brand rounded-3 text-nowrap" onClick={() => setFincaModal({})}>
-          + Nueva Finca
-        </button>
+        {hasPermission("finca.crear") && (
+          <button type="button" className="btn btn-brand rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setFincaModal({})}>
+            <FiPlus /> Nueva Finca
+          </button>
+        )}
         <button
           type="button"
-          className="btn btn-outline-secondary rounded-3 text-nowrap"
+          className="btn btn-outline-secondary rounded-3 text-nowrap d-flex align-items-center gap-1"
           onClick={() => setSyncModal(true)}
         >
-          Sincronizar con banarica
+          <FiRefreshCw /> Sincronizar con banarica
         </button>
         <button
           type="button"
@@ -105,7 +123,7 @@ export default function FincasPage() {
           title="Configurar enlace del API de banarica"
           onClick={() => setConfigModal(true)}
         >
-          ⚙
+          <FiSettings />
         </button>
       </div>
 
@@ -116,8 +134,8 @@ export default function FincasPage() {
           <span className="small fw-medium" style={{ color: "var(--brand-900)" }}>
             {selected.size} finca(s) seleccionada(s)
           </span>
-          <button type="button" className="btn btn-link btn-sm text-danger text-decoration-none" onClick={handleBulkDelete}>
-            Eliminar seleccionadas
+          <button type="button" className="btn btn-link btn-sm text-danger text-decoration-none d-flex align-items-center gap-1" onClick={handleBulkDelete}>
+            <FiTrash2 /> Eliminar seleccionadas
           </button>
         </div>
       )}
@@ -179,28 +197,36 @@ export default function FincasPage() {
                         <span className="badge rounded-pill text-bg-secondary">Inactivo</span>
                       )}
                     </td>
-                    <td className="text-end">
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline-secondary me-2"
-                        onClick={() => setLotesModal(finca)}
-                      >
-                        Ver lotes
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline-secondary me-2"
-                        onClick={() => setFincaModal(finca)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline-danger"
-                        onClick={() => handleDeleteOne(finca.uuid)}
-                      >
-                        Eliminar
-                      </button>
+                    <td>
+                      <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap"
+                          onClick={() => setLotesModal(finca)}
+                        >
+                          <FiEye /> Ver lotes
+                        </button>
+                        {hasPermission("finca.editar") && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-warning"
+                            title="Editar"
+                            onClick={() => setFincaModal(finca)}
+                          >
+                            <FiEdit2 />
+                          </button>
+                        )}
+                        {hasPermission("finca.eliminar") && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            title="Eliminar"
+                            onClick={() => handleDeleteOne(finca.uuid)}
+                          >
+                            <FiTrash2 />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -226,6 +252,7 @@ export default function FincasPage() {
 
       {syncModal && <SyncModal onClose={() => setSyncModal(false)} onSynced={loadFincas} />}
     </div>
+    </RequirePermission>
   );
 }
 
@@ -293,11 +320,11 @@ function FincaModal({ finca, onClose, onSaved }) {
         </div>
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
         <div className="d-flex gap-2">
-          <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1" onClick={onClose}>
-            Cancelar
+          <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+            <FiX /> Cancelar
           </button>
-          <button type="submit" disabled={saving} className="btn btn-brand rounded-3 flex-grow-1">
-            {saving ? "Guardando..." : "Guardar Finca"}
+          <button type="submit" disabled={saving} className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
+            <FiSave /> {saving ? "Guardando..." : "Guardar Finca"}
           </button>
         </div>
       </form>
@@ -311,6 +338,12 @@ function LotesModal({ finca, onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [areaProdMap, setAreaProdMap] = useState({});
+  const [expanded, setExpanded] = useState(null); // { uuid, type: 'area' | 'editar' } | null
+
+  const toggle = (uuid, type) => {
+    setExpanded((prev) => (prev && prev.uuid === uuid && prev.type === type ? null : { uuid, type }));
+  };
 
   async function loadLotes() {
     setLoading(true);
@@ -318,6 +351,13 @@ function LotesModal({ finca, onClose }) {
     try {
       const { items } = await apiFetch(`/fincas/${finca.uuid}/lotes?limit=100`);
       setLotes(items);
+      const entries = await Promise.all(
+        items.map(async (lote) => {
+          const { items: historial } = await apiFetch(`/lotes/${lote.uuid}/area-produccion?limit=1`);
+          return [lote.uuid, historial[0] || null];
+        }),
+      );
+      setAreaProdMap(Object.fromEntries(entries));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -336,8 +376,16 @@ function LotesModal({ finca, onClose }) {
 
       <div className="d-flex justify-content-between align-items-center mb-3">
         <span className="small text-secondary">Código: {finca.codigo}</span>
-        <button type="button" className="btn btn-sm btn-brand rounded-3" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Cancelar" : "+ Nuevo Lote"}
+        <button type="button" className="btn btn-sm btn-brand rounded-3 d-inline-flex align-items-center gap-1" onClick={() => setShowForm((v) => !v)}>
+          {showForm ? (
+            <>
+              <FiX /> Cancelar
+            </>
+          ) : (
+            <>
+              <FiPlus /> Nuevo Lote
+            </>
+          )}
         </button>
       </div>
 
@@ -356,44 +404,116 @@ function LotesModal({ finca, onClose }) {
           <thead className="table-light">
             <tr>
               <th>Lote</th>
-              <th>Área (Ha)</th>
+              <th>Área Disponible</th>
+              <th>Área en Producción</th>
               <th>Estado</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={3} className="text-center text-secondary py-3">
+                <td colSpan={5} className="text-center text-secondary py-3">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && lotes.length === 0 && (
               <tr>
-                <td colSpan={3} className="text-center text-secondary py-3">
+                <td colSpan={5} className="text-center text-secondary py-3">
                   Esta finca todavía no tiene lotes.
                 </td>
               </tr>
             )}
             {!loading &&
-              lotes.map((lote) => (
-                <tr key={lote.uuid}>
-                  <td>
-                    <p className="mb-0">{lote.nombre}</p>
-                    <p className="small text-secondary mb-0">Código: {lote.codigo}</p>
-                  </td>
-                  <td>{lote.area != null ? `${Number(lote.area).toFixed(1)} Ha` : "—"}</td>
-                  <td>
-                    {lote.estado ? (
-                      <span className="badge rounded-pill" style={{ backgroundColor: "#d1fae5", color: "#047857" }}>
-                        Activo
-                      </span>
-                    ) : (
-                      <span className="badge rounded-pill text-bg-secondary">Inactivo</span>
+              lotes.map((lote) => {
+                const ultimo = areaProdMap[lote.uuid];
+                return (
+                  <Fragment key={lote.uuid}>
+                    <tr>
+                      <td>
+                        <p className="mb-0">{lote.nombre}</p>
+                        <p className="small text-secondary mb-0">Código: {lote.codigo}</p>
+                      </td>
+                      <td>{lote.area != null ? `${Number(lote.area).toFixed(1)} Ha` : "—"}</td>
+                      <td>
+                        {ultimo ? (
+                          <>
+                            <span>{Number(ultimo.area).toFixed(1)} Ha</span>
+                            <p className="small text-secondary mb-0">{ultimo.fechaRegistro}</p>
+                          </>
+                        ) : (
+                          <span className="text-secondary small">Sin registrar</span>
+                        )}
+                      </td>
+                      <td>
+                        {lote.estado ? (
+                          <span className="badge rounded-pill" style={{ backgroundColor: "#d1fae5", color: "#047857" }}>
+                            Activo
+                          </span>
+                        ) : (
+                          <span className="badge rounded-pill text-bg-secondary">Inactivo</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1 text-nowrap"
+                            onClick={() => toggle(lote.uuid, "editar")}
+                          >
+                            {expanded?.uuid === lote.uuid && expanded.type === "editar" ? (
+                              <FiX />
+                            ) : (
+                              <FiEdit2 />
+                            )}
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap"
+                            onClick={() => toggle(lote.uuid, "area")}
+                          >
+                            {expanded?.uuid === lote.uuid && expanded.type === "area" ? (
+                              <FiX />
+                            ) : (
+                              <FiRefreshCw />
+                            )}
+                            Área
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded?.uuid === lote.uuid && expanded.type === "area" && (
+                      <tr>
+                        <td colSpan={5} className="bg-light">
+                          <AreaProduccionForm
+                            loteUuid={lote.uuid}
+                            onRegistered={async () => {
+                              const { items: historial } = await apiFetch(`/lotes/${lote.uuid}/area-produccion?limit=1`);
+                              setAreaProdMap((prev) => ({ ...prev, [lote.uuid]: historial[0] || null }));
+                              setExpanded(null);
+                            }}
+                          />
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                </tr>
-              ))}
+                    {expanded?.uuid === lote.uuid && expanded.type === "editar" && (
+                      <tr>
+                        <td colSpan={5} className="bg-light">
+                          <EditarLoteForm
+                            lote={lote}
+                            onSaved={() => {
+                              setExpanded(null);
+                              loadLotes();
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
           </tbody>
         </table>
       </div>
@@ -401,9 +521,149 @@ function LotesModal({ finca, onClose }) {
   );
 }
 
+function EditarLoteForm({ lote, onSaved }) {
+  const [nombre, setNombre] = useState(lote.nombre);
+  const [codigo, setCodigo] = useState(lote.codigo);
+  const [area, setArea] = useState(lote.area ?? "");
+  const [estado, setEstado] = useState(lote.estado);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      await apiFetch(`/lotes/${lote.uuid}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          nombre,
+          codigo,
+          estado,
+          ...(area !== "" ? { area: Number(area) } : {}),
+        }),
+      });
+      onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="d-flex flex-wrap align-items-end gap-2 py-2">
+      <div>
+        <label className="form-label small mb-1">Nombre del lote</label>
+        <input
+          type="text"
+          required
+          className="form-control form-control-sm rounded-3"
+          style={{ width: "12rem" }}
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+        />
+      </div>
+      <div>
+        <label className="form-label small mb-1">Código</label>
+        <input
+          type="text"
+          required
+          className="form-control form-control-sm rounded-3"
+          style={{ width: "7rem" }}
+          value={codigo}
+          onChange={(e) => setCodigo(e.target.value)}
+        />
+      </div>
+      <div>
+        <label className="form-label small mb-1">Área (Ha)</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          className="form-control form-control-sm rounded-3"
+          style={{ width: "6rem" }}
+          value={area}
+          onChange={(e) => setArea(e.target.value)}
+        />
+      </div>
+      <div className="form-check pb-2">
+        <input
+          type="checkbox"
+          className="form-check-input"
+          id={`estado-${lote.uuid}`}
+          checked={estado}
+          onChange={(e) => setEstado(e.target.checked)}
+        />
+        <label className="form-check-label small" htmlFor={`estado-${lote.uuid}`}>
+          Activo
+        </label>
+      </div>
+      <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1 text-nowrap">
+        <FiSave /> {saving ? "Guardando..." : "Guardar"}
+      </button>
+      {error && <div className="alert alert-danger py-1 px-2 small mb-0 w-100">{error}</div>}
+    </form>
+  );
+}
+
+function AreaProduccionForm({ loteUuid, onRegistered }) {
+  const [area, setArea] = useState("");
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      await apiFetch(`/lotes/${loteUuid}/area-produccion`, {
+        method: "POST",
+        body: JSON.stringify({ area: Number(area), fecha }),
+      });
+      onRegistered();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="d-flex flex-wrap align-items-end gap-2 py-2">
+      <div>
+        <label className="form-label small mb-1">Nueva área en producción (Ha)</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          required
+          className="form-control form-control-sm rounded-3"
+          value={area}
+          onChange={(e) => setArea(e.target.value)}
+        />
+      </div>
+      <div>
+        <label className="form-label small mb-1">Fecha</label>
+        <input
+          type="date"
+          required
+          className="form-control form-control-sm rounded-3"
+          value={fecha}
+          onChange={(e) => setFecha(e.target.value)}
+        />
+      </div>
+      <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 d-inline-flex align-items-center gap-1">
+        <FiSave /> {saving ? "Guardando..." : "Registrar"}
+      </button>
+      {error && <span className="text-danger small ms-2">{error}</span>}
+    </form>
+  );
+}
+
 function NuevoLoteForm({ fincaUuid, onCreated }) {
   const [nombre, setNombre] = useState("");
-  const [codigo, setCodigo] = useState("");
   const [area, setArea] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -418,7 +678,6 @@ function NuevoLoteForm({ fincaUuid, onCreated }) {
         body: JSON.stringify({
           fincaUuid,
           nombre,
-          codigo,
           estado: true,
           ...(area ? { area: Number(area) } : {}),
         }),
@@ -433,8 +692,9 @@ function NuevoLoteForm({ fincaUuid, onCreated }) {
 
   return (
     <form onSubmit={handleSubmit} className="border rounded-3 p-3 mb-3 bg-light">
+      <p className="small text-secondary mb-2">El código del lote se genera automáticamente (código de la finca + consecutivo).</p>
       <div className="row g-2 mb-2">
-        <div className="col-12 col-sm-5">
+        <div className="col-12 col-sm-7">
           <input
             type="text"
             required
@@ -446,16 +706,6 @@ function NuevoLoteForm({ fincaUuid, onCreated }) {
         </div>
         <div className="col-6 col-sm-3">
           <input
-            type="text"
-            required
-            className="form-control form-control-sm rounded-3"
-            placeholder="Código"
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value)}
-          />
-        </div>
-        <div className="col-6 col-sm-2">
-          <input
             type="number"
             step="0.01"
             min="0"
@@ -466,8 +716,8 @@ function NuevoLoteForm({ fincaUuid, onCreated }) {
           />
         </div>
         <div className="col-12 col-sm-2">
-          <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 w-100">
-            {saving ? "..." : "Agregar"}
+          <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 w-100 d-flex align-items-center justify-content-center gap-1">
+            <FiPlus /> {saving ? "..." : "Agregar"}
           </button>
         </div>
       </div>
@@ -527,11 +777,11 @@ function ConfigModal({ onClose }) {
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
         {ok && <div className="alert alert-success py-2 small">{ok}</div>}
         <div className="d-flex gap-2">
-          <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1" onClick={onClose}>
-            Cancelar
+          <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+            <FiX /> Cancelar
           </button>
-          <button type="submit" disabled={saving || loading} className="btn btn-brand rounded-3 flex-grow-1">
-            {saving ? "Guardando..." : "Guardar enlace"}
+          <button type="submit" disabled={saving || loading} className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
+            <FiSave /> {saving ? "Guardando..." : "Guardar enlace"}
           </button>
         </div>
       </form>
@@ -638,31 +888,13 @@ function SyncModal({ onClose, onSynced }) {
       {result && <div className="alert alert-success py-2 small">{result}</div>}
 
       <div className="d-flex gap-2">
-        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1" onClick={onClose}>
-          Cancelar
+        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+          <FiX /> Cancelar
         </button>
-        <button type="button" disabled={syncing} className="btn btn-brand rounded-3 flex-grow-1" onClick={handleSync}>
-          {syncing ? "Sincronizando..." : "Sincronizar seleccionados"}
+        <button type="button" disabled={syncing} className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={handleSync}>
+          <FiRefreshCw /> {syncing ? "Sincronizando..." : "Sincronizar seleccionados"}
         </button>
       </div>
     </ModalShell>
-  );
-}
-
-function ModalShell({ title, onClose, children, size }) {
-  return (
-    <div
-      className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
-      style={{ backgroundColor: "rgba(15,23,42,0.4)", zIndex: 1050 }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-4 shadow p-4 w-100" style={{ maxWidth: size === "lg" ? "36rem" : "28rem" }}>
-        <div className="d-flex align-items-center justify-content-between mb-3">
-          <h3 className="h5 fw-bold mb-0">{title}</h3>
-          <button type="button" className="btn-close" onClick={onClose} aria-label="Cerrar"></button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }

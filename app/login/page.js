@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { saveSession } from "@/lib/auth";
 import styles from "./login.module.css";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api/v1";
@@ -31,8 +32,7 @@ export default function LoginPage() {
         throw new Error(data.message || "Credenciales inválidas");
       }
 
-      localStorage.setItem("corbana_access_token", data.data.accessToken);
-      localStorage.setItem("corbana_refresh_token", data.data.refreshToken);
+      saveSession(data.data);
       router.push("/");
     } catch (err) {
       setError(err.message);
