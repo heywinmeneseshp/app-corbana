@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiLogOut, FiChevronRight, FiUsers, FiShield, FiCalendar } from "react-icons/fi";
+import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiLogOut, FiChevronRight, FiUsers, FiShield, FiCalendar, FiRepeat } from "react-icons/fi";
 import { GiFarmTractor } from "react-icons/gi";
 import { PiPlantFill } from "react-icons/pi";
 import { clearSession, hasPermission, hasAnyPermission } from "@/lib/auth";
@@ -12,6 +12,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [maestrosOpen, setMaestrosOpen] = useState(pathname.startsWith("/maestros"));
+  const [racimosOpen, setRacimosOpen] = useState(pathname.startsWith("/racimos"));
   const [perms, setPerms] = useState(null); // null hasta montar en cliente, evita parpadeo/mismatch
 
   useEffect(() => {
@@ -21,6 +22,8 @@ export default function Sidebar() {
       roles: hasPermission("roles.ver"),
       semanas: hasPermission("semana.ver"),
       cargue: hasAnyPermission(["finca.crear", "lote.crear"]),
+      racimoMovimientoCrear: hasPermission("racimo_movimiento.crear"),
+      racimoMovimientoVer: hasPermission("racimo_movimiento.ver"),
     });
   }, []);
 
@@ -93,6 +96,39 @@ export default function Sidebar() {
                     Semanas
                   </Link>
                 )}
+                {perms.semanas && (
+                  <Link href="/maestros/calendario" className={navLinkClass(pathname === "/maestros/calendario")}>
+                    <FiCalendar size={16} />
+                    Calendario
+                  </Link>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {perms.racimoMovimientoCrear && (
+          <>
+            <button
+              type="button"
+              onClick={() => setRacimosOpen((v) => !v)}
+              className={`d-flex align-items-center justify-content-between gap-2 px-3 py-2 rounded-3 border-0 bg-transparent small ${
+                pathname.startsWith("/racimos") ? "text-white fw-medium" : "text-white-50"
+              }`}
+            >
+              <span className="d-flex align-items-center gap-2">
+                <FiRepeat size={18} />
+                Racimos
+              </span>
+              <FiChevronRight style={{ transform: racimosOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+            </button>
+
+            {racimosOpen && (
+              <div className="ps-4 d-flex flex-column gap-1">
+                <Link href="/racimos/repiques" className={navLinkClass(pathname === "/racimos/repiques")}>
+                  <FiRepeat size={16} />
+                  Registrar Repiques
+                </Link>
               </div>
             )}
           </>

@@ -30,6 +30,18 @@ const TOTAL_WEEKS_OPTIONS = [
   { value: 53, label: "53 semanas" },
 ];
 
+const COLOR_HEX = {
+  Azul: "#2563eb",
+  Blanco: "#f8fafc",
+  Amarillo: "#eab308",
+  Morado: "#7c3aed",
+  Rojo: "#dc2626",
+  Café: "#78350f",
+  Negro: "#111827",
+  Verde: "#16a34a",
+  Gris: "#6b7280",
+};
+
 export default function SemanasPage() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [fechaInicio, setFechaInicio] = useState("");
@@ -197,6 +209,7 @@ export default function SemanasPage() {
               <tr>
                 <th>Semana</th>
                 <th>Código</th>
+                <th>Color</th>
                 {weeks.length > 0 && <th>Fecha inicio</th>}
                 {weeks.length > 0 && <th>Fecha fin</th>}
                 <th>Estado</th>
@@ -206,14 +219,14 @@ export default function SemanasPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={6} className="text-center text-secondary py-4">
+                  <td colSpan={7} className="text-center text-secondary py-4">
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && weeks.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-secondary py-4">
+                  <td colSpan={7} className="text-center text-secondary py-4">
                     No hay semanas para {filterYear}. Usa el formulario de arriba para generar el año.
                   </td>
                 </tr>
@@ -226,6 +239,21 @@ export default function SemanasPage() {
                     </td>
                     <td>
                       <code className="small">{semana.codigo}</code>
+                    </td>
+                    <td>
+                      <span className="d-inline-flex align-items-center gap-2">
+                        <span
+                          style={{
+                            width: "0.85rem",
+                            height: "0.85rem",
+                            borderRadius: "50%",
+                            display: "inline-block",
+                            backgroundColor: COLOR_HEX[semana.color] || "#94a3b8",
+                            border: semana.color === "Blanco" ? "1px solid #cbd5e1" : "none",
+                          }}
+                        />
+                        <span className="small">{semana.color}</span>
+                      </span>
                     </td>
                     <td>{semana.fechaInicio}</td>
                     <td>{semana.fechaFin}</td>
