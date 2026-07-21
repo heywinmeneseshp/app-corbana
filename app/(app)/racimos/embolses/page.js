@@ -1,35 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FiPlus, FiTrash2, FiSave, FiRotateCcw, FiInfo, FiCheckCircle } from "react-icons/fi";
+import { FiPlus, FiTrash2, FiSave, FiRotateCcw, FiPackage, FiCheckCircle } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
-import { COLOR_EMOJI, ultimasSemanasConEdad } from "@/lib/semanaColor";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
 function emptyRow() {
-  return {
-    key: Math.random().toString(36).slice(2),
-    loteUuid: "",
-    semanaEmbolseUuid: "",
-    motivoRepiqueUuid: "",
-    cantidad: "",
-    cohortes: [],
-    resumen: null,
-  };
+  return { key: Math.random().toString(36).slice(2), loteUuid: "", cantidad: "" };
 }
 
-export default function RegistrarRepiquesPage() {
+export default function RegistrarEmbolsePage() {
   const [fincas, setFincas] = useState([]);
   const [lotes, setLotes] = useState([]);
   const [semanas, setSemanas] = useState([]);
-  const [motivos, setMotivos] = useState([]);
 
   const [fincaUuid, setFincaUuid] = useState("");
-  const [semanaRegistroUuid, setSemanaRegistroUuid] = useState("");
+  const [semanaEmbolseUuid, setSemanaEmbolseUuid] = useState("");
   const [fechaRegistro, setFechaRegistro] = useState(todayIso());
 
   const [rows, setRows] = useState([emptyRow()]);
@@ -44,18 +34,16 @@ export default function RegistrarRepiquesPage() {
       setLoading(true);
       try {
         const year = new Date().getFullYear();
-        const [fincasRes, semanasRes, motivosRes] = await Promise.all([
+        const [fincasRes, semanasRes] = await Promise.all([
           apiFetch("/fincas?limit=100"),
           apiFetch(`/semanas?limit=55&anio=${year}`),
-          apiFetch("/motivos-repique?limit=100"),
         ]);
         setFincas(fincasRes.items);
         setSemanas(semanasRes.items);
-        setMotivos(motivosRes.items.filter((m) => m.estado));
 
         const hoy = todayIso();
         const semanaHoy = semanasRes.items.find((s) => hoy >= s.fechaInicio && hoy <= s.fechaFin);
-        if (semanaHoy) setSemanaRegistroUuid(semanaHoy.uuid);
+        if (semanaHoy) setSemanaEmbolseUuid(semanaHoy.uuid);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -77,40 +65,6 @@ export default function RegistrarRepiquesPage() {
 
   function updateRow(key, patch) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  }
-
-  // Si cambia la semana de registro, las edades ya calculadas quedan
-  // desactualizadas: se recalculan las cohortes de las filas que ya tenían
-  // un lote seleccionado.
-  useEffect(() => {
-    if (!semanaRegistroUuid) return;
-    setRows((prev) =>
-      prev.map((r) =>
-        r.loteUuid ? { ...r, cohortes: ultimasSemanasConEdad(semanas, semanaRegistroUuid, 13) } : r,
-      ),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semanaRegistroUuid, semanas]);
-
-  function handleLoteChange(row, loteUuid) {
-    const cohortes = loteUuid && semanaRegistroUuid ? ultimasSemanasConEdad(semanas, semanaRegistroUuid, 13) : [];
-    updateRow(row.key, { loteUuid, semanaEmbolseUuid: "", cohortes, resumen: null });
-  }
-
-  async function handleCohorteChange(row, semanaEmbolseUuid) {
-    updateRow(row.key, { semanaEmbolseUuid });
-    if (!semanaEmbolseUuid) {
-      updateRow(row.key, { resumen: null });
-      return;
-    }
-    try {
-      const resumen = await apiFetch(
-        `/racimo-movimientos/resumen-cohorte?fincaUuid=${fincaUuid}&loteUuid=${row.loteUuid}&semanaEmbolseUuid=${semanaEmbolseUuid}`,
-      );
-      updateRow(row.key, { resumen });
-    } catch (err) {
-      setError(err.message);
-    }
   }
 
   function addRow() {
@@ -137,21 +91,13 @@ export default function RegistrarRepiquesPage() {
 
   const puedeRegistrar =
     fincaUuid &&
-    semanaRegistroUuid &&
+    semanaEmbolseUuid &&
     fechaRegistro &&
-    rows.every((r) => r.loteUuid && r.semanaEmbolseUuid && r.motivoRepiqueUuid && Number(r.cantidad) > 0);
+    rows.every((r) => r.loteUuid && Number(r.cantidad) > 0);
 
   async function handleSubmit() {
     setError("");
     setSuccess("");
-
-    for (const r of rows) {
-      if (r.resumen && Number(r.cantidad) > r.resumen.saldo) {
-        setError(`El lote seleccionado en la línea con motivo excede el saldo disponible (${r.resumen.saldo}).`);
-        return;
-      }
-    }
-
     setSaving(true);
     try {
       for (const r of rows) {
@@ -160,16 +106,15 @@ export default function RegistrarRepiquesPage() {
           body: JSON.stringify({
             fincaUuid,
             loteUuid: r.loteUuid,
-            semanaEmbolseUuid: r.semanaEmbolseUuid,
-            semanaRegistroUuid,
-            tipo: "REPIQUE",
-            motivoRepiqueUuid: r.motivoRepiqueUuid,
+            semanaEmbolseUuid,
+            semanaRegistroUuid: semanaEmbolseUuid,
+            tipo: "EMBOLSE",
             cantidad: Number(r.cantidad),
             fecha: fechaRegistro,
           }),
         });
       }
-      setSuccess(`${rows.length} repique(s) registrado(s) correctamente (${totalRacimos} racimos).`);
+      setSuccess(`${rows.length} embolse(s) registrado(s) correctamente (${totalRacimos} racimos).`);
       setRows([emptyRow()]);
     } catch (err) {
       setError(err.message);
@@ -182,10 +127,8 @@ export default function RegistrarRepiquesPage() {
     <RequirePermission code="racimo_movimiento.crear">
       <div className="p-4 p-md-5">
         <div className="mb-4">
-          <h1 className="fw-bold h3 mb-1">Registrar Repiques</h1>
-          <p className="text-secondary mb-0">
-            Racimos que se rechazan antes de cosecha (viento, sigatoka, quema de sol, etc.) y nunca llegan a barcadilla.
-          </p>
+          <h1 className="fw-bold h3 mb-1">Registrar Embolse</h1>
+          <p className="text-secondary mb-0">Registre los racimos embolsados por lote.</p>
         </div>
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
@@ -200,16 +143,16 @@ export default function RegistrarRepiquesPage() {
           <div className="row g-4">
             <div className="col-12">
               <div className="card border-0 shadow-sm rounded-4 p-4 mb-4">
-                <h6 className="fw-bold mb-3">Información principal</h6>
+                <h6 className="fw-bold mb-3">Información general</h6>
                 <div className="row g-3">
                   <div className="col-12 col-md-4">
                     <label className="form-label small fw-medium">
-                      Semana de registro <span className="text-danger">*</span>
+                      Semana de embolse <span className="text-danger">*</span>
                     </label>
                     <select
                       className="form-select rounded-3"
-                      value={semanaRegistroUuid}
-                      onChange={(e) => setSemanaRegistroUuid(e.target.value)}
+                      value={semanaEmbolseUuid}
+                      onChange={(e) => setSemanaEmbolseUuid(e.target.value)}
                     >
                       <option value="">Seleccione una semana</option>
                       {semanas.map((s) => (
@@ -240,9 +183,7 @@ export default function RegistrarRepiquesPage() {
                     </select>
                   </div>
                   <div className="col-12 col-md-4">
-                    <label className="form-label small fw-medium">
-                      Fecha de registro <span className="text-danger">*</span>
-                    </label>
+                    <label className="form-label small fw-medium">Fecha de registro</label>
                     <input
                       type="date"
                       className="form-control rounded-3"
@@ -251,17 +192,12 @@ export default function RegistrarRepiquesPage() {
                     />
                   </div>
                 </div>
-
-                <div className="alert alert-info d-flex align-items-start gap-2 py-2 small mt-3 mb-0">
-                  <FiInfo className="mt-1 flex-shrink-0" />
-                  La semana de registro corresponde a la semana en la que se realiza el repique.
-                </div>
               </div>
 
               <div className="card border-0 shadow-sm rounded-4 p-4">
-                <h6 className="fw-bold text-success mb-1">Detalle de repiques</h6>
+                <h6 className="fw-bold text-success mb-1">Lotes y cantidades</h6>
                 <p className="text-secondary small mb-3">
-                  Ingrese los lotes, la cinta (semana de embolse), el motivo y la cantidad de racimos repicados.
+                  Ingrese los lotes embolsados y la cantidad de racimos por lote.
                 </p>
 
                 <div className="table-responsive">
@@ -270,10 +206,7 @@ export default function RegistrarRepiquesPage() {
                       <tr className="small text-secondary">
                         <th>#</th>
                         <th style={{ minWidth: "9rem" }}>Lote</th>
-                        <th style={{ minWidth: "12rem" }}>Cinta (Semana de embolse)</th>
-                        <th style={{ minWidth: "9rem" }}>Motivo de repique</th>
                         <th style={{ minWidth: "8rem" }}>Cantidad de racimos</th>
-                        <th style={{ minWidth: "8rem" }}>Saldo resultante</th>
                         <th className="text-end">Acciones</th>
                       </tr>
                     </thead>
@@ -285,42 +218,13 @@ export default function RegistrarRepiquesPage() {
                             <select
                               className="form-select form-select-sm rounded-3"
                               value={row.loteUuid}
-                              onChange={(e) => handleLoteChange(row, e.target.value)}
+                              onChange={(e) => updateRow(row.key, { loteUuid: e.target.value })}
                               disabled={!fincaUuid}
                             >
                               <option value="">Seleccione</option>
                               {lotes.map((l) => (
                                 <option key={l.uuid} value={l.uuid}>
                                   {l.codigo}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td>
-                            <select
-                              className="form-select form-select-sm rounded-3"
-                              value={row.semanaEmbolseUuid}
-                              onChange={(e) => handleCohorteChange(row, e.target.value)}
-                              disabled={!row.loteUuid}
-                            >
-                              <option value="">Seleccione</option>
-                              {row.cohortes.map((c) => (
-                                <option key={c.uuid} value={c.uuid}>
-                                  {COLOR_EMOJI[c.color] || ""} {c.codigo} ({c.color}) — edad {c.edadSemanas} sem
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td>
-                            <select
-                              className="form-select form-select-sm rounded-3"
-                              value={row.motivoRepiqueUuid}
-                              onChange={(e) => updateRow(row.key, { motivoRepiqueUuid: e.target.value })}
-                            >
-                              <option value="">Seleccione</option>
-                              {motivos.map((m) => (
-                                <option key={m.uuid} value={m.uuid}>
-                                  {m.nombre}
                                 </option>
                               ))}
                             </select>
@@ -333,11 +237,6 @@ export default function RegistrarRepiquesPage() {
                               value={row.cantidad}
                               onChange={(e) => updateRow(row.key, { cantidad: e.target.value })}
                             />
-                          </td>
-                          <td className="small fw-medium">
-                            {row.resumen
-                              ? (row.resumen.saldo - (Number(row.cantidad) || 0)).toLocaleString()
-                              : "—"}
                           </td>
                           <td className="text-end">
                             <button
@@ -361,13 +260,13 @@ export default function RegistrarRepiquesPage() {
                   onClick={addRow}
                   style={{ width: "fit-content" }}
                 >
-                  <FiPlus /> Agregar otra línea
+                  <FiPlus /> Agregar otro lote
                 </button>
               </div>
 
               <div className="card border-0 shadow-sm rounded-4 p-3 mt-4 d-flex flex-row align-items-center justify-content-between">
                 <span className="fw-medium text-success d-flex align-items-center gap-2">
-                  <FiCheckCircle /> Total de racimos a repicar
+                  <FiPackage /> Total de racimos a registrar
                 </span>
                 <span className="fs-4 fw-bold">{totalRacimos}</span>
               </div>
@@ -382,7 +281,7 @@ export default function RegistrarRepiquesPage() {
                   onClick={handleSubmit}
                   disabled={!puedeRegistrar || saving}
                 >
-                  <FiSave /> {saving ? "Registrando..." : "Registrar repiques"}
+                  <FiSave /> {saving ? "Registrando..." : "Registrar embolses"}
                 </button>
               </div>
             </div>

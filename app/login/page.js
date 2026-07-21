@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveSession } from "@/lib/auth";
+import CorbanaLogo from "@/components/CorbanaLogo";
 import styles from "./login.module.css";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api/v1";
@@ -46,14 +47,7 @@ export default function LoginPage() {
       {/* Panel izquierdo: marca / features (oculto en mobile) */}
       <div className={`d-none d-lg-flex col-lg-6 position-relative text-white flex-column justify-content-between p-5 ${styles.brandBg}`}>
         <div className="d-flex align-items-center gap-2">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M12 21C7 21 3 17.5 3 12.5C3 7 7.5 3 13 3C13 9 9.5 12.5 5 13.5C7.5 15.5 11 16 12 21Z"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <CorbanaLogo size={28} />
           <span className="fs-4 fw-semibold">Corbana</span>
         </div>
 
@@ -117,14 +111,7 @@ export default function LoginPage() {
         <div className="flex-grow-1 d-flex align-items-center justify-content-center px-4 px-sm-5">
           <div className="w-100" style={{ maxWidth: "24rem" }}>
             <div className="d-lg-none d-flex align-items-center gap-2 mb-4 text-brand">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 21C7 21 3 17.5 3 12.5C3 7 7.5 3 13 3C13 9 9.5 12.5 5 13.5C7.5 15.5 11 16 12 21Z"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <CorbanaLogo size={26} />
               <span className="fs-5 fw-semibold">Corbana</span>
             </div>
 

@@ -10,19 +10,30 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function emptyRow() {
+function emptyProcesadoRow() {
   return {
     key: Math.random().toString(36).slice(2),
     loteUuid: "",
     semanaEmbolseUuid: "",
-    motivoRepiqueUuid: "",
     cantidad: "",
     cohortes: [],
     resumen: null,
   };
 }
 
-export default function RegistrarRepiquesPage() {
+function emptyRecusadoRow() {
+  return {
+    key: Math.random().toString(36).slice(2),
+    loteUuid: "",
+    semanaEmbolseUuid: "",
+    motivoRecuseUuid: "",
+    cantidad: "",
+    cohortes: [],
+    resumen: null,
+  };
+}
+
+export default function RegistrarCortePage() {
   const [fincas, setFincas] = useState([]);
   const [lotes, setLotes] = useState([]);
   const [semanas, setSemanas] = useState([]);
@@ -32,7 +43,8 @@ export default function RegistrarRepiquesPage() {
   const [semanaRegistroUuid, setSemanaRegistroUuid] = useState("");
   const [fechaRegistro, setFechaRegistro] = useState(todayIso());
 
-  const [rows, setRows] = useState([emptyRow()]);
+  const [procesadoRows, setProcesadoRows] = useState([emptyProcesadoRow()]);
+  const [recusadoRows, setRecusadoRows] = useState([emptyRecusadoRow()]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,7 +59,7 @@ export default function RegistrarRepiquesPage() {
         const [fincasRes, semanasRes, motivosRes] = await Promise.all([
           apiFetch("/fincas?limit=100"),
           apiFetch(`/semanas?limit=55&anio=${year}`),
-          apiFetch("/motivos-repique?limit=100"),
+          apiFetch("/motivos-recuse?limit=100"),
         ]);
         setFincas(fincasRes.items);
         setSemanas(semanasRes.items);
@@ -75,86 +87,91 @@ export default function RegistrarRepiquesPage() {
       .catch((err) => setError(err.message));
   }, [fincaUuid]);
 
-  function updateRow(key, patch) {
+  function updateRow(setRows, key, patch) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
 
   // Si cambia la semana de registro, las edades ya calculadas quedan
   // desactualizadas: se recalculan las cohortes de las filas que ya tenían
-  // un lote seleccionado.
+  // un lote seleccionado, en ambas secciones (procesado y recusado).
   useEffect(() => {
     if (!semanaRegistroUuid) return;
-    setRows((prev) =>
-      prev.map((r) =>
-        r.loteUuid ? { ...r, cohortes: ultimasSemanasConEdad(semanas, semanaRegistroUuid, 13) } : r,
-      ),
-    );
+    const recalcular = (r) =>
+      r.loteUuid ? { ...r, cohortes: ultimasSemanasConEdad(semanas, semanaRegistroUuid, 13) } : r;
+    setProcesadoRows((prev) => prev.map(recalcular));
+    setRecusadoRows((prev) => prev.map(recalcular));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [semanaRegistroUuid, semanas]);
 
-  function handleLoteChange(row, loteUuid) {
+  function handleLoteChange(setRows, row, loteUuid) {
     const cohortes = loteUuid && semanaRegistroUuid ? ultimasSemanasConEdad(semanas, semanaRegistroUuid, 13) : [];
-    updateRow(row.key, { loteUuid, semanaEmbolseUuid: "", cohortes, resumen: null });
+    updateRow(setRows, row.key, { loteUuid, semanaEmbolseUuid: "", cohortes, resumen: null });
   }
 
-  async function handleCohorteChange(row, semanaEmbolseUuid) {
-    updateRow(row.key, { semanaEmbolseUuid });
+  async function handleCohorteChange(setRows, row, semanaEmbolseUuid) {
+    updateRow(setRows, row.key, { semanaEmbolseUuid });
     if (!semanaEmbolseUuid) {
-      updateRow(row.key, { resumen: null });
+      updateRow(setRows, row.key, { resumen: null });
       return;
     }
     try {
       const resumen = await apiFetch(
         `/racimo-movimientos/resumen-cohorte?fincaUuid=${fincaUuid}&loteUuid=${row.loteUuid}&semanaEmbolseUuid=${semanaEmbolseUuid}`,
       );
-      updateRow(row.key, { resumen });
+      updateRow(setRows, row.key, { resumen });
     } catch (err) {
       setError(err.message);
     }
   }
 
-  function addRow() {
-    setRows((prev) => [...prev, emptyRow()]);
-  }
-
-  function removeRow(key) {
+  function removeRow(setRows, emptyRowFn, key) {
     setRows((prev) => {
       const next = prev.filter((r) => r.key !== key);
-      return next.length > 0 ? next : [emptyRow()];
+      return next.length > 0 ? next : [emptyRowFn()];
     });
   }
 
   function handleLimpiar() {
-    setRows([emptyRow()]);
+    setProcesadoRows([emptyProcesadoRow()]);
+    setRecusadoRows([emptyRecusadoRow()]);
     setError("");
     setSuccess("");
   }
 
-  const totalRacimos = useMemo(
-    () => rows.reduce((sum, r) => sum + (Number(r.cantidad) || 0), 0),
-    [rows],
+  const totalProcesado = useMemo(
+    () => procesadoRows.reduce((sum, r) => sum + (Number(r.cantidad) || 0), 0),
+    [procesadoRows],
   );
+  const totalRecusado = useMemo(
+    () => recusadoRows.reduce((sum, r) => sum + (Number(r.cantidad) || 0), 0),
+    [recusadoRows],
+  );
+
+  const procesadoRowsActivas = procesadoRows.filter((r) => r.loteUuid || r.semanaEmbolseUuid || r.cantidad);
+  const recusadoRowsActivas = recusadoRows.filter((r) => r.loteUuid || r.semanaEmbolseUuid || r.cantidad);
 
   const puedeRegistrar =
     fincaUuid &&
     semanaRegistroUuid &&
     fechaRegistro &&
-    rows.every((r) => r.loteUuid && r.semanaEmbolseUuid && r.motivoRepiqueUuid && Number(r.cantidad) > 0);
+    procesadoRowsActivas.length + recusadoRowsActivas.length > 0 &&
+    procesadoRowsActivas.every((r) => r.loteUuid && r.semanaEmbolseUuid && Number(r.cantidad) > 0) &&
+    recusadoRowsActivas.every((r) => r.loteUuid && r.semanaEmbolseUuid && r.motivoRecuseUuid && Number(r.cantidad) > 0);
 
   async function handleSubmit() {
     setError("");
     setSuccess("");
 
-    for (const r of rows) {
+    for (const r of [...procesadoRowsActivas, ...recusadoRowsActivas]) {
       if (r.resumen && Number(r.cantidad) > r.resumen.saldo) {
-        setError(`El lote seleccionado en la línea con motivo excede el saldo disponible (${r.resumen.saldo}).`);
+        setError(`La cantidad de una línea excede el saldo disponible de esa cohorte (${r.resumen.saldo}).`);
         return;
       }
     }
 
     setSaving(true);
     try {
-      for (const r of rows) {
+      for (const r of procesadoRowsActivas) {
         await apiFetch("/racimo-movimientos", {
           method: "POST",
           body: JSON.stringify({
@@ -162,15 +179,32 @@ export default function RegistrarRepiquesPage() {
             loteUuid: r.loteUuid,
             semanaEmbolseUuid: r.semanaEmbolseUuid,
             semanaRegistroUuid,
-            tipo: "REPIQUE",
-            motivoRepiqueUuid: r.motivoRepiqueUuid,
+            tipo: "PROCESADO",
             cantidad: Number(r.cantidad),
             fecha: fechaRegistro,
           }),
         });
       }
-      setSuccess(`${rows.length} repique(s) registrado(s) correctamente (${totalRacimos} racimos).`);
-      setRows([emptyRow()]);
+      for (const r of recusadoRowsActivas) {
+        await apiFetch("/racimo-movimientos", {
+          method: "POST",
+          body: JSON.stringify({
+            fincaUuid,
+            loteUuid: r.loteUuid,
+            semanaEmbolseUuid: r.semanaEmbolseUuid,
+            semanaRegistroUuid,
+            tipo: "RECUSE",
+            motivoRecuseUuid: r.motivoRecuseUuid,
+            cantidad: Number(r.cantidad),
+            fecha: fechaRegistro,
+          }),
+        });
+      }
+      setSuccess(
+        `Registrado correctamente: ${totalProcesado} procesados, ${totalRecusado} recusados.`,
+      );
+      setProcesadoRows([emptyProcesadoRow()]);
+      setRecusadoRows([emptyRecusadoRow()]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -178,13 +212,33 @@ export default function RegistrarRepiquesPage() {
     }
   }
 
+  function renderCohorteCell(row, setRows) {
+    return (
+      <td>
+        <select
+          className="form-select form-select-sm rounded-3"
+          value={row.semanaEmbolseUuid}
+          onChange={(e) => handleCohorteChange(setRows, row, e.target.value)}
+          disabled={!row.loteUuid}
+        >
+          <option value="">Seleccione</option>
+          {row.cohortes.map((c) => (
+            <option key={c.uuid} value={c.uuid}>
+              {COLOR_EMOJI[c.color] || ""} {c.codigo} ({c.color}) — edad {c.edadSemanas} sem
+            </option>
+          ))}
+        </select>
+      </td>
+    );
+  }
+
   return (
     <RequirePermission code="racimo_movimiento.crear">
       <div className="p-4 p-md-5">
         <div className="mb-4">
-          <h1 className="fw-bold h3 mb-1">Registrar Repiques</h1>
+          <h1 className="fw-bold h3 mb-1">Registrar Corte</h1>
           <p className="text-secondary mb-0">
-            Racimos que se rechazan antes de cosecha (viento, sigatoka, quema de sol, etc.) y nunca llegan a barcadilla.
+            Racimos cosechados: los procesados van a la caja de exportación, los recusados se rechazan por calidad.
           </p>
         </div>
 
@@ -228,7 +282,8 @@ export default function RegistrarRepiquesPage() {
                       value={fincaUuid}
                       onChange={(e) => {
                         setFincaUuid(e.target.value);
-                        setRows([emptyRow()]);
+                        setProcesadoRows([emptyProcesadoRow()]);
+                        setRecusadoRows([emptyRecusadoRow()]);
                       }}
                     >
                       <option value="">Seleccione una finca</option>
@@ -254,14 +309,17 @@ export default function RegistrarRepiquesPage() {
 
                 <div className="alert alert-info d-flex align-items-start gap-2 py-2 small mt-3 mb-0">
                   <FiInfo className="mt-1 flex-shrink-0" />
-                  La semana de registro corresponde a la semana en la que se realiza el repique.
+                  La semana de registro corresponde a la semana en la que se realiza el corte (cosecha).
                 </div>
               </div>
 
-              <div className="card border-0 shadow-sm rounded-4 p-4">
-                <h6 className="fw-bold text-success mb-1">Detalle de repiques</h6>
+              {/* Procesado */}
+              <div className="card border-0 shadow-sm rounded-4 p-4 mb-4" style={{ borderLeft: "4px solid #16a34a" }}>
+                <h6 className="fw-bold mb-1" style={{ color: "#16a34a" }}>
+                  Procesado
+                </h6>
                 <p className="text-secondary small mb-3">
-                  Ingrese los lotes, la cinta (semana de embolse), el motivo y la cantidad de racimos repicados.
+                  Racimos cosechados que se procesan para la caja de exportación.
                 </p>
 
                 <div className="table-responsive">
@@ -271,21 +329,20 @@ export default function RegistrarRepiquesPage() {
                         <th>#</th>
                         <th style={{ minWidth: "9rem" }}>Lote</th>
                         <th style={{ minWidth: "12rem" }}>Cinta (Semana de embolse)</th>
-                        <th style={{ minWidth: "9rem" }}>Motivo de repique</th>
                         <th style={{ minWidth: "8rem" }}>Cantidad de racimos</th>
                         <th style={{ minWidth: "8rem" }}>Saldo resultante</th>
                         <th className="text-end">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((row, idx) => (
+                      {procesadoRows.map((row, idx) => (
                         <tr key={row.key}>
                           <td className="small text-secondary">{idx + 1}</td>
                           <td>
                             <select
                               className="form-select form-select-sm rounded-3"
                               value={row.loteUuid}
-                              onChange={(e) => handleLoteChange(row, e.target.value)}
+                              onChange={(e) => handleLoteChange(setProcesadoRows, row, e.target.value)}
                               disabled={!fincaUuid}
                             >
                               <option value="">Seleccione</option>
@@ -296,26 +353,101 @@ export default function RegistrarRepiquesPage() {
                               ))}
                             </select>
                           </td>
+                          {renderCohorteCell(row, setProcesadoRows)}
+                          <td>
+                            <input
+                              type="number"
+                              min={1}
+                              className="form-control form-control-sm rounded-3"
+                              value={row.cantidad}
+                              onChange={(e) => updateRow(setProcesadoRows, row.key, { cantidad: e.target.value })}
+                            />
+                          </td>
+                          <td className="small fw-medium">
+                            {row.resumen
+                              ? (row.resumen.saldo - (Number(row.cantidad) || 0)).toLocaleString()
+                              : "—"}
+                          </td>
+                          <td className="text-end">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => removeRow(setProcesadoRows, emptyProcesadoRow, row.key)}
+                              title="Eliminar línea"
+                            >
+                              <FiTrash2 />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-link text-decoration-none d-inline-flex align-items-center gap-1 px-0 mt-2"
+                  onClick={() => setProcesadoRows((prev) => [...prev, emptyProcesadoRow()])}
+                  style={{ width: "fit-content", color: "#16a34a" }}
+                >
+                  <FiPlus /> Agregar otra línea
+                </button>
+
+                <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                  <span className="fw-medium" style={{ color: "#16a34a" }}>
+                    Total procesado
+                  </span>
+                  <span className="fs-5 fw-bold">{totalProcesado}</span>
+                </div>
+              </div>
+
+              {/* Recusado */}
+              <div className="card border-0 shadow-sm rounded-4 p-4 mb-4" style={{ borderLeft: "4px solid #eab308" }}>
+                <h6 className="fw-bold mb-1" style={{ color: "#a16207" }}>
+                  Recusado
+                </h6>
+                <p className="text-secondary small mb-3">
+                  Racimos cosechados que se rechazan por calidad, con su motivo.
+                </p>
+
+                <div className="table-responsive">
+                  <table className="table align-middle mb-0">
+                    <thead>
+                      <tr className="small text-secondary">
+                        <th>#</th>
+                        <th style={{ minWidth: "9rem" }}>Lote</th>
+                        <th style={{ minWidth: "12rem" }}>Cinta (Semana de embolse)</th>
+                        <th style={{ minWidth: "9rem" }}>Motivo de recuse</th>
+                        <th style={{ minWidth: "8rem" }}>Cantidad de racimos</th>
+                        <th style={{ minWidth: "8rem" }}>Saldo resultante</th>
+                        <th className="text-end">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recusadoRows.map((row, idx) => (
+                        <tr key={row.key}>
+                          <td className="small text-secondary">{idx + 1}</td>
                           <td>
                             <select
                               className="form-select form-select-sm rounded-3"
-                              value={row.semanaEmbolseUuid}
-                              onChange={(e) => handleCohorteChange(row, e.target.value)}
-                              disabled={!row.loteUuid}
+                              value={row.loteUuid}
+                              onChange={(e) => handleLoteChange(setRecusadoRows, row, e.target.value)}
+                              disabled={!fincaUuid}
                             >
                               <option value="">Seleccione</option>
-                              {row.cohortes.map((c) => (
-                                <option key={c.uuid} value={c.uuid}>
-                                  {COLOR_EMOJI[c.color] || ""} {c.codigo} ({c.color}) — edad {c.edadSemanas} sem
+                              {lotes.map((l) => (
+                                <option key={l.uuid} value={l.uuid}>
+                                  {l.codigo}
                                 </option>
                               ))}
                             </select>
                           </td>
+                          {renderCohorteCell(row, setRecusadoRows)}
                           <td>
                             <select
                               className="form-select form-select-sm rounded-3"
-                              value={row.motivoRepiqueUuid}
-                              onChange={(e) => updateRow(row.key, { motivoRepiqueUuid: e.target.value })}
+                              value={row.motivoRecuseUuid}
+                              onChange={(e) => updateRow(setRecusadoRows, row.key, { motivoRecuseUuid: e.target.value })}
                             >
                               <option value="">Seleccione</option>
                               {motivos.map((m) => (
@@ -331,7 +463,7 @@ export default function RegistrarRepiquesPage() {
                               min={1}
                               className="form-control form-control-sm rounded-3"
                               value={row.cantidad}
-                              onChange={(e) => updateRow(row.key, { cantidad: e.target.value })}
+                              onChange={(e) => updateRow(setRecusadoRows, row.key, { cantidad: e.target.value })}
                             />
                           </td>
                           <td className="small fw-medium">
@@ -343,7 +475,7 @@ export default function RegistrarRepiquesPage() {
                             <button
                               type="button"
                               className="btn btn-sm btn-outline-danger"
-                              onClick={() => removeRow(row.key)}
+                              onClick={() => removeRow(setRecusadoRows, emptyRecusadoRow, row.key)}
                               title="Eliminar línea"
                             >
                               <FiTrash2 />
@@ -358,18 +490,18 @@ export default function RegistrarRepiquesPage() {
                 <button
                   type="button"
                   className="btn btn-link text-decoration-none d-inline-flex align-items-center gap-1 px-0 mt-2"
-                  onClick={addRow}
-                  style={{ width: "fit-content" }}
+                  onClick={() => setRecusadoRows((prev) => [...prev, emptyRecusadoRow()])}
+                  style={{ width: "fit-content", color: "#a16207" }}
                 >
                   <FiPlus /> Agregar otra línea
                 </button>
-              </div>
 
-              <div className="card border-0 shadow-sm rounded-4 p-3 mt-4 d-flex flex-row align-items-center justify-content-between">
-                <span className="fw-medium text-success d-flex align-items-center gap-2">
-                  <FiCheckCircle /> Total de racimos a repicar
-                </span>
-                <span className="fs-4 fw-bold">{totalRacimos}</span>
+                <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                  <span className="fw-medium" style={{ color: "#a16207" }}>
+                    Total recusado
+                  </span>
+                  <span className="fs-5 fw-bold">{totalRecusado}</span>
+                </div>
               </div>
 
               <div className="d-flex justify-content-end gap-2 mt-4">
@@ -382,7 +514,7 @@ export default function RegistrarRepiquesPage() {
                   onClick={handleSubmit}
                   disabled={!puedeRegistrar || saving}
                 >
-                  <FiSave /> {saving ? "Registrando..." : "Registrar repiques"}
+                  <FiSave /> {saving ? "Registrando..." : "Registrar corte"}
                 </button>
               </div>
             </div>

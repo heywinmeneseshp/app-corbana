@@ -21,7 +21,10 @@ export default function AppLayout({ children }) {
   return (
     <div className="d-flex min-vh-100">
       <Sidebar />
-      <main className="flex-grow-1 min-w-0" style={{ backgroundColor: "var(--brand-50)" }}>
+      <main
+        className="flex-grow-1 min-w-0"
+        style={{ backgroundColor: "var(--brand-50)", overflowX: "hidden" }}
+      >
         {children}
       </main>
     </div>
