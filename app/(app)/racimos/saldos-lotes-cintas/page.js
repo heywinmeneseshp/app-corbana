@@ -28,7 +28,7 @@ export default function SaldosLotesCintasPage() {
   const [fincas, setFincas] = useState([]);
   const [fincaUuid, setFincaUuid] = useState("");
   const [anio, setAnio] = useState(new Date().getFullYear());
-  const [semanas, setSemanas] = useState(12);
+  const [semanas, setSemanas] = useState(14);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

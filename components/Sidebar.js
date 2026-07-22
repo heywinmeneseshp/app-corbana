@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList } from "react-icons/fi";
+import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission, hasAnyPermission } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
@@ -219,6 +219,12 @@ export default function Sidebar() {
                   <Link href="/racimos/saldos-lotes-cintas" className={navLinkClass(pathname === "/racimos/saldos-lotes-cintas")}>
                     <FiBarChart2 size={16} />
                     Saldos × Lotes y Cintas
+                  </Link>
+                )}
+                {perms.racimoMovimientoVer && (
+                  <Link href="/racimos/reporte-embolses" className={navLinkClass(pathname === "/racimos/reporte-embolses")}>
+                    <FiTrendingUp size={16} />
+                    Reporte de Embolses
                   </Link>
                 )}
               </div>

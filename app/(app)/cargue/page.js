@@ -9,7 +9,7 @@ import { hasPermission } from "@/lib/auth";
 
 export default function CargueMasivoPage() {
   return (
-    <RequirePermission anyOf={["finca.crear", "lote.crear", "racimo_movimiento.crear", "motivo_repique.crear", "motivo_recuse.crear"]}>
+    <RequirePermission anyOf={["finca.crear", "lote.crear", "racimo_movimiento.crear", "motivo_repique.crear", "motivo_recuse.crear", "produccion.crear"]}>
     <div className="p-4 p-md-5">
       <div className="mb-4">
         <h1 className="fw-bold h3 mb-1">Cargue Masivo</h1>
@@ -124,29 +124,76 @@ export default function CargueMasivoPage() {
             )}
           />
         )}
+
+        {hasPermission("produccion.crear") && (
+          <BulkUploadCard
+            title="Cargue masivo de Producción Semanal"
+            description="Columnas esperadas: semana (código de semana, ej: S30-2026), fincaCodigo, cajas (cajas de 20 kg producidas). Si ya existe un registro para la misma semana y finca, se omite."
+            endpoint="/produccion-semanal/bulk-upload"
+            templateHeaders={["semana", "fincaCodigo", "cajas"]}
+            templateExampleRow={["S30-2026", "525", "1500"]}
+            templateFilename="plantilla_produccion.xlsx"
+            renderResult={(r) => (
+              <>
+                <p className="mb-1">
+                  {r.totalFilas} fila(s) procesadas: <strong>{r.creados}</strong> registro(s) creado(s)
+                  {r.saltados > 0 && <>, <strong>{r.saltados}</strong> omitido(s) por duplicado</>}.
+                </p>
+                <ErrorList errores={r.errores} />
+              </>
+            )}
+          />
+        )}
       </div>
     </div>
     </RequirePermission>
   );
 }
 
-function ErrorList({ errores }) {
+function ErrorList({ errores, rawFileRows, templateHeaders }) {
   if (!errores || errores.length === 0) return null;
+
+  const filaLookup = {};
+  if (rawFileRows) {
+    for (const r of rawFileRows) filaLookup[r.fila] = r.datos;
+  }
+
+  const getMsg = (e) => e.mensaje || e.error || "";
+
   return (
     <div className="mt-2">
       <p className="small text-danger fw-medium mb-1">{errores.length} fila(s) con errores:</p>
-      <ul className="small text-danger mb-0" style={{ maxHeight: "10rem", overflowY: "auto" }}>
-        {errores.map((e, i) => (
-          <li key={i}>
-            Fila {e.fila}: {e.mensaje}
-          </li>
-        ))}
-      </ul>
+      <div className="table-responsive" style={{ maxHeight: "16rem", overflowY: "auto" }}>
+        <table className="table table-sm table-bordered small mb-0">
+          <thead className="table-light" style={{ position: "sticky", top: 0, zIndex: 1 }}>
+            <tr>
+              <th>#</th>
+              {templateHeaders && templateHeaders.map((h) => <th key={h}>{h}</th>)}
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {errores.map((e, i) => {
+              const datos = filaLookup[e.fila] || {};
+              return (
+                <tr key={i}>
+                  <td className="text-secondary">{e.fila}</td>
+                  {templateHeaders && templateHeaders.map((h) => (
+                    <td key={h} className="text-danger">{datos[h] !== undefined ? String(datos[h]) : "—"}</td>
+                  ))}
+                  <td className="text-danger">{getMsg(e)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 function BulkUploadCard({ title, description, endpoint, templateHeaders, templateExampleRow, templateFilename, renderResult }) {
+  const [rawFileRows, setRawFileRows] = useState([]);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
@@ -158,6 +205,7 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [requireConfirmation, setRequireConfirmation] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const inputRef = useRef(null);
   const pollRef = useRef(null);
@@ -202,25 +250,36 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
     }, 1500);
   };
 
-  const handleFile = (file) => {
+  const handleFile = async (file) => {
     if (!file) return;
     setSelectedFile(file);
     setError("");
     setResult(null);
     setPreview(null);
+    setRequireConfirmation(null);
     setUploadPct(0);
     setProcPct(0);
     setProcFase("");
+    setRawFileRows([]);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+      setRawFileRows(json.map((r, i) => ({ fila: i + 2, datos: r })));
+    } catch { setRawFileRows([]); }
   };
 
   // Sube el archivo una sola vez. El servidor valida primero; si no hay
   // errores inserta todo en una transacción (mode=auto). Si hay errores,
   // los devuelve sin escribir nada — el usuario decide si corregir o forzar.
+  // Si el admin tiene saldos negativos, pide confirmación antes de insertar.
   const handleUpload = async () => {
     if (!selectedFile) return;
     setError("");
     setResult(null);
     setPreview(null);
+    setRequireConfirmation(null);
     setUploadPct(0);
     setProcPct(0);
     setProcFase("validando");
@@ -233,7 +292,11 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
         clearInterval(pollRef.current);
         pollRef.current = null;
       }
-      if (data.errores.length === 0) {
+      if (data.requireConfirmation) {
+        setRequireConfirmation(data);
+        setProcFase("completado");
+        setProcPct(100);
+      } else if (!data.errores?.length) {
         setResult(data);
         setProcFase("completado");
         setProcPct(100);
@@ -243,6 +306,37 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
         setProcFase("completado");
         setProcPct(100);
       }
+    } catch (err) {
+      setError(err.message);
+      setProcFase("error");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // El admin confirma la carga ignorando saldos negativos. No hace falta
+  // volver a mandar el archivo: el backend ya tiene cacheada la validación
+  // de la primera pasada (asociada al mismo progressToken) y la reutiliza.
+  const handleForceNegativeSaldos = async () => {
+    setError("");
+    setUploadPct(100);
+    setProcPct(0);
+    setProcFase("validando");
+    setUploading(true);
+    const token = progressToken.current;
+    startPolling(token);
+    try {
+      const data = await apiUploadConProgreso(endpoint, null, setUploadPct, { progressToken: token, forceNegativeSaldos: "true" });
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      setResult(data);
+      setSelectedFile(null);
+      setRequireConfirmation(null);
+      setPreview(null);
+      setProcFase("completado");
+      setProcPct(100);
     } catch (err) {
       setError(err.message);
       setProcFase("error");
@@ -261,7 +355,9 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
     const token = progressToken.current;
     startPolling(token);
     try {
-      const data = await apiUploadConProgreso(endpoint, selectedFile, setUploadPct, { mode: "auto", progressToken: token });
+      // Sin mode="auto": así el backend inserta las filas válidas y omite
+      // las que tienen error, en vez de abortar todo por completo.
+      const data = await apiUploadConProgreso(endpoint, selectedFile, setUploadPct, { progressToken: token });
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
@@ -289,7 +385,7 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
 
   const descargarErrores = () => {
     if (!preview) return;
-    const filas = [["Fila", "Error"], ...preview.errores.map((e) => [e.fila, e.mensaje])];
+    const filas = [["Fila", "Error"], ...preview.errores.map((e) => [e.fila, e.mensaje || e.error])];
     const worksheet = XLSX.utils.aoa_to_sheet(filas);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Errores");
@@ -401,13 +497,14 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
       {preview && !uploading && (
         <div className="alert alert-warning mt-3 mb-0">
           <p className="d-flex align-items-center gap-2 fw-medium mb-2">
-            <FiAlertTriangle /> Se encontraron {preview.errores.length} fila(s) con error de {preview.totalFilas} totales.
+            <FiAlertTriangle /> Se encontraron {preview.errores?.length ?? 0} fila(s) con error de {preview.totalFilas} totales.
           </p>
           <p className="small mb-3">
-            Puedes cargar solo las {preview.totalFilas - preview.errores.length} fila(s) válida(s) (las que tienen
+            Puedes cargar solo las {preview.totalFilas - (preview.errores?.length ?? 0)} fila(s) válida(s) (las que tienen
             error se omitirán), cancelar la carga por completo, o descargar el detalle de errores para corregirlos.
           </p>
-          <div className="d-flex flex-wrap gap-2">
+          <ErrorList errores={preview.errores} rawFileRows={rawFileRows} templateHeaders={templateHeaders} />
+          <div className="d-flex flex-wrap gap-2 mt-3">
             <button
               type="button"
               className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2"
@@ -433,6 +530,49 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
         </div>
       )}
 
+      {requireConfirmation && (
+        <div className="alert alert-warning mt-3 mb-0">
+          <p className="d-flex align-items-center gap-2 fw-medium mb-2">
+            <FiAlertTriangle /> Se encontraron {requireConfirmation.warnings.length} movimiento(s) con saldo negativo.
+          </p>
+          <p className="small mb-3">
+            Como administrador puedes forzar la carga para que estos movimientos se inserten de todas formas,
+            o cancelar y corregir el archivo.
+            {requireConfirmation.errores.length > 0 && (
+              <> Aparte de esto, {requireConfirmation.errores.length} fila(s) tienen error y se omitirán de
+              todas formas (no se pueden forzar).</>
+            )}
+          </p>
+          <div className="d-flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2"
+              onClick={handleForceNegativeSaldos}
+            >
+              <FiUploadCloud /> Sí, cargar de todas formas ({(requireConfirmation.errores?.length ? requireConfirmation.totalFilas - requireConfirmation.errores.length : requireConfirmation.totalFilas)} movimientos)
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+              onClick={() => setRequireConfirmation(null)}
+            >
+              <FiX /> Cancelar
+            </button>
+          </div>
+          {requireConfirmation.warnings?.length > 0 && (
+            <div className="mt-2">
+              <p className="small text-danger fw-medium mb-1">{requireConfirmation.warnings.length} advertencia(s) de saldo negativo:</p>
+              <ErrorList errores={requireConfirmation.warnings} rawFileRows={rawFileRows} templateHeaders={templateHeaders} />
+            </div>
+          )}
+          {requireConfirmation.errores?.length > 0 && (
+            <div className="mt-2">
+              <p className="small text-danger fw-medium mb-1">{requireConfirmation.errores.length} fila(s) con error (se omitirán):</p>
+              <ErrorList errores={requireConfirmation.errores} rawFileRows={rawFileRows} templateHeaders={templateHeaders} />
+            </div>
+          )}
+        </div>
+      )}
       {error && <div className="alert alert-danger py-2 small mt-3 mb-0">{error}</div>}
       {result && <div className="alert alert-success py-2 small mt-3 mb-0">{renderResult(result)}</div>}
     </div>

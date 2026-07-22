@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { FiFilter, FiPlus, FiChevronLeft, FiChevronRight, FiTrash2 } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import { FiFilter, FiPlus, FiChevronLeft, FiChevronRight, FiTrash2, FiDownload } from "react-icons/fi";
+import { apiFetch, API_URL } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import { COLOR_HEX } from "@/lib/semanaColor";
 
@@ -28,10 +28,78 @@ function CintaDot({ color }) {
     <span className="d-inline-flex align-items-center gap-2">
       <span
         className="d-inline-block rounded-circle"
-        style={{ width: "0.6rem", height: "0.6rem", backgroundColor: COLOR_HEX[color] || "#94a3b8" }}
+        style={{ width: "0.6rem", height: "0.6rem", backgroundColor: COLOR_HEX[color] || "#94a3b8", border: "1px solid #374151" }}
       />
       <span className="small">{color}</span>
     </span>
+  );
+}
+
+function SemanaAutocomplete({ semanas, value, onChange }) {
+  const [text, setText] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  const semanaMap = useMemo(() => {
+    const m = {};
+    for (const s of semanas) m[s.uuid] = s;
+    return m;
+  }, [semanas]);
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (value) { const s = semanaMap[value]; if (s) setText(s.codigo); }
+    else setText("");
+  }, [value, semanaMap]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const filtered = useMemo(() => {
+    if (!text) return semanas.slice(0, 20);
+    const q = text.toLowerCase();
+    return semanas.filter((s) => s.codigo.toLowerCase().includes(q)).slice(0, 20);
+  }, [semanas, text]);
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <input
+        type="text"
+        className="form-control form-control-sm rounded-3"
+        style={{ width: "7rem" }}
+        value={text}
+        placeholder="Todas"
+        onChange={(e) => { setText(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+      />
+      {open && filtered.length > 0 && (
+        <div
+          style={{
+            position: "absolute", top: "100%", left: 0, right: 0, zIndex: 1050,
+            maxHeight: "300px", overflowY: "auto",
+            background: "#fff", border: "1px solid #d1d5db",
+            borderRadius: "0.5rem", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
+          }}
+        >
+          {filtered.map((s) => (
+            <div
+              key={s.uuid}
+              className="px-2 py-1 small"
+              style={{ cursor: "pointer" }}
+              onMouseDown={() => { onChange(s.uuid); setText(s.codigo); setOpen(false); }}
+              onMouseOver={(e) => { e.target.style.background = "#f3f4f6"; }}
+              onMouseOut={(e) => { e.target.style.background = ""; }}
+            >
+              {s.codigo}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -45,6 +113,12 @@ export default function MovimientosPage() {
   const [semanaEmbolseUuid, setSemanaEmbolseUuid] = useState("");
   const [semanaRegistroDesdeUuid, setSemanaRegistroDesdeUuid] = useState("");
   const [semanaRegistroHastaUuid, setSemanaRegistroHastaUuid] = useState("");
+
+  const semanasDisponibles = useMemo(() => {
+    const hoy = new Date();
+    return semanas.filter((s) => new Date(s.fechaInicio) <= hoy);
+  }, [semanas]);
+
   const [tipo, setTipo] = useState("");
 
   const [items, setItems] = useState([]);
@@ -122,6 +196,49 @@ export default function MovimientosPage() {
 
   const motivoDe = (item) => item.motivoRepique?.nombre || item.motivoRecuse?.nombre || "—";
 
+  async function exportToExcel() {
+    const tieneSemanaRegistro = semanaRegistroDesdeUuid && semanaRegistroHastaUuid;
+    const tieneSemanaEmbolse = !!semanaEmbolseUuid;
+    if (!tieneSemanaRegistro && !tieneSemanaEmbolse) {
+      setError("Debe filtrar por rango de semana de registro o por semana de embolse antes de exportar.");
+      return;
+    }
+    try {
+      const params = new URLSearchParams();
+      if (fincaUuid) params.set("fincaUuid", fincaUuid);
+      if (loteUuid) params.set("loteUuid", loteUuid);
+      if (semanaEmbolseUuid) params.set("semanaEmbolseUuid", semanaEmbolseUuid);
+      if (semanaRegistroDesdeUuid) params.set("semanaRegistroDesdeUuid", semanaRegistroDesdeUuid);
+      if (semanaRegistroHastaUuid) params.set("semanaRegistroHastaUuid", semanaRegistroHastaUuid);
+      if (tipo) params.set("tipo", tipo);
+
+      const token = localStorage.getItem("corbana_access_token");
+      const res = await fetch(`${API_URL}/racimo-movimientos/exportar?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.status === 401) {
+        localStorage.removeItem("corbana_access_token");
+        localStorage.removeItem("corbana_refresh_token");
+        window.location.href = "/login";
+        throw new Error("Sesión expirada");
+      }
+      if (!res.ok) {
+        let msg = "Error al exportar";
+        try { const j = await res.json(); msg = j.message || msg; } catch { try { msg = await res.text(); } catch {} }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `movimientos-${Date.now()}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <RequirePermission code="racimo_movimiento.ver">
       <div className="p-4 p-md-5">
@@ -130,14 +247,22 @@ export default function MovimientosPage() {
             <h1 className="fw-bold h3 mb-1">Movimientos de Racimos</h1>
             <p className="text-secondary mb-0">Historial de embolses, repiques, corte y recuse por cohorte.</p>
           </div>
-          <div className="position-relative">
+          <div className="d-flex align-items-center gap-2">
             <button
               type="button"
-              className="btn btn-brand rounded-3 d-flex align-items-center gap-2"
-              onClick={() => setNuevoOpen((v) => !v)}
+              className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
+              onClick={exportToExcel}
             >
-              <FiPlus /> Nuevo Movimiento
+              <FiDownload /> Exportar Excel
             </button>
+            <div className="position-relative">
+              <button
+                type="button"
+                className="btn btn-brand rounded-3 d-flex align-items-center gap-2"
+                onClick={() => setNuevoOpen((v) => !v)}
+              >
+                <FiPlus /> Nuevo Movimiento
+              </button>
             {nuevoOpen && (
               <div
                 className="position-absolute end-0 mt-1 bg-white rounded-3 shadow border py-1"
@@ -154,8 +279,9 @@ export default function MovimientosPage() {
                 </Link>
               </div>
             )}
+            </div>
+            </div>
           </div>
-        </div>
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
@@ -163,39 +289,11 @@ export default function MovimientosPage() {
           <div className="row g-2 align-items-end">
             <div className="col-6 col-md-2">
               <label className="form-label small fw-medium mb-1">Semana registro (desde)</label>
-              <select
-                className="form-select form-select-sm rounded-3"
-                value={semanaRegistroDesdeUuid}
-                onChange={(e) => {
-                  setPage(1);
-                  setSemanaRegistroDesdeUuid(e.target.value);
-                }}
-              >
-                <option value="">Todas</option>
-                {semanas.map((s) => (
-                  <option key={s.uuid} value={s.uuid}>
-                    {s.codigo}
-                  </option>
-                ))}
-              </select>
+              <SemanaAutocomplete semanas={semanasDisponibles} value={semanaRegistroDesdeUuid} onChange={(uuid) => { setPage(1); setSemanaRegistroDesdeUuid(uuid); }} />
             </div>
             <div className="col-6 col-md-2">
               <label className="form-label small fw-medium mb-1">Semana registro (hasta)</label>
-              <select
-                className="form-select form-select-sm rounded-3"
-                value={semanaRegistroHastaUuid}
-                onChange={(e) => {
-                  setPage(1);
-                  setSemanaRegistroHastaUuid(e.target.value);
-                }}
-              >
-                <option value="">Todas</option>
-                {semanas.map((s) => (
-                  <option key={s.uuid} value={s.uuid}>
-                    {s.codigo}
-                  </option>
-                ))}
-              </select>
+              <SemanaAutocomplete semanas={semanasDisponibles} value={semanaRegistroHastaUuid} onChange={(uuid) => { setPage(1); setSemanaRegistroHastaUuid(uuid); }} />
             </div>
             <div className="col-6 col-md-2">
               <label className="form-label small fw-medium mb-1">Finca</label>
@@ -237,21 +335,7 @@ export default function MovimientosPage() {
             </div>
             <div className="col-6 col-md-2">
               <label className="form-label small fw-medium mb-1">Semana embolse</label>
-              <select
-                className="form-select form-select-sm rounded-3"
-                value={semanaEmbolseUuid}
-                onChange={(e) => {
-                  setPage(1);
-                  setSemanaEmbolseUuid(e.target.value);
-                }}
-              >
-                <option value="">Todas</option>
-                {semanas.map((s) => (
-                  <option key={s.uuid} value={s.uuid}>
-                    {s.codigo}
-                  </option>
-                ))}
-              </select>
+              <SemanaAutocomplete semanas={semanasDisponibles} value={semanaEmbolseUuid} onChange={(uuid) => { setPage(1); setSemanaEmbolseUuid(uuid); }} />
             </div>
             <div className="col-6 col-md-2">
               <label className="form-label small fw-medium mb-1">Tipo de movimiento</label>

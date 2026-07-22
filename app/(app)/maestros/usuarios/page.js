@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiShield, FiSave, FiX } from "react-icons/fi";
+import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiShield, FiSave, FiX, FiMapPin } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 import TagPicker from "@/components/TagPicker";
@@ -16,6 +16,7 @@ export default function UsuariosPage() {
 
   const [usuarioModal, setUsuarioModal] = useState(null); // null | {} | usuario
   const [rolesModal, setRolesModal] = useState(null); // null | usuario
+  const [fincasModal, setFincasModal] = useState(null); // null | usuario
 
   async function loadUsuarios() {
     setLoading(true);
@@ -85,6 +86,7 @@ export default function UsuariosPage() {
                 <th>Usuario</th>
                 <th>Email</th>
                 <th>Roles</th>
+                <th>Fincas</th>
                 <th>Estado</th>
                 <th className="text-end">Acciones</th>
               </tr>
@@ -92,14 +94,14 @@ export default function UsuariosPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={5} className="text-center text-secondary py-4">
+                  <td colSpan={6} className="text-center text-secondary py-4">
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && usuarios.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center text-secondary py-4">
+                  <td colSpan={6} className="text-center text-secondary py-4">
                     No hay usuarios registrados todavía.
                   </td>
                 </tr>
@@ -123,6 +125,17 @@ export default function UsuariosPage() {
                         ))
                       ) : (
                         <span className="text-secondary small">Sin roles</span>
+                      )}
+                    </td>
+                    <td>
+                      {(usuario.fincas || []).length > 0 ? (
+                        usuario.fincas.map((f) => (
+                          <span key={f.uuid} className="badge rounded-pill text-bg-light border me-1 mb-1">
+                            {f.codigo}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-secondary small">Sin fincas</span>
                       )}
                     </td>
                     <td>
@@ -153,6 +166,15 @@ export default function UsuariosPage() {
                             onClick={() => setRolesModal(usuario)}
                           >
                             <FiShield /> Roles
+                          </button>
+                        )}
+                        {hasPermission("usuarios.asignar_finca") && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 text-nowrap"
+                            onClick={() => setFincasModal(usuario)}
+                          >
+                            <FiMapPin /> Fincas
                           </button>
                         )}
                         {hasPermission("usuarios.eliminar") && (
@@ -189,6 +211,14 @@ export default function UsuariosPage() {
         <RolesModal
           usuario={rolesModal}
           onClose={() => setRolesModal(null)}
+          onChanged={loadUsuarios}
+        />
+      )}
+
+      {fincasModal && (
+        <FincasModal
+          usuario={fincasModal}
+          onClose={() => setFincasModal(null)}
           onChanged={loadUsuarios}
         />
       )}
@@ -389,6 +419,100 @@ function RolesModal({ usuario, onClose, onChanged }) {
         <p className="text-center text-secondary small py-4 mb-0">Cargando roles...</p>
       ) : (
         <TagPicker items={allItems} selected={selected} onChange={setSelected} placeholder="Buscar rol para agregar..." />
+      )}
+
+      <div className="d-flex gap-2 mt-3">
+        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+          <FiX /> Cancelar
+        </button>
+        <button
+          type="button"
+          disabled={saving || loading}
+          className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+          onClick={handleGuardar}
+        >
+          <FiSave /> {saving ? "Guardando..." : "Guardar"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+// ─── Modal: asignar fincas a un usuario ───
+// Un usuario solo puede ver/administrar los datos de las fincas asignadas
+// aquí (salvo que sea Administrador, que ve todas sin restricción). Un
+// usuario sin ninguna finca asignada no ve ningún dato hasta que se le
+// asigne al menos una.
+function FincasModal({ usuario, onClose, onChanged }) {
+  const [allItems, setAllItems] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [originalUuids, setOriginalUuids] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const [{ items: todasLasFincas }, misFincas] = await Promise.all([
+        apiFetch(`/fincas?limit=100`),
+        apiFetch(`/users/${usuario.uuid}/fincas`),
+      ]);
+      setAllItems(todasLasFincas.map((f) => ({ uuid: f.uuid, label: f.nombre, sublabel: f.codigo })));
+      const misItems = misFincas.map((f) => ({ uuid: f.uuid, label: f.nombre, sublabel: f.codigo }));
+      setSelected(misItems);
+      setOriginalUuids(new Set(misItems.map((f) => f.uuid)));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleGuardar = async () => {
+    setError("");
+    setSaving(true);
+    const selectedUuids = new Set(selected.map((s) => s.uuid));
+    const aAgregar = [...selectedUuids].filter((uuid) => !originalUuids.has(uuid));
+    const aQuitar = [...originalUuids].filter((uuid) => !selectedUuids.has(uuid));
+
+    try {
+      await Promise.all([
+        ...aAgregar.map((fincaUuid) =>
+          apiFetch(`/users/${usuario.uuid}/fincas`, { method: "POST", body: JSON.stringify({ fincaUuid }) }),
+        ),
+        ...aQuitar.map((fincaUuid) => apiFetch(`/users/${usuario.uuid}/fincas/${fincaUuid}`, { method: "DELETE" })),
+      ]);
+      onChanged();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title={`Fincas de ${usuario.nombre} ${usuario.apellido}`} onClose={onClose}>
+      <p className="small text-secondary mb-3">
+        Sin ninguna finca seleccionada aquí, el usuario ve todas (sin restricción). En cuanto le asignes al menos
+        una, queda restringido a ver y administrar (según sus permisos) solo los datos de esas fincas. El rol{" "}
+        <strong>Administrador</strong> siempre ve todas las fincas sin restricción, sin importar lo que se elija
+        aquí.
+      </p>
+
+      {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+      {loading ? (
+        <p className="text-center text-secondary small py-4 mb-0">Cargando fincas...</p>
+      ) : (
+        <TagPicker items={allItems} selected={selected} onChange={setSelected} placeholder="Buscar finca para agregar..." />
       )}
 
       <div className="d-flex gap-2 mt-3">
