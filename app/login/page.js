@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveSession } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
@@ -15,6 +15,18 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [checkingSetup, setCheckingSetup] = useState(true);
+  const [requiereSetup, setRequiereSetup] = useState(false);
+  const [setupOk, setSetupOk] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_URL}/sistema/setup/estado`)
+      .then((res) => res.json())
+      .then((data) => setRequiereSetup(Boolean(data?.data?.requiereSetup)))
+      .catch(() => {})
+      .finally(() => setCheckingSetup(false));
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -115,86 +127,223 @@ export default function LoginPage() {
               <span className="fs-5 fw-semibold">Corbana</span>
             </div>
 
-            <h2 className="fw-bold mb-2">Inicia sesión</h2>
-            <p className="text-secondary small mb-4">Ingresa tus credenciales para acceder a tu cuenta.</p>
+            {checkingSetup ? (
+              <p className="text-secondary small">Cargando...</p>
+            ) : requiereSetup ? (
+              <SetupForm
+                onDone={(usuarioCreado) => {
+                  setRequiereSetup(false);
+                  setSetupOk(true);
+                  setUsuario(usuarioCreado);
+                }}
+              />
+            ) : (
+              <>
+                <h2 className="fw-bold mb-2">Inicia sesión</h2>
+                <p className="text-secondary small mb-4">Ingresa tus credenciales para acceder a tu cuenta.</p>
 
-            <form onSubmit={handleSubmit}>
-              <div className="mb-3">
-                <label htmlFor="usuario" className="form-label small fw-medium">
-                  Usuario
-                </label>
-                <input
-                  id="usuario"
-                  type="text"
-                  required
-                  autoComplete="username"
-                  placeholder="Introduce tu usuario"
-                  className="form-control rounded-3"
-                  value={usuario}
-                  onChange={(e) => setUsuario(e.target.value)}
-                />
-              </div>
-
-              <div className="mb-3">
-                <label htmlFor="password" className="form-label small fw-medium">
-                  Contraseña
-                </label>
-                <div className="input-group">
-                  <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    required
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                    className="form-control rounded-start-3"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary rounded-end-3"
-                    onClick={() => setShowPassword((v) => !v)}
-                    tabIndex={-1}
-                  >
-                    {showPassword ? "Ocultar" : "Ver"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="d-flex align-items-center justify-content-between mb-3 small">
-                <div className="form-check">
-                  <input className="form-check-input" type="checkbox" id="remember" />
-                  <label className="form-check-label text-secondary" htmlFor="remember">
-                    Recordarme
-                  </label>
-                </div>
-                <a href="#" className="text-brand fw-medium text-decoration-none">
-                  ¿Olvidaste tu contraseña?
-                </a>
-              </div>
-
-              {error && <div className="alert alert-danger py-2 small">{error}</div>}
-
-              <button type="submit" disabled={loading} className="btn btn-brand w-100 rounded-3 py-2 d-flex align-items-center justify-content-center gap-2">
-                {loading ? "Ingresando..." : "Iniciar sesión"}
-                {!loading && (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M13 5l7 7-7 7M5 12h15" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                {setupOk && (
+                  <div className="alert alert-success py-2 small">
+                    Administrador creado correctamente. Ya podés iniciar sesión.
+                  </div>
                 )}
-              </button>
-            </form>
 
-            <p className="text-center text-secondary small mt-4">
-              ¿No tienes una cuenta?{" "}
-              <a href="#" className="text-brand fw-semibold text-decoration-none">
-                Regístrate
-              </a>
-            </p>
+                <form onSubmit={handleSubmit}>
+                  <div className="mb-3">
+                    <label htmlFor="usuario" className="form-label small fw-medium">
+                      Usuario
+                    </label>
+                    <input
+                      id="usuario"
+                      type="text"
+                      required
+                      autoComplete="username"
+                      placeholder="Introduce tu usuario"
+                      className="form-control rounded-3"
+                      value={usuario}
+                      onChange={(e) => setUsuario(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label htmlFor="password" className="form-label small fw-medium">
+                      Contraseña
+                    </label>
+                    <div className="input-group">
+                      <input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        required
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        className="form-control rounded-start-3"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary rounded-end-3"
+                        onClick={() => setShowPassword((v) => !v)}
+                        tabIndex={-1}
+                      >
+                        {showPassword ? "Ocultar" : "Ver"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="d-flex align-items-center justify-content-between mb-3 small">
+                    <div className="form-check">
+                      <input className="form-check-input" type="checkbox" id="remember" />
+                      <label className="form-check-label text-secondary" htmlFor="remember">
+                        Recordarme
+                      </label>
+                    </div>
+                    <a href="#" className="text-brand fw-medium text-decoration-none">
+                      ¿Olvidaste tu contraseña?
+                    </a>
+                  </div>
+
+                  {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+                  <button type="submit" disabled={loading} className="btn btn-brand w-100 rounded-3 py-2 d-flex align-items-center justify-content-center gap-2">
+                    {loading ? "Ingresando..." : "Iniciar sesión"}
+                    {!loading && (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M13 5l7 7-7 7M5 12h15" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                </form>
+              </>
+            )}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function SetupForm({ onDone }) {
+  const [form, setForm] = useState({ usuario: "", nombre: "", apellido: "", email: "", password: "", confirmar: "" });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const setField = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (form.password !== form.confirmar) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+    if (form.password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/sistema/setup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          usuario: form.usuario,
+          nombre: form.nombre,
+          apellido: form.apellido,
+          email: form.email,
+          password: form.password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "No se pudo completar la configuración inicial");
+      }
+      onDone(form.usuario);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <h2 className="fw-bold mb-2">Configuración inicial</h2>
+      <p className="text-secondary small mb-4">
+        Todavía no hay ningún usuario. Creá la cuenta del primer administrador para empezar a usar Corbana.
+      </p>
+
+      <form onSubmit={handleSubmit}>
+        <div className="row g-2">
+          <div className="col-6 mb-3">
+            <label className="form-label small fw-medium">Nombre</label>
+            <input required className="form-control rounded-3" value={form.nombre} onChange={setField("nombre")} />
+          </div>
+          <div className="col-6 mb-3">
+            <label className="form-label small fw-medium">Apellido</label>
+            <input required className="form-control rounded-3" value={form.apellido} onChange={setField("apellido")} />
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label small fw-medium">Usuario</label>
+          <input
+            required
+            minLength={3}
+            autoComplete="username"
+            className="form-control rounded-3"
+            placeholder="Con qué usuario vas a iniciar sesión"
+            value={form.usuario}
+            onChange={setField("usuario")}
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label small fw-medium">Email</label>
+          <input
+            type="email"
+            required
+            className="form-control rounded-3"
+            value={form.email}
+            onChange={setField("email")}
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label small fw-medium">Contraseña</label>
+          <input
+            type="password"
+            required
+            minLength={8}
+            autoComplete="new-password"
+            className="form-control rounded-3"
+            placeholder="Mínimo 8 caracteres"
+            value={form.password}
+            onChange={setField("password")}
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label small fw-medium">Confirmar contraseña</label>
+          <input
+            type="password"
+            required
+            autoComplete="new-password"
+            className="form-control rounded-3"
+            value={form.confirmar}
+            onChange={setField("confirmar")}
+          />
+        </div>
+
+        {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+        <button type="submit" disabled={loading} className="btn btn-brand w-100 rounded-3 py-2">
+          {loading ? "Creando..." : "Crear administrador"}
+        </button>
+      </form>
+    </>
   );
 }
 

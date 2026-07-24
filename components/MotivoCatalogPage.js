@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2 } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import { FiPlus, FiEdit2, FiTrash2, FiDownload } from "react-icons/fi";
+import { apiFetch, API_URL } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
 function emptyForm() {
-  return { nombre: "", descripcion: "", estado: true };
+  return { nombre: "", descripcion: "", codigoExterno: "", estado: true };
 }
 
 export default function MotivoCatalogPage({ title, description, endpoint, permVer, permCrear, permEditar, permEliminar }) {
@@ -21,6 +21,7 @@ export default function MotivoCatalogPage({ title, description, endpoint, permVe
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [descargando, setDescargando] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -49,7 +50,12 @@ export default function MotivoCatalogPage({ title, description, endpoint, permVe
 
   function openEdit(motivo) {
     setEditing(motivo);
-    setForm({ nombre: motivo.nombre, descripcion: motivo.descripcion || "", estado: motivo.estado });
+    setForm({
+      nombre: motivo.nombre,
+      descripcion: motivo.descripcion || "",
+      codigoExterno: motivo.codigoExterno || "",
+      estado: motivo.estado,
+    });
     setFormError("");
     setModalOpen(true);
   }
@@ -73,6 +79,45 @@ export default function MotivoCatalogPage({ title, description, endpoint, permVe
     }
   }
 
+  async function handleExportar() {
+    setDescargando(true);
+    try {
+      const token = localStorage.getItem("corbana_access_token");
+      const res = await fetch(`${API_URL}${endpoint}/exportar`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.status === 401) {
+        localStorage.removeItem("corbana_access_token");
+        localStorage.removeItem("corbana_refresh_token");
+        window.location.href = "/login";
+        throw new Error("Sesión expirada");
+      }
+      if (!res.ok) {
+        let msg = "Error al exportar";
+        try {
+          const j = await res.json();
+          msg = j.message || msg;
+        } catch {
+          try {
+            msg = await res.text();
+          } catch {}
+        }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDescargando(false);
+    }
+  }
+
   async function handleDelete(motivo) {
     if (!confirm(`¿Eliminar el motivo "${motivo.nombre}"?`)) return;
     try {
@@ -91,11 +136,21 @@ export default function MotivoCatalogPage({ title, description, endpoint, permVe
             <h1 className="fw-bold h3 mb-1">{title}</h1>
             <p className="text-secondary mb-0">{description}</p>
           </div>
-          {hasPermission(permCrear) && (
-            <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
-              <FiPlus /> Nuevo motivo
+          <div className="d-flex gap-2">
+            <button
+              type="button"
+              className="btn btn-outline-success rounded-3 d-flex align-items-center gap-2"
+              onClick={handleExportar}
+              disabled={descargando}
+            >
+              <FiDownload /> {descargando ? "Descargando..." : "Descargar Excel"}
             </button>
-          )}
+            {hasPermission(permCrear) && (
+              <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
+                <FiPlus /> Nuevo motivo
+              </button>
+            )}
+          </div>
         </div>
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
@@ -107,6 +162,7 @@ export default function MotivoCatalogPage({ title, description, endpoint, permVe
                 <tr>
                   <th>Nombre</th>
                   <th>Descripción</th>
+                  <th>Código externo</th>
                   <th>Estado</th>
                   <th className="text-end">Acciones</th>
                 </tr>
@@ -114,14 +170,14 @@ export default function MotivoCatalogPage({ title, description, endpoint, permVe
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={4} className="text-center text-secondary py-4">
+                    <td colSpan={5} className="text-center text-secondary py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="text-center text-secondary py-4">
+                    <td colSpan={5} className="text-center text-secondary py-4">
                       No hay motivos registrados todavía.
                     </td>
                   </tr>
@@ -131,6 +187,7 @@ export default function MotivoCatalogPage({ title, description, endpoint, permVe
                     <tr key={m.uuid}>
                       <td className="fw-medium">{m.nombre}</td>
                       <td className="small text-secondary">{m.descripcion || "—"}</td>
+                      <td className="small text-secondary">{m.codigoExterno || "—"}</td>
                       <td>
                         {m.estado ? (
                           <span className="badge rounded-pill" style={{ backgroundColor: "#d1fae5", color: "#047857" }}>
@@ -195,6 +252,17 @@ export default function MotivoCatalogPage({ title, description, endpoint, permVe
                   maxLength={255}
                   value={form.descripcion}
                   onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))}
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label small fw-medium">Código externo</label>
+                <input
+                  type="text"
+                  className="form-control rounded-3"
+                  maxLength={50}
+                  placeholder="Código que usa el sistema externo para esta novedad"
+                  value={form.codigoExterno}
+                  onChange={(e) => setForm((f) => ({ ...f, codigoExterno: e.target.value }))}
                 />
               </div>
               <div className="form-check mb-3">

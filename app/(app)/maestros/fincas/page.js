@@ -484,7 +484,7 @@ function LotesModal({ finca, onClose }) {
                     {editMode && draft ? (
                       <tr>
                         <td>
-                          <input className="form-control form-control-sm rounded-3 mb-1" value={draft.nombre} onChange={(e) => setDraftField(lote.uuid, "nombre", e.target.value)} placeholder="Nombre" />
+                          <input className="form-control form-control-sm rounded-3 mb-1" inputMode="numeric" pattern="[0-9]*" value={draft.nombre} onChange={(e) => setDraftField(lote.uuid, "nombre", e.target.value.replace(/\D/g, ""))} placeholder="Nombre (ej: 01)" />
                           <input className="form-control form-control-sm rounded-3" value={draft.codigo} onChange={(e) => setDraftField(lote.uuid, "codigo", e.target.value)} placeholder="Código" />
                         </td>
                         <td>
@@ -608,11 +608,14 @@ function EditarLoteForm({ lote, onSaved }) {
         <label className="form-label small mb-1">Nombre del lote</label>
         <input
           type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
           required
           className="form-control form-control-sm rounded-3"
           style={{ width: "12rem" }}
+          placeholder="Ej: 01"
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={(e) => setNombre(e.target.value.replace(/\D/g, ""))}
         />
       </div>
       <div>
@@ -748,11 +751,13 @@ function NuevoLoteForm({ fincaUuid, onCreated }) {
         <div className="col-12 col-sm-7">
           <input
             type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             required
             className="form-control form-control-sm rounded-3"
-            placeholder="Nombre del lote"
+            placeholder="Nombre del lote (ej: 01)"
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => setNombre(e.target.value.replace(/\D/g, ""))}
           />
         </div>
         <div className="col-6 col-sm-3">
