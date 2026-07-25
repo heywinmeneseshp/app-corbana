@@ -129,11 +129,12 @@ export default function CargueMasivoPage() {
         {hasPermission("produccion.crear") && (
           <BulkUploadCard
             title="Cargue masivo de Producción Semanal"
-            description="Columnas esperadas: semana (código de semana, ej: S30-2026), fincaCodigo, cajas (cajas de 20 kg producidas). Si ya existe un registro para la misma semana y finca, se omite."
+            description="Columnas esperadas: semana (código de semana, ej: S30-2026), fincaCodigo, cajas (cajas de 20 kg producidas). Si ya existe un registro para la misma semana y finca, se omite. Máximo 15,000 filas por archivo — si tenés más, dividilo por año y subí cada parte por separado."
             endpoint="/produccion-semanal/bulk-upload"
             templateHeaders={["semana", "fincaCodigo", "cajas"]}
             templateExampleRow={["S30-2026", "525", "1500"]}
             templateFilename="plantilla_produccion.xlsx"
+            chunkSize={10000}
             renderResult={(r) => (
               <>
                 <p className="mb-1">
@@ -226,7 +227,15 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
     };
   }, []);
 
+  // Solo el endpoint de movimientos de racimos reporta progreso en vivo
+  // (fase/porcentaje) del lado del servidor — los demás cargues son
+  // sincrónicos (responden al terminar), así que para esos no tiene sentido
+  // consultar este endpoint: se saltea y el usuario solo ve el % de subida
+  // del archivo (XHR) y, si aplica, "Parte X de N" del troceo.
+  const soportaProgreso = endpoint === "/racimo-movimientos/bulk-upload";
+
   const startPolling = (token) => {
+    if (!soportaProgreso) return;
     setProcPct(0);
     setProcFase("validando");
     setProcFilas(0);

@@ -69,16 +69,15 @@ export default function InicioPage() {
     return () => clearTimeout(timer);
   }, [fetchParam]);
 
-  const semanaCorte = useMemo(() => {
-    if (!data?.primeraSemanaEmbolse?.numeroSemana) return 0;
-    return data.primeraSemanaEmbolse.numeroSemana + 11;
-  }, [data]);
-
+  // El backend ya marca `ratio: null` semana por semana según si esa semana
+  // REALMENTE tiene cajas/racimos registrados o no (ver dashboard.service.js)
+  // — no hay que asumir a ciegas que las primeras ~12 semanas después del
+  // primer embolse no tienen datos: con cargas históricas, sí pueden
+  // tenerlos. Se confía en el dato real en vez de una suposición fija.
   const ratioFiltrado = useMemo(() => {
     if (!data?.ratioAnual?.length) return [];
-    const desde = semanaCorte || 1;
-    return data.ratioAnual.filter((s) => s.numeroSemana >= desde);
-  }, [data, semanaCorte]);
+    return data.ratioAnual.filter((s) => s.ratio !== null);
+  }, [data]);
 
   const totAncho = 120 + (data?.cohortes?.length || 0) * 68;
 
@@ -339,7 +338,7 @@ export default function InicioPage() {
               }
 
               const charts = [
-                { id: "ratio", title: "Ratio", subtitle: `S${data.primeraSemanaEmbolse?.numeroSemana || '?'} +12 → sem ${semanaCorte}`, data: ratioFiltrado, dataKey: "ratio", color: "#6d28d9", decimal: true, prefix: "Ratio" },
+                { id: "ratio", title: "Ratio", subtitle: "Cajas producidas / racimos procesados, por semana", data: ratioFiltrado, dataKey: "ratio", color: "#6d28d9", decimal: true, prefix: "Ratio" },
                 { id: "cajas", title: "Cajas Producidas", subtitle: "Por semana de registro", data: cajasData, dataKey: "cajas", color: "#16a34a", prefix: "Cajas" },
                 { id: "embolses", title: "Embolses", subtitle: "Por semana de embolse", data: embolseData, dataKey: "embolse", color: "#2563eb", prefix: "Embolses" },
                 { id: "aprovechamiento", title: "Aprovechamiento", subtitle: "(RECUSE + PROCESADO) / embolsado", data: aproData, dataKey: "aprovechamiento", color: "#047857", yDomain: [0, 100], yUnit: "%", decimal: true, prefix: "Aprov." },
@@ -349,7 +348,7 @@ export default function InicioPage() {
                 <>
                   <div className="row g-3 mt-0">
                     <div className="col-md-6" style={{ height: "280px" }}>
-                      <ChartCard id="ratio" title="Ratio" subtitle={`S${data.primeraSemanaEmbolse?.numeroSemana || '?'} +12 → sem ${semanaCorte}`}>
+                      <ChartCard id="ratio" title="Ratio" subtitle="Cajas producidas / racimos procesados, por semana">
                         {ratioFiltrado.length > 0 && <ChartLine data={ratioFiltrado} dataKey="ratio" color="#6d28d9" decimal prefix="Ratio" />}
                       </ChartCard>
                     </div>
