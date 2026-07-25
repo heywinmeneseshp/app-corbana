@@ -39,6 +39,7 @@ export default function InicioPage() {
   const [fetchParam, setFetchParam] = useState(() => localStorage.getItem(LS_KEY) || "");
   const [fincasOpen, setFincasOpen] = useState(false);
   const [expandedChart, setExpandedChart] = useState(null);
+  const [anioGraficos, setAnioGraficos] = useState("");
   const debounceRef = useRef(null);
   const initialFincasSet = useRef(false);
 
@@ -50,7 +51,11 @@ export default function InicioPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(true), 50);
-    const url = `/dashboard/resumen${fetchParam ? `?fincas=${fetchParam}` : ""}`;
+    const params = new URLSearchParams();
+    if (fetchParam) params.set("fincas", fetchParam);
+    if (anioGraficos) params.set("anio", anioGraficos);
+    const qs = params.toString();
+    const url = `/dashboard/resumen${qs ? `?${qs}` : ""}`;
     apiFetch(url)
       .then((res) => {
         clearTimeout(timer);
@@ -67,7 +72,7 @@ export default function InicioPage() {
         setLoading(false);
       });
     return () => clearTimeout(timer);
-  }, [fetchParam]);
+  }, [fetchParam, anioGraficos]);
 
   // El backend ya marca `ratio: null` semana por semana según si esa semana
   // REALMENTE tiene cajas/racimos registrados o no (ver dashboard.service.js)
@@ -273,6 +278,33 @@ export default function InicioPage() {
           </div>
         </div>
       </div>
+
+      {data.aniosDisponibles?.length > 0 && (
+        <div className="d-flex align-items-center justify-content-end gap-2 mb-2">
+          <label htmlFor="anio-graficos" className="small text-secondary mb-0">
+            Año de los gráficos:
+          </label>
+          <select
+            id="anio-graficos"
+            className="form-select form-select-sm rounded-3"
+            style={{ width: "auto" }}
+            value={anioGraficos || String(data.anioSeleccionado || "")}
+            onChange={(e) => setAnioGraficos(e.target.value)}
+          >
+            {data.aniosDisponibles.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {ratioFiltrado.length === 0 && (
+        <div className="alert alert-light border small mb-3">
+          No hay datos de cajas/racimos procesados para el año {anioGraficos || data.anioSeleccionado}.
+        </div>
+      )}
 
       {ratioFiltrado.length > 0 && (() => {
         function ChartTooltip({ active, payload, label, dataKey, prefix, decimal }) {
