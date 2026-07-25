@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FiPlus, FiEdit2, FiTrash2, FiDownload } from "react-icons/fi";
-import { apiFetch, API_URL } from "@/lib/api";
+import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
@@ -82,29 +82,7 @@ export default function MotivoCatalogPage({ title, description, endpoint, permVe
   async function handleExportar() {
     setDescargando(true);
     try {
-      const token = localStorage.getItem("corbana_access_token");
-      const res = await fetch(`${API_URL}${endpoint}/exportar`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.status === 401) {
-        localStorage.removeItem("corbana_access_token");
-        localStorage.removeItem("corbana_refresh_token");
-        window.location.href = "/login";
-        throw new Error("Sesión expirada");
-      }
-      if (!res.ok) {
-        let msg = "Error al exportar";
-        try {
-          const j = await res.json();
-          msg = j.message || msg;
-        } catch {
-          try {
-            msg = await res.text();
-          } catch {}
-        }
-        throw new Error(msg);
-      }
-      const blob = await res.blob();
+      const blob = await apiFetchBlob(`${endpoint}/exportar`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

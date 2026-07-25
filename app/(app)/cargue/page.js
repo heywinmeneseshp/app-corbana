@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { FiUploadCloud, FiDownload, FiArrowRight, FiAlertTriangle, FiX } from "react-icons/fi";
-import { apiUploadConProgreso, apiFetch, API_URL } from "@/lib/api";
+import { apiUploadConProgreso, apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import { hasPermission } from "@/lib/auth";
 
@@ -59,7 +59,7 @@ export default function CargueMasivoPage() {
         {hasPermission("racimo_movimiento.crear") && (
           <BulkUploadCard
             title="Cargue masivo de Movimientos de Racimos"
-            description="Columnas esperadas: fincaCodigo, loteCodigo, tipo (EMBOLSE/REPIQUE/RECUSE/PROCESADO), semanaEmbolseCodigo, semanaRegistroCodigo (opcional, por defecto = semanaEmbolseCodigo), motivo (nombre, requerido para REPIQUE/RECUSE — debe existir en el maestro correspondiente), cantidad, fecha (AAAA-MM-DD), observacion (opcional). Se procesa en el orden del archivo, para validar el saldo de cada cohorte correctamente."
+            description="Columnas esperadas: fincaCodigo, loteCodigo, tipo (EMBOLSE/REPIQUE/RECUSE/PROCESADO), semanaEmbolseCodigo, semanaRegistroCodigo (opcional, por defecto = semanaEmbolseCodigo), motivo (nombre, requerido para REPIQUE/RECUSE — debe existir en el maestro correspondiente), cantidad, fecha (AAAA-MM-DD), observacion (opcional). Se procesa en el orden del archivo, para validar el saldo de cada cohorte correctamente. Máximo 15,000 filas por archivo — si tenés más, dividilo por semana o por año y subí cada parte por separado."
             endpoint="/racimo-movimientos/bulk-upload"
             templateHeaders={[
               "fincaCodigo",
@@ -74,6 +74,7 @@ export default function CargueMasivoPage() {
             ]}
             templateExampleRow={["525", "525-01", "EMBOLSE", "S17-2026", "S17-2026", "", "1000", "2026-04-20", ""]}
             templateFilename="plantilla_movimientos_racimos.xlsx"
+            chunkSize={10000}
             renderResult={(r) => (
               <>
                 <p className="mb-1">
@@ -192,7 +193,7 @@ function ErrorList({ errores, rawFileRows, templateHeaders }) {
   );
 }
 
-function BulkUploadCard({ title, description, endpoint, templateHeaders, templateExampleRow, templateFilename, renderResult }) {
+function BulkUploadCard({ title, description, endpoint, templateHeaders, templateExampleRow, templateFilename, renderResult, chunkSize }) {
   const [rawFileRows, setRawFileRows] = useState([]);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -207,8 +208,11 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
   const [preview, setPreview] = useState(null);
   const [requireConfirmation, setRequireConfirmation] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [chunkInfo, setChunkInfo] = useState(null); // { actual, total } mientras se sube en partes
+  const [failedChunk, setFailedChunk] = useState(null); // datos para poder reanudar tras un fallo a mitad de camino
   const inputRef = useRef(null);
   const pollRef = useRef(null);
+  const chunkConfirmResolver = useRef(null); // resuelve la pausa por saldo negativo en medio del chunking
 
   // Genera un token único para seguir el progreso del lado del servidor
   const progressToken = useRef(null);
@@ -257,6 +261,7 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
     setResult(null);
     setPreview(null);
     setRequireConfirmation(null);
+    setFailedChunk(null);
     setUploadPct(0);
     setProcPct(0);
     setProcFase("");
@@ -312,6 +317,130 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
     } finally {
       setUploading(false);
     }
+  };
+
+  // Construye un archivo .xlsx solo con un pedazo de filas (mismo header),
+  // para subirlo como si fuera un cargue independiente.
+  const buildChunkFile = (rowsSlice, baseName, idx, totalChunks) => {
+    const worksheet = XLSX.utils.json_to_sheet(rowsSlice, { header: templateHeaders });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Datos");
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const nombre = `${baseName.replace(/\.(xlsx|csv)$/i, "")}_parte${idx + 1}de${totalChunks}.xlsx`;
+    return new File([blob], nombre, { type: blob.type });
+  };
+
+  // Para archivos con más filas de las que el backend puede procesar en una
+  // sola petición (se corta por el límite de tiempo de la función
+  // serverless): el navegador arma partes de `chunkSize` filas cada una,
+  // reutilizando el header, y las sube en secuencia (nunca en paralelo,
+  // porque el orden importa para validar el saldo de cada cohorte). Si una
+  // parte pide confirmación por saldo negativo, se pausa y se le pregunta al
+  // usuario antes de seguir con la siguiente.
+  const handleUploadChunked = async (resumeFrom) => {
+    if (!selectedFile || rawFileRows.length === 0) return;
+    setError("");
+    setResult(null);
+    setPreview(null);
+    setRequireConfirmation(null);
+    setFailedChunk(null);
+    setUploadPct(0);
+    setProcPct(0);
+    setUploading(true);
+
+    const rows = rawFileRows.map((r) => r.datos);
+    const totalChunks = Math.ceil(rows.length / chunkSize);
+    // Al reanudar, se retoma desde la parte que falló — las anteriores ya
+    // quedaron insertadas en la BD, no hace falta (ni conviene) repetirlas.
+    const acumulado = resumeFrom ? resumeFrom.acumulado : { totalFilas: 0, errores: [] };
+    let filaOffset = resumeFrom ? resumeFrom.filaOffset : 0;
+    const idxInicial = resumeFrom ? resumeFrom.idx : 0;
+
+    // El backend numera las filas relativas a CADA parte subida (empieza en
+    // 2 en cada chunk). Para mostrarlas/buscarlas contra `rawFileRows`
+    // (que tiene los números de fila del archivo ORIGINAL completo), hay
+    // que sumarles cuántas filas ya pasaron en partes anteriores.
+    const ajustarFilas = (arr) =>
+      (arr || []).map((e) => ({ ...e, fila: e.fila != null ? e.fila + filaOffset : e.fila }));
+
+    for (let idx = idxInicial; idx < totalChunks; idx += 1) {
+      setChunkInfo({ actual: idx + 1, total: totalChunks });
+      const chunkRows = rows.slice(idx * chunkSize, idx * chunkSize + chunkSize);
+      const chunkFile = buildChunkFile(chunkRows, selectedFile.name, idx, totalChunks);
+      const token = `${progressToken.current}-p${idx}`;
+      setProcPct(0);
+      setProcFase("validando");
+      startPolling(token);
+
+      try {
+        let data = await apiUploadConProgreso(endpoint, chunkFile, setUploadPct, { progressToken: token });
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+
+        if (data.requireConfirmation) {
+          const confirmar = await new Promise((resolve) => {
+            chunkConfirmResolver.current = resolve;
+            setRequireConfirmation({
+              ...data,
+              errores: ajustarFilas(data.errores),
+              warnings: ajustarFilas(data.warnings),
+            });
+          });
+          setRequireConfirmation(null);
+          if (!confirmar) {
+            setError(
+              `Carga detenida en la parte ${idx + 1} de ${totalChunks} (filas ${filaOffset + 1}-${filaOffset + chunkRows.length}). Las partes anteriores ya se cargaron correctamente — podés reanudar desde acá.`,
+            );
+            setFailedChunk({ idx, totalChunks, acumulado, filaOffset });
+            setUploading(false);
+            setChunkInfo(null);
+            return;
+          }
+          setProcFase("validando");
+          setProcPct(0);
+          startPolling(token);
+          data = await apiUploadConProgreso(endpoint, null, setUploadPct, { progressToken: token, forceNegativeSaldos: "true" });
+          if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+        }
+
+        acumulado.totalFilas += data.totalFilas || chunkRows.length;
+        for (const key of Object.keys(data)) {
+          if (["errores", "warnings", "totalFilas", "requireConfirmation"].includes(key)) continue;
+          if (typeof data[key] === "number") acumulado[key] = (acumulado[key] || 0) + data[key];
+        }
+        if (data.errores?.length) {
+          acumulado.errores.push(...ajustarFilas(data.errores));
+        }
+      } catch (err) {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        setError(
+          `Falló en la parte ${idx + 1} de ${totalChunks} (filas ${filaOffset + 1}-${filaOffset + chunkRows.length}): ${err.message}. Las partes anteriores ya se cargaron correctamente — podés reanudar desde acá.`,
+        );
+        setFailedChunk({ idx, totalChunks, acumulado, filaOffset });
+        setUploading(false);
+        setChunkInfo(null);
+        return;
+      }
+
+      filaOffset += chunkRows.length;
+    }
+
+    setResult(acumulado);
+    setSelectedFile(null);
+    setFailedChunk(null);
+    setUploading(false);
+    setChunkInfo(null);
+    setProcFase("completado");
+    setProcPct(100);
   };
 
   // El admin confirma la carga ignorando saldos negativos. No hace falta
@@ -462,11 +591,19 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
         </button>
       </div>
 
+      {selectedFile && chunkSize && rawFileRows.length > chunkSize && !uploading && !result && !preview && (
+        <p className="small text-secondary mt-2 mb-0">
+          El archivo tiene {rawFileRows.length.toLocaleString("es")} filas — se subirá automáticamente en{" "}
+          {Math.ceil(rawFileRows.length / chunkSize)} partes de hasta {chunkSize.toLocaleString("es")} filas cada una,
+          en orden. No hace falta que lo dividas vos.
+        </p>
+      )}
+
       {selectedFile && !uploading && !result && !preview && (
         <button
           type="button"
           className="btn btn-brand rounded-3 w-100 mt-3 d-flex align-items-center justify-content-center gap-2"
-          onClick={handleUpload}
+          onClick={() => (chunkSize && rawFileRows.length > chunkSize ? handleUploadChunked() : handleUpload())}
         >
           <FiUploadCloud /> Iniciar carga
         </button>
@@ -474,6 +611,11 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
 
       {uploading && (
         <div className="mt-3">
+          {chunkInfo && (
+            <p className="small fw-medium text-brand mb-2">
+              Parte {chunkInfo.actual} de {chunkInfo.total}
+            </p>
+          )}
           <div className="d-flex justify-content-between small text-secondary mb-1">
             <span>Subiendo archivo...</span>
             <span>{uploadPct}%</span>
@@ -547,14 +689,30 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
             <button
               type="button"
               className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2"
-              onClick={handleForceNegativeSaldos}
+              onClick={() => {
+                if (chunkConfirmResolver.current) {
+                  const resolve = chunkConfirmResolver.current;
+                  chunkConfirmResolver.current = null;
+                  resolve(true);
+                } else {
+                  handleForceNegativeSaldos();
+                }
+              }}
             >
               <FiUploadCloud /> Sí, cargar de todas formas ({(requireConfirmation.errores?.length ? requireConfirmation.totalFilas - requireConfirmation.errores.length : requireConfirmation.totalFilas)} movimientos)
             </button>
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
-              onClick={() => setRequireConfirmation(null)}
+              onClick={() => {
+                if (chunkConfirmResolver.current) {
+                  const resolve = chunkConfirmResolver.current;
+                  chunkConfirmResolver.current = null;
+                  resolve(false);
+                } else {
+                  setRequireConfirmation(null);
+                }
+              }}
             >
               <FiX /> Cancelar
             </button>
@@ -573,7 +731,20 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
           )}
         </div>
       )}
-      {error && <div className="alert alert-danger py-2 small mt-3 mb-0">{error}</div>}
+      {error && (
+        <div className="alert alert-danger py-2 small mt-3 mb-0">
+          <p className="mb-0">{error}</p>
+          {failedChunk && !uploading && (
+            <button
+              type="button"
+              className="btn btn-brand btn-sm rounded-3 d-inline-flex align-items-center gap-2 mt-2"
+              onClick={() => handleUploadChunked(failedChunk)}
+            >
+              <FiUploadCloud /> Reanudar desde la parte {failedChunk.idx + 1} de {failedChunk.totalChunks}
+            </button>
+          )}
+        </div>
+      )}
       {result && <div className="alert alert-success py-2 small mt-3 mb-0">{renderResult(result)}</div>}
     </div>
   );

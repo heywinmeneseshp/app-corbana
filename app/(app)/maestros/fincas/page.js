@@ -110,13 +110,15 @@ export default function FincasPage() {
             <FiPlus /> Nueva Finca
           </button>
         )}
-        <button
-          type="button"
-          className="btn btn-outline-secondary rounded-3 text-nowrap d-flex align-items-center gap-1"
-          onClick={() => setSyncModal(true)}
-        >
-          <FiRefreshCw /> Sincronizar con banarica
-        </button>
+        {hasPermission("finca.crear") && (
+          <button
+            type="button"
+            className="btn btn-outline-secondary rounded-3 text-nowrap d-flex align-items-center gap-1"
+            onClick={() => setSyncModal(true)}
+          >
+            <FiRefreshCw /> Sincronizar con banarica
+          </button>
+        )}
         <button
           type="button"
           className="btn btn-outline-secondary rounded-3"
@@ -134,9 +136,11 @@ export default function FincasPage() {
           <span className="small fw-medium" style={{ color: "var(--brand-900)" }}>
             {selected.size} finca(s) seleccionada(s)
           </span>
-          <button type="button" className="btn btn-link btn-sm text-danger text-decoration-none d-flex align-items-center gap-1" onClick={handleBulkDelete}>
-            <FiTrash2 /> Eliminar seleccionadas
-          </button>
+          {hasPermission("finca.eliminar") && (
+            <button type="button" className="btn btn-link btn-sm text-danger text-decoration-none d-flex align-items-center gap-1" onClick={handleBulkDelete}>
+              <FiTrash2 /> Eliminar seleccionadas
+            </button>
+          )}
         </div>
       )}
 
@@ -427,12 +431,16 @@ function LotesModal({ finca, onClose }) {
         <div className="d-flex gap-2">
           {!editMode && (
             <>
-              <button type="button" className="btn btn-sm btn-outline-warning rounded-3 d-inline-flex align-items-center gap-1" onClick={enableEditMode}>
-                <FiEdit2 /> Modo edición
-              </button>
-              <button type="button" className="btn btn-sm btn-brand rounded-3 d-inline-flex align-items-center gap-1" onClick={() => setShowForm((v) => !v)}>
-                {showForm ? <><FiX /> Cancelar</> : <><FiPlus /> Nuevo Lote</>}
-              </button>
+              {hasPermission("lote.editar") && (
+                <button type="button" className="btn btn-sm btn-outline-warning rounded-3 d-inline-flex align-items-center gap-1" onClick={enableEditMode}>
+                  <FiEdit2 /> Modo edición
+                </button>
+              )}
+              {hasPermission("lote.crear") && (
+                <button type="button" className="btn btn-sm btn-brand rounded-3 d-inline-flex align-items-center gap-1" onClick={() => setShowForm((v) => !v)}>
+                  {showForm ? <><FiX /> Cancelar</> : <><FiPlus /> Nuevo Lote</>}
+                </button>
+              )}
             </>
           )}
           {editMode && (
@@ -540,12 +548,16 @@ function LotesModal({ finca, onClose }) {
                           </td>
                           <td>
                             <div className="d-flex justify-content-end gap-2 flex-nowrap">
-                              <button type="button" className="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1 text-nowrap" onClick={() => toggle(lote.uuid, "editar")}>
-                                {expanded?.uuid === lote.uuid && expanded.type === "editar" ? <><FiX /> Cancelar</> : <><FiEdit2 /> Editar</>}
-                              </button>
-                              <button type="button" className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap" onClick={() => toggle(lote.uuid, "area")}>
-                                {expanded?.uuid === lote.uuid && expanded.type === "area" ? <><FiX /> Cancelar</> : <><FiRefreshCw /> Área</>}
-                              </button>
+                              {hasPermission("lote.editar") && (
+                                <button type="button" className="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1 text-nowrap" onClick={() => toggle(lote.uuid, "editar")}>
+                                  {expanded?.uuid === lote.uuid && expanded.type === "editar" ? <><FiX /> Cancelar</> : <><FiEdit2 /> Editar</>}
+                                </button>
+                              )}
+                              {hasPermission("lote.editar") && (
+                                <button type="button" className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap" onClick={() => toggle(lote.uuid, "area")}>
+                                  {expanded?.uuid === lote.uuid && expanded.type === "area" ? <><FiX /> Cancelar</> : <><FiRefreshCw /> Área</>}
+                                </button>
+                              )}
                               {esAdmin && (
                                 <button type="button" className="btn btn-sm btn-outline-danger" title="Eliminar lote" onClick={() => handleDeleteLote(lote)}>
                                   <FiTrash2 />

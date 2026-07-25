@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiKey, FiSave, FiX } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
-import TagPicker from "@/components/TagPicker";
+import PermisosGroupedPicker from "@/components/PermisosGroupedPicker";
 import RequirePermission from "@/components/RequirePermission";
 import { hasPermission } from "@/lib/auth";
 
@@ -287,12 +287,7 @@ function PermisosModal({ rol, onClose }) {
       {loading ? (
         <p className="text-center text-secondary small py-4 mb-0">Cargando permisos...</p>
       ) : (
-        <TagPicker
-          items={allItems}
-          selected={selected}
-          onChange={setSelected}
-          placeholder="Buscar permiso para agregar (ej: finca, usuarios, lote...)"
-        />
+        <PermisosGroupedPicker items={allItems} selected={selected} onChange={setSelected} />
       )}
 
       <div className="d-flex gap-2 mt-3">

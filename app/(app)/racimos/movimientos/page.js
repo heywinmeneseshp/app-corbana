@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { FiFilter, FiPlus, FiChevronLeft, FiChevronRight, FiTrash2, FiDownload } from "react-icons/fi";
-import { apiFetch, API_URL } from "@/lib/api";
+import { apiFetch, apiFetchBlob } from "@/lib/api";
+import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import { COLOR_HEX } from "@/lib/semanaColor";
 
@@ -104,6 +105,7 @@ function SemanaAutocomplete({ semanas, value, onChange }) {
 }
 
 export default function MovimientosPage() {
+  const puedeEliminar = hasPermission("racimo_movimiento.eliminar");
   const [fincas, setFincas] = useState([]);
   const [lotes, setLotes] = useState([]);
   const [semanas, setSemanas] = useState([]);
@@ -212,22 +214,7 @@ export default function MovimientosPage() {
       if (semanaRegistroHastaUuid) params.set("semanaRegistroHastaUuid", semanaRegistroHastaUuid);
       if (tipo) params.set("tipo", tipo);
 
-      const token = localStorage.getItem("corbana_access_token");
-      const res = await fetch(`${API_URL}/racimo-movimientos/exportar?${params.toString()}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.status === 401) {
-        localStorage.removeItem("corbana_access_token");
-        localStorage.removeItem("corbana_refresh_token");
-        window.location.href = "/login";
-        throw new Error("Sesión expirada");
-      }
-      if (!res.ok) {
-        let msg = "Error al exportar";
-        try { const j = await res.json(); msg = j.message || msg; } catch { try { msg = await res.text(); } catch {} }
-        throw new Error(msg);
-      }
-      const blob = await res.blob();
+      const blob = await apiFetchBlob(`/racimo-movimientos/exportar?${params.toString()}`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -423,14 +410,16 @@ export default function MovimientosPage() {
                         </td>
                         <td className="small">{item.creadoPor?.usuario || "Sistema"}</td>
                         <td className="text-end">
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={() => handleDelete(item.uuid)}
-                            title="Eliminar"
-                          >
-                            <FiTrash2 />
-                          </button>
+                          {puedeEliminar && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => handleDelete(item.uuid)}
+                              title="Eliminar"
+                            >
+                              <FiTrash2 />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

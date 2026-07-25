@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState, useCallback } from "react";
 import { FiRefreshCw, FiTrash2, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
+import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 
 function toLocalDateStr(d) {
@@ -128,60 +129,63 @@ export default function SemanasPage() {
       </div>
 
       {/* Generate form */}
-      <form onSubmit={handleGenerate} className="card border-0 shadow-sm rounded-4 p-4 mb-4">
-        <h6 className="fw-bold mb-3">Generar año</h6>
-        <div className="row g-3 align-items-end">
-          <div className="col-12 col-sm-3">
-            <label className="form-label small fw-medium">Año</label>
-            <input
-              type="number"
-              min={2000}
-              max={2100}
-              required
-              className="form-control rounded-3"
-              value={year}
-              onChange={(e) => resetFormToYear(Number(e.target.value))}
-            />
+      {hasPermission("semana.crear") && (
+        <form onSubmit={handleGenerate} className="card border-0 shadow-sm rounded-4 p-4 mb-4">
+          <h6 className="fw-bold mb-3">Generar año</h6>
+          <div className="row g-3 align-items-end">
+            <div className="col-12 col-sm-3">
+              <label className="form-label small fw-medium">Año</label>
+              <input
+                type="number"
+                min={2000}
+                max={2100}
+                required
+                className="form-control rounded-3"
+                value={year}
+                onChange={(e) => resetFormToYear(Number(e.target.value))}
+              />
+            </div>
+            <div className="col-12 col-sm-4">
+              <label className="form-label small fw-medium">Primer lunes de semana 1</label>
+              <input
+                type="date"
+                required
+                className="form-control rounded-3"
+                value={fechaInicio}
+                onChange={(e) => setFechaInicio(e.target.value)}
+              />
+            </div>
+            <div className="col-12 col-sm-3">
+              <label className="form-label small fw-medium">Total de semanas</label>
+              <select
+                className="form-select rounded-3"
+                value={totalSemanas}
+                onChange={(e) => setTotalSemanas(Number(e.target.value))}
+              >
+                {TOTAL_WEEKS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="form-text small mb-0 mt-1">
+                Sugerido: {getDefaultTotalWeeks(year)} para {year}
+              </p>
+            </div>
+            <div className="col-12 col-sm-2">
+              <button
+                type="submit"
+                disabled={generating}
+                className="btn btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1"
+              >
+                <FiRefreshCw /> {generating ? "Generando..." : "Generar"}
+              </button>
+            </div>
           </div>
-          <div className="col-12 col-sm-4">
-            <label className="form-label small fw-medium">Primer lunes de semana 1</label>
-            <input
-              type="date"
-              required
-              className="form-control rounded-3"
-              value={fechaInicio}
-              onChange={(e) => setFechaInicio(e.target.value)}
-            />
-          </div>
-          <div className="col-12 col-sm-3">
-            <label className="form-label small fw-medium">Total de semanas</label>
-            <select
-              className="form-select rounded-3"
-              value={totalSemanas}
-              onChange={(e) => setTotalSemanas(Number(e.target.value))}
-            >
-              {TOTAL_WEEKS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <p className="form-text small mb-0 mt-1">
-              Sugerido: {getDefaultTotalWeeks(year)} para {year}
-            </p>
-          </div>
-          <div className="col-12 col-sm-2">
-            <button
-              type="submit"
-              disabled={generating}
-              className="btn btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1"
-            >
-              <FiRefreshCw /> {generating ? "Generando..." : "Generar"}
-            </button>
-          </div>
-        </div>
-        {error && <div className="alert alert-danger py-2 small mt-3 mb-0">{error}</div>}
-      </form>
+        </form>
+      )}
+
+      {error && <div className="alert alert-danger py-2 small mb-4">{error}</div>}
 
       {/* Filter */}
       <div className="d-flex align-items-center gap-3 mb-3">
@@ -268,14 +272,16 @@ export default function SemanasPage() {
                     </td>
                     <td>
                       <div className="d-flex justify-content-end gap-2 flex-nowrap">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-danger"
-                          title="Eliminar"
-                          onClick={() => handleDeleteOne(semana.uuid)}
-                        >
-                          <FiTrash2 />
-                        </button>
+                        {hasPermission("semana.eliminar") && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            title="Eliminar"
+                            onClick={() => handleDeleteOne(semana.uuid)}
+                          >
+                            <FiTrash2 />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

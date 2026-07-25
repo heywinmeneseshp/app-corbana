@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FiFilter, FiEye, FiDownload } from "react-icons/fi";
-import { apiFetch, API_URL } from "@/lib/api";
+import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
@@ -92,29 +92,7 @@ function ReporteSemanalRacimos() {
     setDescargando(tipo);
     try {
       const params = new URLSearchParams({ semanaUuid, tipo });
-      const token = localStorage.getItem("corbana_access_token");
-      const res = await fetch(`${API_URL}/racimo-movimientos/exportar-semanal?${params.toString()}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.status === 401) {
-        localStorage.removeItem("corbana_access_token");
-        localStorage.removeItem("corbana_refresh_token");
-        window.location.href = "/login";
-        throw new Error("Sesión expirada");
-      }
-      if (!res.ok) {
-        let msg = "Error al exportar";
-        try {
-          const j = await res.json();
-          msg = j.message || msg;
-        } catch {
-          try {
-            msg = await res.text();
-          } catch {}
-        }
-        throw new Error(msg);
-      }
-      const blob = await res.blob();
+      const blob = await apiFetchBlob(`/racimo-movimientos/exportar-semanal?${params.toString()}`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
