@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList } from "react-icons/fi";
+import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission, hasAnyPermission } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
@@ -69,7 +69,7 @@ export default function Sidebar() {
   return (
     <aside
       className="d-flex flex-column flex-shrink-0"
-      style={{ width, backgroundColor: "var(--brand-900)", transition: "width .15s" }}
+      style={{ width, backgroundColor: "var(--brand-900)", transition: "width .15s", height: "100vh", position: "sticky", top: 0 }}
     >
       <div className={`d-flex align-items-center text-white py-4 ${collapsed ? "justify-content-center px-2" : "justify-content-between px-4"}`}>
         <div className="d-flex align-items-center gap-2">
@@ -98,7 +98,7 @@ export default function Sidebar() {
         </button>
       )}
 
-      <nav className="flex-grow-1 px-3 d-flex flex-column gap-1 mt-2">
+      <nav className="flex-grow-1 px-3 d-flex flex-column gap-1 mt-2 overflow-y-auto">
         <Link href="/" className={navLinkClass(pathname === "/")} title="Inicio">
           <FiHome size={18} />
           {label("Inicio")}
@@ -244,7 +244,11 @@ export default function Sidebar() {
         </Link>
       </nav>
 
-      <div className="px-3 pb-4">
+      <div className="px-3 pb-4 d-flex flex-column gap-1 flex-shrink-0">
+        <Link href="/profile" className={navLinkClass(pathname === "/profile")} title="Mi Perfil">
+          <FiUser size={18} />
+          {label("Mi Perfil")}
+        </Link>
         <button
           type="button"
           onClick={handleLogout}

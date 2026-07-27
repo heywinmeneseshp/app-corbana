@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiShield, FiSave, FiX, FiMapPin } from "react-icons/fi";
+import { FiPlus, FiSearch, FiEdit2, FiShield, FiSave, FiX, FiMapPin, FiToggleLeft, FiToggleRight, FiCheck, FiRefreshCw } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 import TagPicker from "@/components/TagPicker";
@@ -17,6 +17,11 @@ export default function UsuariosPage() {
   const [usuarioModal, setUsuarioModal] = useState(null); // null | {} | usuario
   const [rolesModal, setRolesModal] = useState(null); // null | usuario
   const [fincasModal, setFincasModal] = useState(null); // null | usuario
+
+  const [selected, setSelected] = useState(new Set());
+  const [resetModal, setResetModal] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetResult, setResetResult] = useState(null);
 
   async function loadUsuarios() {
     setLoading(true);
@@ -36,14 +41,58 @@ export default function UsuariosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDelete = async (uuid) => {
-    if (!confirm("¿Eliminar este usuario?")) return;
+  const handleToggleEstado = async (usuario) => {
+    const nuevoEstado = !usuario.estado;
+    const accion = nuevoEstado ? "activar" : "desactivar";
+    if (!confirm(`¿${accion} a ${usuario.nombre} ${usuario.apellido}?`)) return;
     try {
-      await apiFetch(`/users/${uuid}`, { method: "DELETE" });
+      await apiFetch(`/users/${usuario.uuid}`, {
+        method: "PUT",
+        body: JSON.stringify({ estado: nuevoEstado }),
+      });
       loadUsuarios();
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const toggleAll = () => {
+    if (selected.size === usuarios.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(usuarios.map((u) => u.uuid)));
+    }
+  };
+
+  const toggleOne = (uuid) => {
+    const next = new Set(selected);
+    if (next.has(uuid)) next.delete(uuid);
+    else next.add(uuid);
+    setSelected(next);
+  };
+
+  const handleBulkReset = async () => {
+    setResetting(true);
+    setResetResult(null);
+    try {
+      const r = await apiFetch("/users/bulk-reset-password", {
+        method: "POST",
+        body: JSON.stringify({ uuids: [...selected] }),
+      });
+      setResetResult(r);
+    } catch (err) {
+      setError(err.message);
+      setResetResult(null);
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const closeResetModal = () => {
+    setResetModal(false);
+    setResetResult(null);
+    setSelected(new Set());
+    loadUsuarios();
   };
 
   return (
@@ -83,6 +132,17 @@ export default function UsuariosPage() {
           <table className="table table-hover mb-0 align-middle">
             <thead className="table-light">
               <tr>
+                <th style={{ width: 40 }}>
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={selected.size > 0 && selected.size === usuarios.length}
+                      ref={(el) => { if (el) el.indeterminate = selected.size > 0 && selected.size < usuarios.length; }}
+                      onChange={toggleAll}
+                    />
+                  </div>
+                </th>
                 <th>Usuario</th>
                 <th>Email</th>
                 <th>Roles</th>
@@ -94,14 +154,14 @@ export default function UsuariosPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={6} className="text-center text-secondary py-4">
+                  <td colSpan={7} className="text-center text-secondary py-4">
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && usuarios.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-secondary py-4">
+                  <td colSpan={7} className="text-center text-secondary py-4">
                     No hay usuarios registrados todavía.
                   </td>
                 </tr>
@@ -109,6 +169,16 @@ export default function UsuariosPage() {
               {!loading &&
                 usuarios.map((usuario) => (
                   <tr key={usuario.uuid}>
+                    <td>
+                      <div className="form-check">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={selected.has(usuario.uuid)}
+                          onChange={() => toggleOne(usuario.uuid)}
+                        />
+                      </div>
+                    </td>
                     <td>
                       <p className="fw-medium mb-0">
                         {usuario.nombre} {usuario.apellido}
@@ -177,16 +247,14 @@ export default function UsuariosPage() {
                             <FiMapPin /> Fincas
                           </button>
                         )}
-                        {hasPermission("usuarios.eliminar") && (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-danger"
-                            title="Eliminar"
-                            onClick={() => handleDelete(usuario.uuid)}
-                          >
-                            <FiTrash2 />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className={`btn btn-sm border-0 ${usuario.estado ? "text-secondary" : "text-success"}`}
+                          title={usuario.estado ? "Desactivar" : "Activar"}
+                          onClick={() => handleToggleEstado(usuario)}
+                        >
+                          {usuario.estado ? <FiToggleLeft /> : <FiToggleRight />}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -195,6 +263,87 @@ export default function UsuariosPage() {
           </table>
         </div>
       </div>
+
+      {selected.size > 0 && (
+        <div className="d-flex align-items-center gap-2 mb-3 p-2 bg-light rounded-3 border">
+          <span className="small text-secondary fw-medium">{selected.size} seleccionado(s)</span>
+          <button
+            type="button"
+            className="btn btn-sm btn-brand d-inline-flex align-items-center gap-1"
+            onClick={() => setResetModal(true)}
+          >
+            <FiRefreshCw /> Restablecer contraseña
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+            onClick={() => setSelected(new Set())}
+          >
+            <FiX /> Limpiar
+          </button>
+        </div>
+      )}
+
+      {resetModal && (
+        <ModalShell title="Restablecer contraseñas" onClose={() => setResetModal(false)}>
+          {resetResult ? (
+            <div>
+              <p className="small text-secondary mb-3">
+                Resultado del restablecimiento para {resetResult.data?.length ?? 0} usuario(s):
+              </p>
+              <div className="mb-3" style={{ maxHeight: 240, overflowY: "auto" }}>
+                {(resetResult.data || []).map((r) => (
+                  <div key={r.uuid} className="d-flex align-items-center gap-2 mb-1 small">
+                    {r.ok ? (
+                      <FiCheck className="text-success flex-shrink-0" />
+                    ) : (
+                      <FiX className="text-danger flex-shrink-0" />
+                    )}
+                    <span>
+                      <strong>{r.usuario}</strong> — {r.email}
+                      {!r.ok && <span className="text-danger ms-1">(error al enviar correo)</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="d-flex">
+                <button
+                  type="button"
+                  className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+                  onClick={closeResetModal}
+                >
+                  <FiCheck /> Listo
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="small text-secondary mb-3">
+                Se restablecerá la contraseña de <strong>{selected.size} usuario(s)</strong>. Recibirán un correo con
+                su nueva contraseña y se les pedirá cambiarla. ¿Continuar?
+              </p>
+              {error && <div className="alert alert-danger py-2 small">{error}</div>}
+              <div className="d-flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+                  onClick={() => setResetModal(false)}
+                >
+                  <FiX /> Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={resetting}
+                  className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+                  onClick={handleBulkReset}
+                >
+                  <FiRefreshCw /> {resetting ? "Restableciendo..." : "Sí, restablecer"}
+                </button>
+              </div>
+            </div>
+          )}
+        </ModalShell>
+      )}
 
       {usuarioModal && (
         <UsuarioModal

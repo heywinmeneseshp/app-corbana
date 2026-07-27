@@ -79,10 +79,16 @@ export default function InicioPage() {
   // — no hay que asumir a ciegas que las primeras ~12 semanas después del
   // primer embolse no tienen datos: con cargas históricas, sí pueden
   // tenerlos. Se confía en el dato real en vez de una suposición fija.
-  const ratioFiltrado = useMemo(() => {
-    if (!data?.ratioAnual?.length) return [];
-    return data.ratioAnual.filter((s) => s.ratio !== null);
-  }, [data]);
+  //
+  // Importante: NO se filtran las semanas sin dato (a diferencia de antes)
+  // — el eje X de ChartLine es de tipo "categoría", así que su rango
+  // depende de qué valores de `numeroSemana` aparecen en el arreglo, no del
+  // `domain` fijo declarado. Si se acorta el arreglo, el eje también se
+  // acorta. Se mantienen las 52 semanas (como en Cajas/Embolses), con
+  // `ratio: null` en las que no tienen dato — ChartLine ya sabe no dibujar
+  // punto ni conectar la línea en esos huecos.
+  const ratioFiltrado = useMemo(() => data?.ratioAnual || [], [data]);
+  const hayDatosDeRatio = useMemo(() => ratioFiltrado.some((s) => s.ratio !== null), [ratioFiltrado]);
 
   const totAncho = 120 + (data?.cohortes?.length || 0) * 68;
 
@@ -300,13 +306,13 @@ export default function InicioPage() {
         </div>
       )}
 
-      {ratioFiltrado.length === 0 && (
+      {!hayDatosDeRatio && (
         <div className="alert alert-light border small mb-3">
           No hay datos de cajas/racimos procesados para el año {anioGraficos || data.anioSeleccionado}.
         </div>
       )}
 
-      {ratioFiltrado.length > 0 && (() => {
+      {hayDatosDeRatio && (() => {
         function ChartTooltip({ active, payload, label, dataKey, prefix, decimal }) {
           if (!active || !payload || payload.length === 0) return null;
           const entry = payload.find((p) => p.dataKey === dataKey);
@@ -381,7 +387,7 @@ export default function InicioPage() {
                   <div className="row g-3 mt-0">
                     <div className="col-md-6" style={{ height: "280px" }}>
                       <ChartCard id="ratio" title="Ratio" subtitle="Cajas producidas / racimos procesados, por semana">
-                        {ratioFiltrado.length > 0 && <ChartLine data={ratioFiltrado} dataKey="ratio" color="#6d28d9" decimal prefix="Ratio" />}
+                        {hayDatosDeRatio && <ChartLine data={ratioFiltrado} dataKey="ratio" color="#6d28d9" decimal prefix="Ratio" />}
                       </ChartCard>
                     </div>
                     <div className="col-md-6" style={{ height: "280px" }}>
