@@ -79,7 +79,7 @@ export default function LoginPage() {
             />
             <Feature
               title="Optimización de Cosecha"
-              text="Planifica y gestiona tus cosechas con inteligencia artificial para máxima eficiencia."
+              text="Planifica y gestiona tus cosechas para máxima eficiencia."
               icon={
                 <>
                   <path
