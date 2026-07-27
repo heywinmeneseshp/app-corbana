@@ -104,7 +104,7 @@ export default function LoginPage() {
         </div>
 
         <p className="small mb-0" style={{ color: "rgba(240,253,244,0.6)" }}>
-          © 2026 Corbana. Innovación Agrícola y Tecnológica Global.
+          © 2026 Corbana. Todos los derechos reservados.
         </p>
       </div>
 
