@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser } from "react-icons/fi";
+import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission, hasAnyPermission } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
@@ -36,6 +36,7 @@ export default function Sidebar() {
       semanas: hasPermission("semana.ver"),
       motivoRepique: hasPermission("motivo_repique.ver"),
       motivoRecuse: hasPermission("motivo_recuse.ver"),
+      versionApp: hasPermission("roles.ver"),
       cargue: hasAnyPermission([
         "finca.crear",
         "lote.crear",
@@ -63,7 +64,13 @@ export default function Sidebar() {
   if (!perms) return <aside className="flex-shrink-0" style={{ width, backgroundColor: "var(--brand-900)" }} />;
 
   const maestrosVisible =
-    perms.fincas || perms.usuarios || perms.roles || perms.semanas || perms.motivoRepique || perms.motivoRecuse;
+    perms.fincas ||
+    perms.usuarios ||
+    perms.roles ||
+    perms.semanas ||
+    perms.motivoRepique ||
+    perms.motivoRecuse ||
+    perms.versionApp;
   const label = (text) => (!collapsed ? text : null);
 
   return (
@@ -165,6 +172,12 @@ export default function Sidebar() {
                   <Link href="/maestros/motivos-recuse" className={navLinkClass(pathname === "/maestros/motivos-recuse")}>
                     <GiFruitBowl size={16} />
                     Motivos de Recuse
+                  </Link>
+                )}
+                {perms.versionApp && (
+                  <Link href="/maestros/version-app" className={navLinkClass(pathname === "/maestros/version-app")}>
+                    <FiSmartphone size={16} />
+                    Versión App Móvil
                   </Link>
                 )}
               </div>
