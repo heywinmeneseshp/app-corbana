@@ -12,6 +12,7 @@ const TABS = [
   { key: "Conteo de Hojas", label: "Conteo de Hojas" },
   { key: "Suma Bruta", label: "Suma Bruta" },
   { key: "Racimos", label: "Descargas de Racimos" },
+  { key: "Precipitaciones", label: "Precipitaciones" },
 ];
 
 export default function ReportesPage() {
@@ -53,6 +54,8 @@ export default function ReportesPage() {
 
         {tab === "Racimos" ? (
           <ReporteSemanalRacimos />
+        ) : tab === "Precipitaciones" ? (
+          <ReportePrecipitaciones />
         ) : tipoActual ? (
           <ReporteEvaluacion tipoEvaluacionUuid={tipoActual.uuid} tab={tab} />
         ) : (
@@ -283,20 +286,21 @@ function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
                     <th>Candela</th>
                   </>
                 )}
+                {(tab === "Índice de infección" || tab === "Conteo de Hojas" || tab === "Suma Bruta") && <th>Registrado por</th>}
                 {(tab === "Índice de infección" || tab === "Suma Bruta") && <th></th>}
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8} className="text-center text-secondary py-4">
+                  <td colSpan={10} className="text-center text-secondary py-4">
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && items.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center text-secondary py-4">
+                  <td colSpan={10} className="text-center text-secondary py-4">
                     No hay evaluaciones para estos filtros.
                   </td>
                 </tr>
@@ -316,13 +320,19 @@ function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
                         <td>{ev.infeccion?.yls ?? "—"}</td>
                       </>
                     )}
-                    {tab === "Conteo de Hojas" && <td>{ev.conteoHojas?.hojasFuncionales ?? "—"}</td>}
+                    {tab === "Conteo de Hojas" && (
+                      <>
+                        <td>{ev.conteoHojas?.hojasFuncionales ?? "—"}</td>
+                        <td>{ev.usuario?.usuario || "—"}</td>
+                      </>
+                    )}
                     {tab === "Suma Bruta" && (
                       <>
                         <td>{ev.sumaBruta?.hojasFuncionales ?? "—"}</td>
                         <td>{ev.sumaBruta?.candela ?? "—"}</td>
                       </>
                     )}
+                    {(tab === "Índice de infección" || tab === "Suma Bruta") && <td>{ev.usuario?.usuario || "—"}</td>}
                     {(tab === "Índice de infección" || tab === "Suma Bruta") && (
                       <td className="text-end">
                         <button
@@ -386,3 +396,113 @@ function DetalleModal({ evaluacion, tab, onClose }) {
     </ModalShell>
   );
 }
+
+function ReportePrecipitaciones() {
+  const [fincas, setFincas] = useState([]);
+  const [fincaUuid, setFincaUuid] = useState("");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    apiFetch("/fincas?limit=100")
+      .then((res) => setFincas(res.items))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadReporte();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadReporte() {
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ limit: "100" });
+      if (fincaUuid) params.set("fincaUuid", fincaUuid);
+      if (fechaDesde) params.set("fechaDesde", fechaDesde);
+      if (fechaHasta) params.set("fechaHasta", fechaHasta);
+      const res = await apiFetch(`/precipitaciones?${params.toString()}`);
+      setData(res);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+        <div className="row g-2 align-items-end">
+          <div className="col-6 col-md-3">
+            <label className="form-label small fw-medium">Finca</label>
+            <select className="form-select rounded-3" value={fincaUuid} onChange={(e) => setFincaUuid(e.target.value)}>
+              <option value="">Todas</option>
+              {fincas.map((f) => (
+                <option key={f.uuid} value={f.uuid}>{f.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-6 col-md-2">
+            <label className="form-label small fw-medium">Desde</label>
+            <input type="date" className="form-control rounded-3" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
+          </div>
+          <div className="col-6 col-md-2">
+            <label className="form-label small fw-medium">Hasta</label>
+            <input type="date" className="form-control rounded-3" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
+          </div>
+          <div className="col-12 col-md-2">
+            <button type="button" className="btn btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={loadReporte}>
+              <FiFilter /> Filtrar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+      <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div className="table-responsive">
+          <table className="table table-hover mb-0 align-middle small">
+            <thead className="table-light">
+              <tr>
+                <th>Fecha</th>
+                <th>Semana</th>
+                <th>Finca</th>
+                <th className="text-end">Precipitación (mm)</th>
+                <th>Registrado por</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={5} className="text-center text-secondary py-4">Cargando...</td>
+                </tr>
+              )}
+              {!loading && data?.items?.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="text-center text-secondary py-4">No hay precipitaciones registradas.</td>
+                </tr>
+              )}
+              {!loading && data?.items?.map((p) => (
+                <tr key={p.uuid}>
+                  <td>{p.fecha}</td>
+                  <td>{p.semana_codigo || "—"}</td>
+                  <td>{p.finca_nombre || "—"}</td>
+                  <td className="text-end fw-semibold">{Number(p.mm).toLocaleString("es")}</td>
+                  <td>{p.usuario_nombre || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+

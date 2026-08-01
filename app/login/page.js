@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { saveSession } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
 import styles from "./login.module.css";
@@ -198,9 +199,9 @@ export default function LoginPage() {
                         Recordarme
                       </label>
                     </div>
-                    <a href="#" className="text-brand fw-medium text-decoration-none">
+                    <Link href="/forgot-password" className="text-brand fw-medium text-decoration-none">
                       ¿Olvidaste tu contraseña?
-                    </a>
+                    </Link>
                   </div>
 
                   {error && <div className="alert alert-danger py-2 small">{error}</div>}

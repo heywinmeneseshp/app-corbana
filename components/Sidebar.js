@@ -251,6 +251,14 @@ export default function Sidebar() {
             {label("Cargue Masivo")}
           </Link>
         )}
+        <Link
+          href="/labores-culturales"
+          className={navLinkClass(pathname.startsWith("/labores-culturales"))}
+          title="Evaluación de Labores"
+        >
+          <GiFarmTractor size={18} />
+          {label("Evaluación de Labores")}
+        </Link>
         <Link href="/reportes" className={navLinkClass(pathname === "/reportes")} title="Reportes">
           <FiBarChart2 size={18} />
           {label("Reportes")}

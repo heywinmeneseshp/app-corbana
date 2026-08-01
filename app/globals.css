@@ -39,13 +39,18 @@ body {
 }
 .btn-brand:hover,
 .btn-brand:focus {
-  background-color: var(--brand-800);
-  border-color: var(--brand-800);
+  background-color: #6c757d;
+  border-color: #6c757d;
   color: #fff;
 }
 
 .border-brand {
   border-color: var(--brand-700) !important;
+}
+
+.nav-pills .nav-link.btn-outline-secondary:hover {
+  background-color: #6c757d !important;
+  color: #fff !important;
 }
 
 .form-control:focus {
