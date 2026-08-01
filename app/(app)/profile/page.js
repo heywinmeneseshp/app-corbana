@@ -51,10 +51,16 @@ export default function ProfilePage() {
         method: "PUT",
         body: JSON.stringify({ nombre, apellido, email }),
       });
-      setUser(userData);
+      // PUT /auth/me no devuelve permissions/roles/fincaIds (solo los datos
+      // de perfil editados) — si se guardara tal cual, la sesión perdería
+      // esos campos hasta el próximo login. Se combinan con lo que ya
+      // estaba en caché para no pisarlos.
+      const cached = getCurrentUser();
+      const mergedUser = { ...cached, ...userData };
+      setUser(mergedUser);
       const accessToken = localStorage.getItem("corbana_access_token");
       const refreshToken = localStorage.getItem("corbana_refresh_token");
-      saveSession({ accessToken, refreshToken, user: userData });
+      saveSession({ accessToken, refreshToken, user: mergedUser });
       setSaved(true);
     } catch (err) {
       setError(err.message);
