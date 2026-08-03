@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone } from "react-icons/fi";
+import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission, hasAnyPermission } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
@@ -46,6 +46,7 @@ export default function Sidebar() {
       ]),
       racimoMovimientoCrear: hasPermission("racimo_movimiento.crear"),
       racimoMovimientoVer: hasPermission("racimo_movimiento.ver"),
+      precipitacionDiaria: hasPermission("precipitacion_diaria.ver"),
     });
   }, []);
 
@@ -259,6 +260,16 @@ export default function Sidebar() {
           <GiFarmTractor size={18} />
           {label("Evaluación de Labores")}
         </Link>
+        {perms.precipitacionDiaria && (
+          <Link
+            href="/precipitacion-diaria"
+            className={navLinkClass(pathname.startsWith("/precipitacion-diaria"))}
+            title="Precipitación Diaria"
+          >
+            <FiCloudRain size={18} />
+            {label("Precipitación Diaria")}
+          </Link>
+        )}
         <Link href="/reportes" className={navLinkClass(pathname === "/reportes")} title="Reportes">
           <FiBarChart2 size={18} />
           {label("Reportes")}
