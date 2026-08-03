@@ -416,11 +416,16 @@ function LotesModal({ finca, onClose }) {
       const incluirParam = esAdmin && mostrarEliminados ? "&incluirEliminados=true" : "";
       const { items } = await apiFetch(`/fincas/${finca.uuid}/lotes?limit=100${incluirParam}`);
       setLotes(items);
+      // Los lotes eliminados no existen para el endpoint de historial (lo
+      // excluye por ser soft-delete), así que se omiten aquí — de todas
+      // formas no se les muestra esa columna en la tabla.
       const entries = await Promise.all(
-        items.map(async (lote) => {
-          const { items: historial } = await apiFetch(`/lotes/${lote.uuid}/area-produccion?limit=1`);
-          return [lote.uuid, historial[0] || null];
-        }),
+        items
+          .filter((lote) => !lote.deletedAt)
+          .map(async (lote) => {
+            const { items: historial } = await apiFetch(`/lotes/${lote.uuid}/area-produccion?limit=1`);
+            return [lote.uuid, historial[0] || null];
+          }),
       );
       setAreaProdMap(Object.fromEntries(entries));
     } catch (err) {
