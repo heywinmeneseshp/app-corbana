@@ -94,7 +94,7 @@ export default function PrecipitacionDiariaPage() {
     e.preventDefault();
     setError("");
     if (!fincaSeleccionada || !rolSeleccionado || !semanaSeleccionada) {
-      setError("Elegí una opción válida de la lista en cada campo.");
+      setError("Elige una opción válida de la lista en cada campo.");
       return;
     }
     setCreando(true);
@@ -148,7 +148,7 @@ export default function PrecipitacionDiariaPage() {
             <FiCloudRain className="text-primary" /> Precipitación Diaria
           </h1>
           <p className="text-secondary mb-0">
-            Programá qué rol debe registrar la precipitación diaria de una finca, a partir de qué semana. A los
+            Programa qué rol debe registrar la precipitación diaria de una finca, a partir de qué semana. A los
             usuarios con ese rol se les va a pedir (con bloqueo) los días que no hayan registrado.
           </p>
         </div>
@@ -166,7 +166,7 @@ export default function PrecipitacionDiariaPage() {
                     type="text"
                     className="form-control"
                     list="fincas-datalist"
-                    placeholder="Escribí para buscar..."
+                    placeholder="Escribe para buscar..."
                     autoComplete="off"
                     value={fincaTexto}
                     onChange={(e) => setFincaTexto(e.target.value)}
@@ -184,7 +184,7 @@ export default function PrecipitacionDiariaPage() {
                     type="text"
                     className="form-control"
                     list="roles-datalist"
-                    placeholder="Escribí para buscar..."
+                    placeholder="Escribe para buscar..."
                     autoComplete="off"
                     value={rolTexto}
                     onChange={(e) => setRolTexto(e.target.value)}
@@ -202,7 +202,7 @@ export default function PrecipitacionDiariaPage() {
                     type="text"
                     className="form-control"
                     list="semanas-datalist"
-                    placeholder="Escribí para buscar..."
+                    placeholder="Escribe para buscar..."
                     autoComplete="off"
                     value={semanaTexto}
                     onChange={(e) => setSemanaTexto(e.target.value)}

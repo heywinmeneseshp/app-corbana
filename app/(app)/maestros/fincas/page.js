@@ -11,6 +11,7 @@ import {
   FiTrash2,
   FiSave,
   FiX,
+  FiRotateCcw,
 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
@@ -346,6 +347,7 @@ function LotesModal({ finca, onClose }) {
   const [expanded, setExpanded] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [editDraft, setEditDraft] = useState({});
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
   const esAdmin = (getCurrentUser()?.roles || []).includes("Administrador");
 
   const enableEditMode = () => {
@@ -368,6 +370,16 @@ function LotesModal({ finca, onClose }) {
     try {
       await apiFetch(`/lotes/${lote.uuid}`, { method: "DELETE" });
       setLotes((prev) => prev.filter((l) => l.uuid !== lote.uuid));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleRestoreLote = async (lote) => {
+    if (!confirm(`¿Restaurar el lote "${lote.nombre}" (${lote.codigo})?`)) return;
+    try {
+      const restaurado = await apiFetch(`/lotes/${lote.uuid}/restore`, { method: "POST" });
+      setLotes((prev) => prev.map((l) => (l.uuid === lote.uuid ? restaurado : l)));
     } catch (err) {
       setError(err.message);
     }
@@ -401,7 +413,8 @@ function LotesModal({ finca, onClose }) {
     setLoading(true);
     setError("");
     try {
-      const { items } = await apiFetch(`/fincas/${finca.uuid}/lotes?limit=100`);
+      const incluirParam = esAdmin && mostrarEliminados ? "&incluirEliminados=true" : "";
+      const { items } = await apiFetch(`/fincas/${finca.uuid}/lotes?limit=100${incluirParam}`);
       setLotes(items);
       const entries = await Promise.all(
         items.map(async (lote) => {
@@ -420,14 +433,30 @@ function LotesModal({ finca, onClose }) {
   useEffect(() => {
     loadLotes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mostrarEliminados]);
 
   return (
     <ModalShell title={`Lotes de ${finca.nombre}`} onClose={onClose} size="lg">
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <span className="small text-secondary">Código: {finca.codigo}</span>
+        <div className="d-flex align-items-center gap-3">
+          <span className="small text-secondary">Código: {finca.codigo}</span>
+          {esAdmin && (
+            <div className="form-check mb-0">
+              <input
+                type="checkbox"
+                className="form-check-input"
+                id="mostrar-eliminados"
+                checked={mostrarEliminados}
+                onChange={(e) => setMostrarEliminados(e.target.checked)}
+              />
+              <label className="form-check-label small" htmlFor="mostrar-eliminados">
+                Mostrar eliminados
+              </label>
+            </div>
+          )}
+        </div>
         <div className="d-flex gap-2">
           {!editMode && (
             <>
@@ -526,7 +555,7 @@ function LotesModal({ finca, onClose }) {
                       </tr>
                     ) : (
                       <>
-                        <tr>
+                        <tr className={lote.deletedAt ? "opacity-50" : undefined}>
                           <td>
                             <p className="mb-0">{lote.nombre}</p>
                             <p className="small text-secondary mb-0">Código: {lote.codigo}</p>
@@ -540,13 +569,24 @@ function LotesModal({ finca, onClose }) {
                             )}
                           </td>
                           <td>
-                            {lote.estado ? (
+                            {lote.deletedAt ? (
+                              <span className="badge rounded-pill text-bg-danger">Eliminado</span>
+                            ) : lote.estado ? (
                               <span className="badge rounded-pill" style={{ backgroundColor: "#d1fae5", color: "#047857" }}>Activo</span>
                             ) : (
                               <span className="badge rounded-pill text-bg-secondary">Inactivo</span>
                             )}
                           </td>
                           <td>
+                            {lote.deletedAt ? (
+                              esAdmin && (
+                                <div className="d-flex justify-content-end">
+                                  <button type="button" className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap" title="Restaurar lote" onClick={() => handleRestoreLote(lote)}>
+                                    <FiRotateCcw /> Restaurar
+                                  </button>
+                                </div>
+                              )
+                            ) : (
                             <div className="d-flex justify-content-end gap-2 flex-nowrap">
                               {hasPermission("lote.editar") && (
                                 <button type="button" className="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1 text-nowrap" onClick={() => toggle(lote.uuid, "editar")}>
@@ -564,6 +604,7 @@ function LotesModal({ finca, onClose }) {
                                 </button>
                               )}
                             </div>
+                            )}
                           </td>
                         </tr>
                         {expanded?.uuid === lote.uuid && expanded.type === "area" && (

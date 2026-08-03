@@ -66,7 +66,7 @@ export default function PrecipitacionDiariaModal() {
           <h2 className="h5 fw-bold mb-0">Precipitación pendiente de registrar</h2>
         </div>
         <p className="text-secondary small mb-4">
-          Tenés días sin registrar. Completá la precipitación (mm) de cada día para poder continuar.
+          Tienes días sin registrar. Completa la precipitación (mm) de cada día para poder continuar.
         </p>
 
         <form onSubmit={handleSubmit}>
