@@ -410,7 +410,7 @@ export default function MovimientosPage() {
                         </td>
                         <td className="small">{item.creadoPor?.usuario || "Sistema"}</td>
                         <td className="text-end">
-                          {puedeEliminar && (
+                          {puedeEliminar && (!item.esHistorico || meta.puedeEliminarHistorico) && (
                             <button
                               type="button"
                               className="btn btn-sm btn-outline-danger"
