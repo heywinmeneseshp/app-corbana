@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain } from "react-icons/fi";
+import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain, FiFolder, FiCheckSquare, FiClipboard } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission, hasAnyPermission } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
@@ -36,6 +36,9 @@ export default function Sidebar() {
       semanas: hasPermission("semana.ver"),
       motivoRepique: hasPermission("motivo_repique.ver"),
       motivoRecuse: hasPermission("motivo_recuse.ver"),
+      categoriaLabor: hasPermission("categoria_labor.ver"),
+      labor: hasPermission("labor.ver"),
+      calendarioLabores: hasPermission("labor_programacion.ver"),
       versionApp: hasPermission("roles.ver"),
       cargue: hasAnyPermission([
         "finca.crear",
@@ -71,6 +74,8 @@ export default function Sidebar() {
     perms.semanas ||
     perms.motivoRepique ||
     perms.motivoRecuse ||
+    perms.categoriaLabor ||
+    perms.labor ||
     perms.versionApp;
   const label = (text) => (!collapsed ? text : null);
 
@@ -175,6 +180,18 @@ export default function Sidebar() {
                     Motivos de Recuse
                   </Link>
                 )}
+                {perms.categoriaLabor && (
+                  <Link href="/maestros/categorias-labor" className={navLinkClass(pathname === "/maestros/categorias-labor")}>
+                    <FiFolder size={16} />
+                    Categorías de Labor
+                  </Link>
+                )}
+                {perms.labor && (
+                  <Link href="/maestros/labores" className={navLinkClass(pathname === "/maestros/labores")}>
+                    <FiCheckSquare size={16} />
+                    Labores
+                  </Link>
+                )}
                 {perms.versionApp && (
                   <Link href="/maestros/version-app" className={navLinkClass(pathname === "/maestros/version-app")}>
                     <FiSmartphone size={16} />
@@ -268,6 +285,16 @@ export default function Sidebar() {
           >
             <FiCloudRain size={18} />
             {label("Precipitación Diaria")}
+          </Link>
+        )}
+        {perms.calendarioLabores && (
+          <Link
+            href="/calendario-labores"
+            className={navLinkClass(pathname.startsWith("/calendario-labores"))}
+            title="Calendario de Labores"
+          >
+            <FiClipboard size={18} />
+            {label("Calendario de Labores")}
           </Link>
         )}
         <Link href="/reportes" className={navLinkClass(pathname === "/reportes")} title="Reportes">

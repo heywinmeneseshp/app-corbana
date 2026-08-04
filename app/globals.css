@@ -62,3 +62,10 @@ body {
   background-color: var(--brand-700);
   border-color: var(--brand-700);
 }
+
+/* Calendario de Labores: fila de labor compacta, sin fondo salvo al pasar
+   el mouse — el color vive únicamente en el icono. */
+.labor-item:hover {
+  background-color: #f8fafc;
+}
+
