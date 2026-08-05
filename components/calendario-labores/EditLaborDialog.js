@@ -5,6 +5,7 @@ import { FiTrash2 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import ModalShell from "@/components/ModalShell";
+import { esAdministrador, estaBloqueada } from "@/lib/laborEstados";
 
 function nombreCompleto(u) {
   return `${u.nombre} ${u.apellido}`.trim();
@@ -25,8 +26,9 @@ export default function EditLaborDialog({ ocurrencia, usuarios, onClose, onChang
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const puedeEditar = hasPermission("labor_programacion.editar");
-  const puedeEliminar = hasPermission("labor_programacion.eliminar");
+  const editable = esAdministrador() || !estaBloqueada(ocurrencia);
+  const puedeEditar = hasPermission("labor_programacion.editar") && editable;
+  const puedeEliminar = hasPermission("labor_programacion.eliminar") && editable;
   const esRecurrente = Boolean(ocurrencia.serie?.esRecurrente);
   const permiteEstaYSiguientes = ocurrencia.serie?.modoLotes === "UNICO";
 
@@ -75,6 +77,11 @@ export default function EditLaborDialog({ ocurrencia, usuarios, onClose, onChang
   return (
     <ModalShell title={`${ocurrencia.labor?.nombre || "Labor"} — ${ocurrencia.lote?.nombre || ""}`} onClose={onClose}>
       <form onSubmit={handleSubmit}>
+        {!editable && (
+          <div className="alert alert-warning py-2 small">
+            Esta labor está completada o su fecha ya pasó. Solo un usuario con rol de Administrador puede editarla.
+          </div>
+        )}
         {esRecurrente && (puedeEditar || puedeEliminar) && (
           <div className="border rounded-3 p-3 mb-3 bg-light">
             <label className="form-label small fw-medium d-block mb-2">Esta acción aplica a</label>

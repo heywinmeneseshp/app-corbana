@@ -51,7 +51,7 @@ export default function VisitaLaborCulturalPage() {
       <button
         type="button"
         className="btn btn-link text-secondary text-decoration-none d-flex align-items-center gap-1 px-0 mb-3"
-        onClick={() => router.push("/labores-culturales")}
+        onClick={() => router.push("/sanidad-vegetal/labores")}
       >
         <FiArrowLeft /> Volver al listado
       </button>

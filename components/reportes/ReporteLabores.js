@@ -6,7 +6,9 @@ import { FiCalendar, FiChevronRight, FiAlertTriangle } from "react-icons/fi";
 import { GiFarmTractor } from "react-icons/gi";
 import { apiFetch } from "@/lib/api";
 
-export default function LaboresCulturalesPage() {
+// Listado de visitas de sanidad y labor cultural registradas desde la app
+// móvil. Se muestra como pestaña dentro del módulo de Reportes.
+export default function ReporteLabores() {
   const router = useRouter();
   const [visitas, setVisitas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,12 +22,7 @@ export default function LaboresCulturalesPage() {
   }, []);
 
   return (
-    <div className="p-4 p-md-5">
-      <div className="mb-4">
-        <h1 className="fw-bold h3 mb-1">Evaluación de Labores</h1>
-        <p className="text-secondary mb-0">Visitas de sanidad y labor cultural registradas desde la app móvil.</p>
-      </div>
-
+    <div>
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       {loading ? (
@@ -52,7 +49,7 @@ export default function LaboresCulturalesPage() {
                   <tr
                     key={v.visitaUuid}
                     role="button"
-                    onClick={() => router.push(`/labores-culturales/${v.visitaUuid}`)}
+                    onClick={() => router.push(`/sanidad-vegetal/labores/${v.visitaUuid}`)}
                   >
                     <td className="ps-4">
                       <span className="d-flex align-items-center gap-2">

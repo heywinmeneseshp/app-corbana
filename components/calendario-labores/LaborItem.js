@@ -3,6 +3,7 @@
 import { useState } from "react";
 import LaborIconBadge from "./LaborIconBadge";
 import LaborTooltip from "./LaborTooltip";
+import EstadoLaborBadge from "./EstadoLaborBadge";
 
 // Fila compacta: círculo del color de la labor con su icono en blanco
 // adentro + nombre en texto neutro. Sin fondo ni borde de color en el texto
@@ -36,6 +37,7 @@ export default function LaborItem({ ocurrencia, onClick }) {
     >
       <LaborIconBadge icono={ocurrencia.labor?.icono} color={ocurrencia.labor?.color} size={20} />
       <span className="small text-body text-truncate">{ocurrencia.labor?.nombre}</span>
+      <EstadoLaborBadge ocurrencia={ocurrencia} />
       {hoverPos && <LaborTooltip ocurrencia={ocurrencia} position={hoverPos} />}
     </div>
   );

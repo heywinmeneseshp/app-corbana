@@ -13,6 +13,8 @@ export default function Sidebar() {
   const router = useRouter();
   const [maestrosOpen, setMaestrosOpen] = useState(pathname.startsWith("/maestros"));
   const [racimosOpen, setRacimosOpen] = useState(pathname.startsWith("/racimos"));
+  const [laboresOpen, setLaboresOpen] = useState(pathname.startsWith("/calendario-labores") || pathname.startsWith("/labores"));
+  const [sanidadOpen, setSanidadOpen] = useState(pathname.startsWith("/sanidad-vegetal"));
   const [collapsed, setCollapsed] = useState(false);
   const [perms, setPerms] = useState(null); // null hasta montar en cliente, evita parpadeo/mismatch
 
@@ -38,6 +40,7 @@ export default function Sidebar() {
       motivoRecuse: hasPermission("motivo_recuse.ver"),
       categoriaLabor: hasPermission("categoria_labor.ver"),
       labor: hasPermission("labor.ver"),
+      estadioSigatoka: hasPermission("estadio_sigatoka.ver"),
       calendarioLabores: hasPermission("labor_programacion.ver"),
       versionApp: hasPermission("roles.ver"),
       cargue: hasAnyPermission([
@@ -50,6 +53,7 @@ export default function Sidebar() {
       racimoMovimientoCrear: hasPermission("racimo_movimiento.crear"),
       racimoMovimientoVer: hasPermission("racimo_movimiento.ver"),
       precipitacionDiaria: hasPermission("precipitacion_diaria.ver"),
+      sanidadVegetal: hasPermission("infeccion.ver"),
     });
   }, []);
 
@@ -75,8 +79,9 @@ export default function Sidebar() {
     perms.motivoRepique ||
     perms.motivoRecuse ||
     perms.categoriaLabor ||
-    perms.labor ||
+    perms.estadioSigatoka ||
     perms.versionApp;
+  const laboresVisible = perms.labor || perms.calendarioLabores;
   const label = (text) => (!collapsed ? text : null);
 
   return (
@@ -192,6 +197,12 @@ export default function Sidebar() {
                     Labores
                   </Link>
                 )}
+                {perms.estadioSigatoka && (
+                  <Link href="/maestros/estadios-sigatoka" className={navLinkClass(pathname === "/maestros/estadios-sigatoka")}>
+                    <FiTrendingUp size={16} />
+                    Estadios de Sigatoka
+                  </Link>
+                )}
                 {perms.versionApp && (
                   <Link href="/maestros/version-app" className={navLinkClass(pathname === "/maestros/version-app")}>
                     <FiSmartphone size={16} />
@@ -262,21 +273,43 @@ export default function Sidebar() {
             )}
           </>
         )}
+        {laboresVisible && (
+          <>
+            <button
+              type="button"
+              onClick={() => setLaboresOpen((v) => !v)}
+              className={`d-flex align-items-center justify-content-between gap-2 px-3 py-2 rounded-3 border-0 bg-transparent small ${
+                pathname.startsWith("/calendario-labores") || pathname.startsWith("/labores") ? "text-white fw-medium" : "text-white-50"
+              }`}
+              title="Labores"
+            >
+              <span className="d-flex align-items-center gap-2">
+                <FiClipboard size={18} />
+                {label("Labores")}
+              </span>
+              {!collapsed && (
+                <FiChevronRight style={{ transform: laboresOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+              )}
+            </button>
 
-        {perms.cargue && (
-          <Link href="/cargue" className={navLinkClass(pathname === "/cargue")} title="Cargue Masivo">
-            <FiUploadCloud size={18} />
-            {label("Cargue Masivo")}
-          </Link>
+            {laboresOpen && !collapsed && (
+              <div className="ps-4 d-flex flex-column gap-1">
+                {perms.calendarioLabores && (
+                  <Link href="/calendario-labores" className={navLinkClass(pathname.startsWith("/calendario-labores"))}>
+                    <FiCalendar size={16} />
+                    Calendario de Labores
+                  </Link>
+                )}
+                {perms.calendarioLabores && (
+                  <Link href="/labores/estados" className={navLinkClass(pathname === "/labores/estados")}>
+                    <FiCheckSquare size={16} />
+                    Estados de Labores
+                  </Link>
+                )}
+              </div>
+            )}
+          </>
         )}
-        <Link
-          href="/labores-culturales"
-          className={navLinkClass(pathname.startsWith("/labores-culturales"))}
-          title="Evaluación de Labores"
-        >
-          <GiFarmTractor size={18} />
-          {label("Evaluación de Labores")}
-        </Link>
         {perms.precipitacionDiaria && (
           <Link
             href="/precipitacion-diaria"
@@ -287,17 +320,55 @@ export default function Sidebar() {
             {label("Precipitación Diaria")}
           </Link>
         )}
-        {perms.calendarioLabores && (
-          <Link
-            href="/calendario-labores"
-            className={navLinkClass(pathname.startsWith("/calendario-labores"))}
-            title="Calendario de Labores"
-          >
-            <FiClipboard size={18} />
-            {label("Calendario de Labores")}
+        {perms.sanidadVegetal && (
+          <>
+            <button
+              type="button"
+              onClick={() => setSanidadOpen((v) => !v)}
+              className={`d-flex align-items-center justify-content-between gap-2 px-3 py-2 rounded-3 border-0 bg-transparent small ${
+                pathname.startsWith("/sanidad-vegetal") ? "text-white fw-medium" : "text-white-50"
+              }`}
+              title="Sanidad Vegetal"
+            >
+              <span className="d-flex align-items-center gap-2">
+                <FiTrendingUp size={18} />
+                {label("Sanidad Vegetal")}
+              </span>
+              {!collapsed && (
+                <FiChevronRight style={{ transform: sanidadOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+              )}
+            </button>
+
+            {sanidadOpen && !collapsed && (
+              <div className="ps-4 d-flex flex-column gap-1">
+                <Link href="/sanidad-vegetal/evaluaciones" className={navLinkClass(pathname === "/sanidad-vegetal/evaluaciones")}>
+                  <FiList size={16} />
+                  Evaluaciones
+                </Link>
+                <Link href="/sanidad-vegetal/graficos" className={navLinkClass(pathname === "/sanidad-vegetal/graficos")}>
+                  <FiBarChart2 size={16} />
+                  Gráficos
+                </Link>
+                <Link href="/sanidad-vegetal/labores" className={navLinkClass(pathname === "/sanidad-vegetal/labores")}>
+                  <GiFarmTractor size={16} />
+                  Evaluación de Labores
+                </Link>
+              </div>
+            )}
+          </>
+        )}
+
+        {perms.cargue && (
+          <Link href="/cargue" className={navLinkClass(pathname === "/cargue")} title="Cargue Masivo">
+            <FiUploadCloud size={18} />
+            {label("Cargue Masivo")}
           </Link>
         )}
-        <Link href="/reportes" className={navLinkClass(pathname === "/reportes")} title="Reportes">
+        <Link
+          href="/reportes"
+          className={navLinkClass(pathname === "/reportes")}
+          title="Reportes"
+        >
           <FiBarChart2 size={18} />
           {label("Reportes")}
         </Link>

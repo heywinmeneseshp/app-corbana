@@ -14,11 +14,9 @@ import CreateLaborDialog from "@/components/calendario-labores/CreateLaborDialog
 import EditLaborDialog from "@/components/calendario-labores/EditLaborDialog";
 import { agruparPorSemanaYLote } from "@/lib/laborCalendarBuilder";
 import VistaCalendarioRBC from "./VistaCalendarioRBC";
-import VistaPorLote from "./VistaPorLote";
 
 const VISTAS = [
   { value: "anual", label: "Anual por semanas" },
-  { value: "lote", label: "Por lote" },
   { value: "semanal", label: "Semanal" },
   { value: "diaria", label: "Diaria" },
 ];
@@ -40,7 +38,6 @@ export default function CalendarioLaboresPage() {
   const [anio, setAnio] = useState(new Date().getFullYear());
   const [vista, setVista] = useState("anual");
   const [fechaFoco, setFechaFoco] = useState(new Date());
-  const [loteSeleccionadoUuid, setLoteSeleccionadoUuid] = useState("");
   const [rangoSemanas, setRangoSemanas] = useState({ desde: 1, hasta: 53 });
 
   const [semanas, setSemanas] = useState([]);
@@ -85,10 +82,7 @@ export default function CalendarioLaboresPage() {
   useEffect(() => {
     if (!fincaUuid) return;
     apiFetch(`/fincas/${fincaUuid}/lotes?limit=100`)
-      .then(({ items }) => {
-        setLotes(items);
-        setLoteSeleccionadoUuid((prev) => (items.some((l) => l.uuid === prev) ? prev : items[0]?.uuid || ""));
-      })
+      .then(({ items }) => setLotes(items))
       .catch((err) => setError(err.message));
   }, [fincaUuid]);
 
@@ -129,8 +123,8 @@ export default function CalendarioLaboresPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fincaUuid, anio]);
 
-  // Si cambia el año seleccionado, la fecha de foco de las vistas Semanal/
-  // Diaria/Por lote se reubica dentro de ese año.
+  // Si cambia el año seleccionado, la fecha de foco de las vistas Semanal y
+  // Diaria se reubica dentro de ese año.
   useEffect(() => {
     if (fechaFoco.getFullYear() !== anio) {
       setFechaFoco(new Date(anio, 0, 1));
@@ -201,10 +195,9 @@ export default function CalendarioLaboresPage() {
 
   function handleSelectSlot(slotInfo) {
     if (!puedeCrear) return;
-    if (vista === "lote" && !loteSeleccionadoUuid) return;
     setCrearPrefill({
       fechaInicio: fechaISO(slotInfo.start),
-      loteUuid: vista === "lote" ? loteSeleccionadoUuid : lotes[0]?.uuid || "",
+      loteUuid: lotes[0]?.uuid || "",
       hora: vista === "diaria" || vista === "semanal" ? horaHHmm(slotInfo.start) : "",
     });
   }
@@ -245,22 +238,8 @@ export default function CalendarioLaboresPage() {
             ))}
           </div>
 
-          {(vista === "anual" || vista === "lote") && (
+          {vista === "anual" && (
             <div className="d-flex flex-wrap align-items-center gap-2">
-              {vista === "lote" && (
-                <select
-                  className="form-select form-select-sm rounded-3"
-                  style={{ maxWidth: 220 }}
-                  value={loteSeleccionadoUuid}
-                  onChange={(e) => setLoteSeleccionadoUuid(e.target.value)}
-                >
-                  {lotes.map((l) => (
-                    <option key={l.uuid} value={l.uuid}>
-                      {l.nombre}
-                    </option>
-                  ))}
-                </select>
-              )}
               <WeekRangeSelector semanas={semanas} desde={rangoSemanas.desde} hasta={rangoSemanas.hasta} onChange={setRangoSemanas} />
             </div>
           )}
@@ -304,17 +283,6 @@ export default function CalendarioLaboresPage() {
           </div>
         )}
 
-        {fincaUuid && vista === "lote" && loteSeleccionadoUuid && (
-          <VistaPorLote
-            semanas={semanasVisibles}
-            loteUuid={loteSeleccionadoUuid}
-            mapaCeldas={mapaCeldas}
-            puedeCrear={puedeCrear}
-            onEmptyClick={(semana) => setCrearPrefill({ fechaInicio: semana.fechaInicio, loteUuid: loteSeleccionadoUuid, hora: "" })}
-            onLaborClick={setOcurrenciaSeleccionada}
-          />
-        )}
-
         {fincaUuid && (vista === "semanal" || vista === "diaria") && (
           <VistaCalendarioRBC
             vista={vista}
@@ -326,6 +294,7 @@ export default function CalendarioLaboresPage() {
             onSelectSlot={handleSelectSlot}
             onSelectEvent={setOcurrenciaSeleccionada}
             onMoverOcurrencia={moverOcurrencia}
+            semanas={semanas}
           />
         )}
 
