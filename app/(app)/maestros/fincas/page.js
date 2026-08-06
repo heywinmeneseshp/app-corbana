@@ -266,8 +266,29 @@ function FincaModal({ finca, onClose, onSaved }) {
   const [nombre, setNombre] = useState(finca?.nombre || "");
   const [codigo, setCodigo] = useState(finca?.codigo || "");
   const [estado, setEstado] = useState(finca ? finca.estado : true);
+  const [grupoFincaUuid, setGrupoFincaUuid] = useState(finca?.grupoFinca?.uuid || "");
+  const [grupos, setGrupos] = useState([]);
+  const [fincasHermanas, setFincasHermanas] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    apiFetch("/grupos-finca?limit=100")
+      .then((data) => setGrupos(data.items))
+      .catch(() => {});
+  }, []);
+
+  // Muestra qué otra(s) finca(s) ya están en el grupo elegido, para que
+  // quede claro que seleccionar cualquiera de ellas comparte lotes y acceso.
+  useEffect(() => {
+    if (!grupoFincaUuid) {
+      setFincasHermanas([]);
+      return;
+    }
+    apiFetch(`/grupos-finca/${grupoFincaUuid}`)
+      .then((grupo) => setFincasHermanas((grupo.fincas || []).filter((f) => f.uuid !== finca?.uuid)))
+      .catch(() => setFincasHermanas([]));
+  }, [grupoFincaUuid, finca?.uuid]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -276,7 +297,7 @@ function FincaModal({ finca, onClose, onSaved }) {
     try {
       await apiFetch(finca ? `/fincas/${finca.uuid}` : "/fincas", {
         method: finca ? "PUT" : "POST",
-        body: JSON.stringify({ nombre, codigo, estado }),
+        body: JSON.stringify({ nombre, codigo, estado, grupoFincaUuid: grupoFincaUuid || null }),
       });
       onSaved();
     } catch (err) {
@@ -310,6 +331,30 @@ function FincaModal({ finca, onClose, onSaved }) {
             value={codigo}
             onChange={(e) => setCodigo(e.target.value)}
           />
+        </div>
+        <div className="mb-3">
+          <label className="form-label small fw-medium">Grupo de Finca (opcional)</label>
+          <select
+            className="form-select rounded-3"
+            value={grupoFincaUuid}
+            onChange={(e) => setGrupoFincaUuid(e.target.value)}
+          >
+            <option value="">Ninguno</option>
+            {grupos.map((g) => (
+              <option key={g.uuid} value={g.uuid}>
+                {g.nombre}
+              </option>
+            ))}
+          </select>
+          <div className="form-text">
+            Para fincas que en realidad son una sola dividida en varios registros: seleccionar cualquiera trae los
+            lotes y datos de todo el grupo.
+          </div>
+          {fincasHermanas.length > 0 && (
+            <div className="alert alert-info py-2 small mt-2 mb-0">
+              También comparten este grupo: {fincasHermanas.map((f) => f.nombre).join(", ")}
+            </div>
+          )}
         </div>
         <div className="form-check mb-3">
           <input

@@ -33,6 +33,7 @@ export default function Sidebar() {
   useEffect(() => {
     setPerms({
       fincas: hasPermission("finca.ver"),
+      gruposFinca: hasPermission("grupo_finca.ver"),
       usuarios: hasPermission("usuarios.ver"),
       roles: hasPermission("roles.ver"),
       semanas: hasPermission("semana.ver"),
@@ -54,6 +55,7 @@ export default function Sidebar() {
       racimoMovimientoVer: hasPermission("racimo_movimiento.ver"),
       precipitacionDiaria: hasPermission("precipitacion_diaria.ver"),
       sanidadVegetal: hasPermission("infeccion.ver"),
+      laborEvaluacion: hasPermission("labor_evaluacion.ver"),
     });
   }, []);
 
@@ -73,6 +75,7 @@ export default function Sidebar() {
 
   const maestrosVisible =
     perms.fincas ||
+    perms.gruposFinca ||
     perms.usuarios ||
     perms.roles ||
     perms.semanas ||
@@ -147,6 +150,12 @@ export default function Sidebar() {
                   <Link href="/maestros/fincas" className={navLinkClass(pathname === "/maestros/fincas")}>
                     <GiFarmTractor size={16} />
                     Fincas
+                  </Link>
+                )}
+                {perms.gruposFinca && (
+                  <Link href="/maestros/grupos-finca" className={navLinkClass(pathname === "/maestros/grupos-finca")}>
+                    <GiFarmTractor size={16} />
+                    Grupos de Finca
                   </Link>
                 )}
                 {perms.usuarios && (
@@ -320,7 +329,7 @@ export default function Sidebar() {
             {label("Precipitación Diaria")}
           </Link>
         )}
-        {perms.sanidadVegetal && (
+        {(perms.sanidadVegetal || perms.laborEvaluacion) && (
           <>
             <button
               type="button"
@@ -341,18 +350,24 @@ export default function Sidebar() {
 
             {sanidadOpen && !collapsed && (
               <div className="ps-4 d-flex flex-column gap-1">
-                <Link href="/sanidad-vegetal/evaluaciones" className={navLinkClass(pathname === "/sanidad-vegetal/evaluaciones")}>
-                  <FiList size={16} />
-                  Evaluaciones
-                </Link>
-                <Link href="/sanidad-vegetal/graficos" className={navLinkClass(pathname === "/sanidad-vegetal/graficos")}>
-                  <FiBarChart2 size={16} />
-                  Gráficos
-                </Link>
-                <Link href="/sanidad-vegetal/labores" className={navLinkClass(pathname === "/sanidad-vegetal/labores")}>
-                  <GiFarmTractor size={16} />
-                  Evaluación de Labores
-                </Link>
+                {perms.sanidadVegetal && (
+                  <Link href="/sanidad-vegetal/evaluaciones" className={navLinkClass(pathname === "/sanidad-vegetal/evaluaciones")}>
+                    <FiList size={16} />
+                    Evaluaciones
+                  </Link>
+                )}
+                {perms.sanidadVegetal && (
+                  <Link href="/sanidad-vegetal/graficos" className={navLinkClass(pathname === "/sanidad-vegetal/graficos")}>
+                    <FiBarChart2 size={16} />
+                    Gráficos
+                  </Link>
+                )}
+                {perms.laborEvaluacion && (
+                  <Link href="/sanidad-vegetal/labores" className={navLinkClass(pathname === "/sanidad-vegetal/labores")}>
+                    <GiFarmTractor size={16} />
+                    Evaluación de Labores
+                  </Link>
+                )}
               </div>
             )}
           </>

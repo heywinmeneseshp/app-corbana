@@ -5,7 +5,7 @@ import ReporteLabores from "@/components/reportes/ReporteLabores";
 
 export default function SanidadLaboresPage() {
   return (
-    <RequirePermission code="labor.ver">
+    <RequirePermission code="labor_evaluacion.ver">
       <div className="p-4 p-md-5">
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1">Sanidad Vegetal — Evaluación de Labores</h1>

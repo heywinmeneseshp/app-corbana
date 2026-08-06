@@ -81,7 +81,7 @@ export default function CalendarioLaboresPage() {
 
   useEffect(() => {
     if (!fincaUuid) return;
-    apiFetch(`/fincas/${fincaUuid}/lotes?limit=100`)
+    apiFetch(`/fincas/${fincaUuid}/lotes?limit=100&incluirGrupo=true`)
       .then(({ items }) => setLotes(items))
       .catch((err) => setError(err.message));
   }, [fincaUuid]);

@@ -2,19 +2,31 @@
 
 import { useMemo, useState } from "react";
 
-// Agrupa los permisos por módulo conceptual (no por el prefijo literal del
-// código) — así "Racimos" incluye motivo_repique/motivo_recuse aunque su
-// código no contenga la palabra "racimo". Evita el error típico de asignar
-// racimo_movimiento.* y olvidarse de los motivos, que son del mismo módulo
-// mental pero un código distinto.
+// Agrupa los permisos siguiendo la misma jerarquía menú/submenú del Sidebar
+// (ver components/Sidebar.js) en vez de una taxonomía conceptual aparte —
+// así el grupo donde aparece cada permiso es el mismo módulo que se ve al
+// navegar la app, y no queda nada en "Otros" salvo un permiso realmente sin
+// pantalla propia.
 const GRUPOS = [
-  { titulo: "Seguridad", prefijos: ["usuarios.", "roles.", "permisos.", "menu."] },
-  { titulo: "Fincas y Lotes", prefijos: ["finca.", "lote.", "planta.", "categoria_planta."] },
   {
-    titulo: "Evaluaciones",
-    prefijos: ["tipo_evaluacion.", "semana.", "evaluacion.", "infeccion.", "conteo_hojas.", "suma_bruta."],
+    titulo: "Maestros · Fincas y Lotes",
+    prefijos: ["finca.", "grupo_finca.", "lote.", "planta.", "categoria_planta."],
   },
-  { titulo: "Racimos", prefijos: ["motivo_repique.", "motivo_recuse.", "racimo_movimiento."] },
+  { titulo: "Maestros · Usuarios", prefijos: ["usuarios."] },
+  { titulo: "Maestros · Roles y Permisos", prefijos: ["roles.", "permisos.", "menu."] },
+  { titulo: "Maestros · Semanas y Calendario", prefijos: ["semana."] },
+  { titulo: "Maestros · Motivos de Repique", prefijos: ["motivo_repique."] },
+  { titulo: "Maestros · Motivos de Recuse", prefijos: ["motivo_recuse."] },
+  { titulo: "Maestros · Categorías de Labor", prefijos: ["categoria_labor."] },
+  { titulo: "Maestros · Labores", prefijos: ["labor."] },
+  { titulo: "Maestros · Estadios de Sigatoka", prefijos: ["estadio_sigatoka."] },
+  { titulo: "Racimos", prefijos: ["racimo_movimiento."] },
+  { titulo: "Labores · Calendario de Labores", prefijos: ["labor_programacion."] },
+  { titulo: "Precipitación Diaria", prefijos: ["precipitacion_diaria."] },
+  {
+    titulo: "Sanidad Vegetal",
+    prefijos: ["evaluacion.", "infeccion.", "conteo_hojas.", "suma_bruta.", "tipo_evaluacion.", "labor_evaluacion."],
+  },
   { titulo: "Producción", prefijos: ["produccion."] },
   { titulo: "Sistema", prefijos: ["sistema."] },
 ];

@@ -35,7 +35,7 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
       setLotes([]);
       return;
     }
-    apiFetch(`/fincas/${fincaUuid}/lotes?limit=100`)
+    apiFetch(`/fincas/${fincaUuid}/lotes?limit=100&incluirGrupo=true`)
       .then((data) => setLotes(data.items))
       .catch(() => setLotes([]));
   }, [fincaUuid]);
@@ -129,6 +129,7 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
                     <th>Hojas Totales</th>
                     <th>YLI</th>
                     <th>YLS</th>
+                    <th>Índice de Infección</th>
                   </>
                 )}
                 {tab === "Conteo de Hojas" && <th>Hojas Funcionales</th>}
@@ -171,6 +172,9 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
                         <td>{ev.infeccion?.hojasTotales ?? "—"}</td>
                         <td>{ev.infeccion?.yli ?? "—"}</td>
                         <td>{ev.infeccion?.yls ?? "—"}</td>
+                        <td className="fw-medium">
+                          {ev.infeccion?.indiceInfeccion != null ? `${ev.infeccion.indiceInfeccion.toFixed(2)}%` : "—"}
+                        </td>
                       </>
                     )}
                     {tab === "Conteo de Hojas" && (
@@ -242,12 +246,16 @@ function DetalleModal({ evaluacion, tab, onClose }) {
 
   return (
     <ModalShell title={`Detalle de hojas — Planta ${evaluacion.planta?.codigo || ""}`} onClose={onClose}>
-      {!esInfeccion && (
-        <div className="mb-3 p-3 rounded-3" style={{ backgroundColor: "#f0fdf4" }}>
-          <span className="small text-secondary me-2">Suma Bruta:</span>
-          <span className="fw-bold">{evaluacion.sumaBruta?.total ?? "—"}</span>
-        </div>
-      )}
+      <div className="mb-3 p-3 rounded-3" style={{ backgroundColor: "#f0fdf4" }}>
+        <span className="small text-secondary me-2">{esInfeccion ? "Índice de Infección:" : "Suma Bruta:"}</span>
+        <span className="fw-bold">
+          {esInfeccion
+            ? evaluacion.infeccion?.indiceInfeccion != null
+              ? `${evaluacion.infeccion.indiceInfeccion.toFixed(2)}%`
+              : "—"
+            : (evaluacion.sumaBruta?.total ?? "—")}
+        </span>
+      </div>
       <div className="table-responsive">
         <table className="table table-sm table-hover mb-0">
           <thead className="table-light">

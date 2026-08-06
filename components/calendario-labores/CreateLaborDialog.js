@@ -66,7 +66,7 @@ export default function CreateLaborDialog({
   // elegidos pueden no pertenecer a la finca nueva, así que se limpian.
   useEffect(() => {
     if (!fincaUuid) return;
-    apiFetch(`/fincas/${fincaUuid}/lotes?limit=100`)
+    apiFetch(`/fincas/${fincaUuid}/lotes?limit=100&incluirGrupo=true`)
       .then(({ items }) => {
         setLotesFinca(items);
         if (!esPrimeraCargaLotes.current) {

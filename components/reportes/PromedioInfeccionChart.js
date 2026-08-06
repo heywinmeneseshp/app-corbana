@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 
 const COLOR_YLI = "#dc2626";
 const COLOR_YLS = "#2563eb";
+const COLOR_INDICE = "#9333ea";
 
 // Promedio semanal del Índice de Infección (YLI y YLS) más el promedio de
 // hojas totales evaluadas. Se muestra en dos gráficas: la primera junta los
@@ -113,7 +114,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
           ) : null}
 
           {tiene("promedioHojasTotales") ? (
-            <div>
+            <div className="mb-3">
               <h3 className="h6 fw-semibold text-success mb-1">Promedio de Hojas Totales por Semana</h3>
               <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -132,7 +133,35 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
             </div>
           ) : null}
 
-          {!tiene("promedioYli") && !tiene("promedioYls") && !tiene("promedioHojasTotales") && (
+          {tiene("promedioIndiceInfeccion") ? (
+            <div>
+              <h3 className="h6 fw-semibold text-success mb-1">Promedio de Índice de Infección por Semana</h3>
+              <div style={{ height: 240 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={items} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals unit="%" />
+                    <Tooltip
+                      formatter={(value) => [`${Number(value).toFixed(2)}%`, "Promedio Índice de Infección"]}
+                      labelFormatter={(label) => `Semana ${label}`}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="promedioIndiceInfeccion"
+                      name="Promedio Índice de Infección"
+                      stroke={COLOR_INDICE}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      connectNulls
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ) : null}
+
+          {!tiene("promedioYli") && !tiene("promedioYls") && !tiene("promedioHojasTotales") && !tiene("promedioIndiceInfeccion") && (
             <p className="text-secondary small py-4 text-center mb-0">{mensajeVacio}</p>
           )}
         </>
