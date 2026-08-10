@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import PrecipitacionDiariaModal from "@/components/PrecipitacionDiariaModal";
+import AreaLoteModal from "@/components/AreaLoteModal";
 
 export default function AppLayout({ children }) {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function AppLayout({ children }) {
         {children}
       </main>
       <PrecipitacionDiariaModal />
+      <AreaLoteModal />
     </div>
   );
 }

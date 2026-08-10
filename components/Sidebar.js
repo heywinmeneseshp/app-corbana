@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain, FiFolder, FiCheckSquare, FiClipboard } from "react-icons/fi";
+import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiActivity, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain, FiFolder, FiCheckSquare, FiClipboard, FiMap } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission, hasAnyPermission } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
@@ -34,6 +34,7 @@ export default function Sidebar() {
     setPerms({
       fincas: hasPermission("finca.ver"),
       gruposFinca: hasPermission("grupo_finca.ver"),
+      areaLoteConfig: hasPermission("area_lote.ver"),
       usuarios: hasPermission("usuarios.ver"),
       roles: hasPermission("roles.ver"),
       semanas: hasPermission("semana.ver"),
@@ -54,6 +55,7 @@ export default function Sidebar() {
       racimoMovimientoCrear: hasPermission("racimo_movimiento.crear"),
       racimoMovimientoVer: hasPermission("racimo_movimiento.ver"),
       precipitacionDiaria: hasPermission("precipitacion_diaria.ver"),
+      pronostico: hasPermission("pronostico.ver"),
       sanidadVegetal: hasPermission("infeccion.ver"),
       laborEvaluacion: hasPermission("labor_evaluacion.ver"),
     });
@@ -76,6 +78,7 @@ export default function Sidebar() {
   const maestrosVisible =
     perms.fincas ||
     perms.gruposFinca ||
+    perms.areaLoteConfig ||
     perms.usuarios ||
     perms.roles ||
     perms.semanas ||
@@ -156,6 +159,12 @@ export default function Sidebar() {
                   <Link href="/maestros/grupos-finca" className={navLinkClass(pathname === "/maestros/grupos-finca")}>
                     <GiFarmTractor size={16} />
                     Grupos de Finca
+                  </Link>
+                )}
+                {perms.areaLoteConfig && (
+                  <Link href="/maestros/area-lotes-config" className={navLinkClass(pathname === "/maestros/area-lotes-config")}>
+                    <FiMap size={16} />
+                    Área de Lotes
                   </Link>
                 )}
                 {perms.usuarios && (
@@ -327,6 +336,16 @@ export default function Sidebar() {
           >
             <FiCloudRain size={18} />
             {label("Precipitación Diaria")}
+          </Link>
+        )}
+        {perms.pronostico && (
+          <Link
+            href="/pronostico"
+            className={navLinkClass(pathname.startsWith("/pronostico"))}
+            title="Pronóstico de Cajas"
+          >
+            <FiActivity size={18} />
+            {label("Pronóstico de Cajas")}
           </Link>
         )}
         {(perms.sanidadVegetal || perms.laborEvaluacion) && (

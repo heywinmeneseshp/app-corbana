@@ -23,6 +23,7 @@ const GRUPOS = [
   { titulo: "Racimos", prefijos: ["racimo_movimiento."] },
   { titulo: "Labores · Calendario de Labores", prefijos: ["labor_programacion."] },
   { titulo: "Precipitación Diaria", prefijos: ["precipitacion_diaria."] },
+  { titulo: "Área de Lotes", prefijos: ["area_lote."] },
   {
     titulo: "Sanidad Vegetal",
     prefijos: ["evaluacion.", "infeccion.", "conteo_hojas.", "suma_bruta.", "tipo_evaluacion.", "labor_evaluacion."],
