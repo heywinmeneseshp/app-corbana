@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiActivity, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain, FiFolder, FiCheckSquare, FiClipboard, FiMap } from "react-icons/fi";
+import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiActivity, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain, FiFolder, FiCheckSquare, FiClipboard, FiMap, FiPackage } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission, hasAnyPermission } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
@@ -55,6 +55,7 @@ export default function Sidebar() {
       racimoMovimientoCrear: hasPermission("racimo_movimiento.crear"),
       racimoMovimientoVer: hasPermission("racimo_movimiento.ver"),
       precipitacionDiaria: hasPermission("precipitacion_diaria.ver"),
+      produccionSemanal: hasPermission("produccion.ver"),
       pronostico: hasPermission("pronostico.ver"),
       sanidadVegetal: hasPermission("infeccion.ver"),
       laborEvaluacion: hasPermission("labor_evaluacion.ver"),
@@ -336,6 +337,16 @@ export default function Sidebar() {
           >
             <FiCloudRain size={18} />
             {label("Precipitación Diaria")}
+          </Link>
+        )}
+        {perms.produccionSemanal && (
+          <Link
+            href="/produccion-semanal"
+            className={navLinkClass(pathname.startsWith("/produccion-semanal"))}
+            title="Producción Semanal"
+          >
+            <FiPackage size={18} />
+            {label("Producción Semanal")}
           </Link>
         )}
         {perms.pronostico && (
