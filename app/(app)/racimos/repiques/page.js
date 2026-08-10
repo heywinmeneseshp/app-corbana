@@ -135,40 +135,53 @@ export default function RegistrarRepiquesPage() {
     [rows],
   );
 
-  const puedeRegistrar =
-    fincaUuid &&
-    semanaRegistroUuid &&
-    fechaRegistro &&
-    rows.every((r) => r.loteUuid && r.semanaEmbolseUuid && r.motivoRepiqueUuid && Number(r.cantidad) > 0);
+  const camposFaltantes = useMemo(() => {
+    const faltan = [];
+    if (!fincaUuid) faltan.push("Finca");
+    if (!semanaRegistroUuid) faltan.push("Semana de registro");
+    if (!fechaRegistro) faltan.push("Fecha de registro");
+    rows.forEach((r, idx) => {
+      const n = idx + 1;
+      if (!r.loteUuid) faltan.push(`Línea ${n}: lote`);
+      if (!r.semanaEmbolseUuid) faltan.push(`Línea ${n}: cinta (semana de embolse)`);
+      if (!r.motivoRepiqueUuid) faltan.push(`Línea ${n}: motivo de repique`);
+      if (!(Number(r.cantidad) > 0)) faltan.push(`Línea ${n}: cantidad`);
+    });
+    return faltan;
+  }, [fincaUuid, semanaRegistroUuid, fechaRegistro, rows]);
 
-  async function handleSubmit() {
+  const puedeRegistrar = camposFaltantes.length === 0;
+
+  async function handleSubmit(forzarSaldoNegativo = false) {
     setError("");
     setSuccess("");
-
-    for (const r of rows) {
-      if (r.resumen && Number(r.cantidad) > r.resumen.saldo) {
-        setError(`El lote seleccionado en la línea con motivo excede el saldo disponible (${r.resumen.saldo}).`);
-        return;
-      }
-    }
-
     setSaving(true);
     try {
-      for (const r of rows) {
-        await apiFetch("/racimo-movimientos", {
-          method: "POST",
-          body: JSON.stringify({
-            fincaUuid,
+      const resultado = await apiFetch("/racimo-movimientos/lote", {
+        method: "POST",
+        body: JSON.stringify({
+          fincaUuid,
+          semanaRegistroUuid,
+          fecha: fechaRegistro,
+          forzarSaldoNegativo,
+          movimientos: rows.map((r) => ({
+            tipo: "REPIQUE",
             loteUuid: r.loteUuid,
             semanaEmbolseUuid: r.semanaEmbolseUuid,
-            semanaRegistroUuid,
-            tipo: "REPIQUE",
             motivoRepiqueUuid: r.motivoRepiqueUuid,
             cantidad: Number(r.cantidad),
-            fecha: fechaRegistro,
-          }),
-        });
+          })),
+        }),
+      });
+
+      if (resultado.requiereConfirmacion) {
+        const mensaje = resultado.advertencias.map((a) => a.mensaje).join("\n");
+        if (confirm(`${mensaje}\n\n¿Registrar de todas formas?`)) {
+          await handleSubmit(true);
+        }
+        return;
       }
+
       setSuccess(`${rows.length} repique(s) registrado(s) correctamente (${totalRacimos} racimos).`);
       setRows([emptyRow()]);
     } catch (err) {
@@ -372,14 +385,19 @@ export default function RegistrarRepiquesPage() {
                 <span className="fs-4 fw-bold">{totalRacimos}</span>
               </div>
 
-              <div className="d-flex justify-content-end gap-2 mt-4">
+              {!puedeRegistrar && (
+                <div className="alert alert-warning py-2 small mt-4 mb-0">
+                  Falta completar: {camposFaltantes.join(", ")}.
+                </div>
+              )}
+              <div className="d-flex justify-content-end gap-2 mt-3">
                 <button type="button" className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2" onClick={handleLimpiar}>
                   <FiRotateCcw /> Limpiar
                 </button>
                 <button
                   type="button"
                   className="btn btn-brand rounded-3 d-flex align-items-center gap-2"
-                  onClick={handleSubmit}
+                  onClick={() => handleSubmit()}
                   disabled={!puedeRegistrar || saving}
                 >
                   <FiSave /> {saving ? "Registrando..." : "Registrar repiques"}

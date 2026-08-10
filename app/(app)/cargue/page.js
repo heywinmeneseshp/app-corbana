@@ -687,7 +687,7 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
             <FiAlertTriangle /> Se encontraron {requireConfirmation.warnings.length} movimiento(s) con saldo negativo.
           </p>
           <p className="small mb-3">
-            Como administrador puedes forzar la carga para que estos movimientos se inserten de todas formas,
+            Puedes forzar la carga para que estos movimientos se inserten de todas formas,
             o cancelar y corregir el archivo.
             {requireConfirmation.errores.length > 0 && (
               <> Aparte de esto, {requireConfirmation.errores.length} fila(s) tienen error y se omitirán de

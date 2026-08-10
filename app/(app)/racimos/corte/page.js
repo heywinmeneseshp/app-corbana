@@ -150,56 +150,70 @@ export default function RegistrarCortePage() {
   const procesadoRowsActivas = procesadoRows.filter((r) => r.loteUuid || r.semanaEmbolseUuid || r.cantidad);
   const recusadoRowsActivas = recusadoRows.filter((r) => r.loteUuid || r.semanaEmbolseUuid || r.cantidad);
 
-  const puedeRegistrar =
-    fincaUuid &&
-    semanaRegistroUuid &&
-    fechaRegistro &&
-    procesadoRowsActivas.length + recusadoRowsActivas.length > 0 &&
-    procesadoRowsActivas.every((r) => r.loteUuid && r.semanaEmbolseUuid && Number(r.cantidad) > 0) &&
-    recusadoRowsActivas.every((r) => r.loteUuid && r.semanaEmbolseUuid && r.motivoRecuseUuid && Number(r.cantidad) > 0);
+  const camposFaltantes = useMemo(() => {
+    const faltan = [];
+    if (!fincaUuid) faltan.push("Finca");
+    if (!semanaRegistroUuid) faltan.push("Semana de registro");
+    if (!fechaRegistro) faltan.push("Fecha de registro");
+    if (procesadoRowsActivas.length + recusadoRowsActivas.length === 0) {
+      faltan.push("Al menos una línea de procesado o recusado");
+    }
+    procesadoRowsActivas.forEach((r, idx) => {
+      const n = idx + 1;
+      if (!r.loteUuid) faltan.push(`Procesado línea ${n}: lote`);
+      if (!r.semanaEmbolseUuid) faltan.push(`Procesado línea ${n}: cinta (semana de embolse)`);
+      if (!(Number(r.cantidad) > 0)) faltan.push(`Procesado línea ${n}: cantidad`);
+    });
+    recusadoRowsActivas.forEach((r, idx) => {
+      const n = idx + 1;
+      if (!r.loteUuid) faltan.push(`Recusado línea ${n}: lote`);
+      if (!r.semanaEmbolseUuid) faltan.push(`Recusado línea ${n}: cinta (semana de embolse)`);
+      if (!r.motivoRecuseUuid) faltan.push(`Recusado línea ${n}: motivo de recuse`);
+      if (!(Number(r.cantidad) > 0)) faltan.push(`Recusado línea ${n}: cantidad`);
+    });
+    return faltan;
+  }, [fincaUuid, semanaRegistroUuid, fechaRegistro, procesadoRowsActivas, recusadoRowsActivas]);
 
-  async function handleSubmit() {
+  const puedeRegistrar = camposFaltantes.length === 0;
+
+  async function handleSubmit(forzarSaldoNegativo = false) {
     setError("");
     setSuccess("");
-
-    for (const r of [...procesadoRowsActivas, ...recusadoRowsActivas]) {
-      if (r.resumen && Number(r.cantidad) > r.resumen.saldo) {
-        setError(`La cantidad de una línea excede el saldo disponible de esa cohorte (${r.resumen.saldo}).`);
-        return;
-      }
-    }
-
     setSaving(true);
     try {
-      for (const r of procesadoRowsActivas) {
-        await apiFetch("/racimo-movimientos", {
-          method: "POST",
-          body: JSON.stringify({
-            fincaUuid,
-            loteUuid: r.loteUuid,
-            semanaEmbolseUuid: r.semanaEmbolseUuid,
-            semanaRegistroUuid,
-            tipo: "PROCESADO",
-            cantidad: Number(r.cantidad),
-            fecha: fechaRegistro,
-          }),
-        });
+      const resultado = await apiFetch("/racimo-movimientos/lote", {
+        method: "POST",
+        body: JSON.stringify({
+          fincaUuid,
+          semanaRegistroUuid,
+          fecha: fechaRegistro,
+          forzarSaldoNegativo,
+          movimientos: [
+            ...procesadoRowsActivas.map((r) => ({
+              tipo: "PROCESADO",
+              loteUuid: r.loteUuid,
+              semanaEmbolseUuid: r.semanaEmbolseUuid,
+              cantidad: Number(r.cantidad),
+            })),
+            ...recusadoRowsActivas.map((r) => ({
+              tipo: "RECUSE",
+              loteUuid: r.loteUuid,
+              semanaEmbolseUuid: r.semanaEmbolseUuid,
+              motivoRecuseUuid: r.motivoRecuseUuid,
+              cantidad: Number(r.cantidad),
+            })),
+          ],
+        }),
+      });
+
+      if (resultado.requiereConfirmacion) {
+        const mensaje = resultado.advertencias.map((a) => a.mensaje).join("\n");
+        if (confirm(`${mensaje}\n\n¿Registrar de todas formas?`)) {
+          await handleSubmit(true);
+        }
+        return;
       }
-      for (const r of recusadoRowsActivas) {
-        await apiFetch("/racimo-movimientos", {
-          method: "POST",
-          body: JSON.stringify({
-            fincaUuid,
-            loteUuid: r.loteUuid,
-            semanaEmbolseUuid: r.semanaEmbolseUuid,
-            semanaRegistroUuid,
-            tipo: "RECUSE",
-            motivoRecuseUuid: r.motivoRecuseUuid,
-            cantidad: Number(r.cantidad),
-            fecha: fechaRegistro,
-          }),
-        });
-      }
+
       setSuccess(
         `Registrado correctamente: ${totalProcesado} procesados, ${totalRecusado} recusados.`,
       );
@@ -504,14 +518,19 @@ export default function RegistrarCortePage() {
                 </div>
               </div>
 
-              <div className="d-flex justify-content-end gap-2 mt-4">
+              {!puedeRegistrar && (
+                <div className="alert alert-warning py-2 small mb-0">
+                  Falta completar: {camposFaltantes.join(", ")}.
+                </div>
+              )}
+              <div className="d-flex justify-content-end gap-2 mt-3">
                 <button type="button" className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2" onClick={handleLimpiar}>
                   <FiRotateCcw /> Limpiar
                 </button>
                 <button
                   type="button"
                   className="btn btn-brand rounded-3 d-flex align-items-center gap-2"
-                  onClick={handleSubmit}
+                  onClick={() => handleSubmit()}
                   disabled={!puedeRegistrar || saving}
                 >
                   <FiSave /> {saving ? "Registrando..." : "Registrar corte"}

@@ -5,14 +5,22 @@ import { FiFilter, FiEye } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 
+function nombreCompleto(u) {
+  return `${u.nombre} ${u.apellido}`.trim();
+}
+
 // Tabla paginada de evaluaciones (una fila por planta). El tipo de
 // evaluación llega como `tipoEvaluacionUuid` y `tab` (nombre) define qué
 // columnas se muestran.
 export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
   const [fincas, setFincas] = useState([]);
   const [lotes, setLotes] = useState([]);
+  const [semanas, setSemanas] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
   const [fincaUuid, setFincaUuid] = useState("");
   const [loteUuid, setLoteUuid] = useState("");
+  const [semanaUuid, setSemanaUuid] = useState("");
+  const [usuarioUuid, setUsuarioUuid] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
 
@@ -27,6 +35,12 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
     apiFetch("/fincas?limit=100")
       .then((data) => setFincas(data.items))
       .catch(() => {});
+    apiFetch("/semanas?limit=100")
+      .then((data) => setSemanas(data.items))
+      .catch(() => {});
+    apiFetch("/users?limit=100")
+      .then((data) => setUsuarios(data.items))
+      .catch(() => setUsuarios([])); // sin permiso para listar usuarios: el filtro queda oculto
   }, []);
 
   useEffect(() => {
@@ -47,6 +61,8 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
       const params = new URLSearchParams({ limit: "40", page: String(paginaNueva || 1), tipoEvaluacionUuid });
       if (fincaUuid) params.set("fincaUuid", fincaUuid);
       if (loteUuid) params.set("loteUuid", loteUuid);
+      if (semanaUuid) params.set("semanaUuid", semanaUuid);
+      if (usuarioUuid) params.set("usuarioUuid", usuarioUuid);
       if (fechaDesde) params.set("fechaDesde", fechaDesde);
       if (fechaHasta) params.set("fechaHasta", fechaHasta);
       const { items: evaluaciones, meta } = await apiFetch(`/evaluaciones?${params.toString()}`);
@@ -69,9 +85,9 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
     <div>
       <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
         <div className="row g-2 align-items-end">
-          <div className="col-6 col-md-3">
+          <div className="col-6 col-md">
             <label className="form-label small fw-medium">Finca</label>
-            <select className="form-select rounded-3" value={fincaUuid} onChange={(e) => setFincaUuid(e.target.value)}>
+            <select className="form-select form-select-sm rounded-3" value={fincaUuid} onChange={(e) => setFincaUuid(e.target.value)}>
               <option value="">Todas</option>
               {fincas.map((f) => (
                 <option key={f.uuid} value={f.uuid}>
@@ -80,10 +96,10 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
               ))}
             </select>
           </div>
-          <div className="col-6 col-md-3">
+          <div className="col-6 col-md">
             <label className="form-label small fw-medium">Lote</label>
             <select
-              className="form-select rounded-3"
+              className="form-select form-select-sm rounded-3"
               value={loteUuid}
               disabled={!fincaUuid}
               onChange={(e) => setLoteUuid(e.target.value)}
@@ -96,16 +112,40 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
               ))}
             </select>
           </div>
-          <div className="col-6 col-md-2">
+          <div className="col-6 col-md">
+            <label className="form-label small fw-medium">Semana</label>
+            <select className="form-select form-select-sm rounded-3" value={semanaUuid} onChange={(e) => setSemanaUuid(e.target.value)}>
+              <option value="">Todas</option>
+              {semanas.map((s) => (
+                <option key={s.uuid} value={s.uuid}>
+                  {s.codigo}
+                </option>
+              ))}
+            </select>
+          </div>
+          {usuarios.length > 0 && (
+            <div className="col-6 col-md">
+              <label className="form-label small fw-medium">Usuario</label>
+              <select className="form-select form-select-sm rounded-3" value={usuarioUuid} onChange={(e) => setUsuarioUuid(e.target.value)}>
+                <option value="">Todos</option>
+                {usuarios.map((u) => (
+                  <option key={u.uuid} value={u.uuid}>
+                    {nombreCompleto(u)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="col-6 col-md">
             <label className="form-label small fw-medium">Desde</label>
-            <input type="date" className="form-control rounded-3" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
+            <input type="date" className="form-control form-control-sm rounded-3" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
           </div>
-          <div className="col-6 col-md-2">
+          <div className="col-6 col-md">
             <label className="form-label small fw-medium">Hasta</label>
-            <input type="date" className="form-control rounded-3" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
+            <input type="date" className="form-control form-control-sm rounded-3" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
           </div>
-          <div className="col-12 col-md-2">
-            <button type="button" className="btn btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={() => loadReporte(1)}>
+          <div className="col-12 col-md-auto">
+            <button type="button" className="btn btn-sm btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={() => loadReporte(1)}>
               <FiFilter /> Filtrar
             </button>
           </div>

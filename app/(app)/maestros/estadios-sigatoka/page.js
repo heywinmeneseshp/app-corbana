@@ -8,7 +8,7 @@ import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
 function emptyForm() {
-  return { estadio: "", valor: "", estado: true };
+  return { estadio: "", valorL3: "", valorL4: "", valorL5: "", estado: true };
 }
 
 export default function EstadiosSigatokaPage() {
@@ -41,7 +41,13 @@ export default function EstadiosSigatokaPage() {
 
   function openEdit(estadio) {
     setEditing(estadio);
-    setForm({ estadio: estadio.estadio, valor: String(estadio.valor), estado: estadio.estado });
+    setForm({
+      estadio: estadio.estadio,
+      valorL3: String(estadio.valorL3),
+      valorL4: String(estadio.valorL4),
+      valorL5: String(estadio.valorL5),
+      estado: estadio.estado,
+    });
     setFormError("");
     setModalOpen(true);
   }
@@ -53,7 +59,9 @@ export default function EstadiosSigatokaPage() {
     try {
       const body = {
         ...form,
-        valor: Number(form.valor) || 0,
+        valorL3: Number(form.valorL3) || 0,
+        valorL4: Number(form.valorL4) || 0,
+        valorL5: Number(form.valorL5) || 0,
       };
       await apiFetch(`/estadios-sigatoka/${editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       setModalOpen(false);
@@ -71,9 +79,9 @@ export default function EstadiosSigatokaPage() {
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1">Estadios de Sigatoka</h1>
           <p className="text-secondary mb-0">
-            Valores numéricos por estadio para el cálculo automático de la Suma Bruta: <strong>0</strong> = sin estadio
-            (hoja sin estadio en la app móvil) y la escala de Sigatoka de <strong>1-</strong> a <strong>6+</strong>. Los
-            cambios se aplican en tiempo real, sin tocar código.
+            Valores numéricos por estadio y por hoja evaluada (L3, L4, L5) para el cálculo automático de la Suma
+            Bruta: <strong>0</strong> = sin estadio (hoja sin estadio en la app móvil) y la escala de Sigatoka de{" "}
+            <strong>1-</strong> a <strong>6+</strong>. Los cambios se aplican en tiempo real, sin tocar código.
           </p>
         </div>
 
@@ -85,21 +93,23 @@ export default function EstadiosSigatokaPage() {
               <thead className="table-light">
                 <tr>
                   <th>Estadio</th>
-                  <th>Valor</th>
+                  <th>L3</th>
+                  <th>L4</th>
+                  <th>L5</th>
                   <th className="text-end">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={3} className="text-center text-secondary py-4">
+                    <td colSpan={5} className="text-center text-secondary py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="text-center text-secondary py-4">
+                    <td colSpan={5} className="text-center text-secondary py-4">
                       No hay estadios de Sigatoka registrados todavía.
                     </td>
                   </tr>
@@ -108,7 +118,9 @@ export default function EstadiosSigatokaPage() {
                   items.map((e) => (
                     <tr key={e.uuid}>
                       <td className="fw-medium">{e.estadio}</td>
-                      <td className="small text-secondary">{Number(e.valor)}</td>
+                      <td className="small text-secondary">{Number(e.valorL3)}</td>
+                      <td className="small text-secondary">{Number(e.valorL4)}</td>
+                      <td className="small text-secondary">{Number(e.valorL5)}</td>
                       <td>
                         <div className="d-flex justify-content-end gap-2 flex-nowrap">
                           {hasPermission("estadio_sigatoka.editar") && (
@@ -128,21 +140,50 @@ export default function EstadiosSigatokaPage() {
         {modalOpen && (
           <ModalShell title={`Editar estadio ${editing?.estadio || ""}`} onClose={() => setModalOpen(false)}>
             <form onSubmit={handleSave}>
-              <div className="mb-3">
-                <label className="form-label small fw-medium">
-                  Valor numérico <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="form-control rounded-3"
-                  required
-                  placeholder="Ej. 2.5"
-                  value={form.valor}
-                  onChange={(e) => setForm((f) => ({ ...f, valor: e.target.value }))}
-                />
-                <div className="form-text small">Valor con el que se calcula la Suma Bruta.</div>
+              <div className="row g-3 mb-3">
+                <div className="col-4">
+                  <label className="form-label small fw-medium">
+                    L3 <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="form-control rounded-3"
+                    required
+                    value={form.valorL3}
+                    onChange={(e) => setForm((f) => ({ ...f, valorL3: e.target.value }))}
+                  />
+                </div>
+                <div className="col-4">
+                  <label className="form-label small fw-medium">
+                    L4 <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="form-control rounded-3"
+                    required
+                    value={form.valorL4}
+                    onChange={(e) => setForm((f) => ({ ...f, valorL4: e.target.value }))}
+                  />
+                </div>
+                <div className="col-4">
+                  <label className="form-label small fw-medium">
+                    L5 <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="form-control rounded-3"
+                    required
+                    value={form.valorL5}
+                    onChange={(e) => setForm((f) => ({ ...f, valorL5: e.target.value }))}
+                  />
+                </div>
+                <div className="form-text small">Valores con los que se calcula la Suma Bruta según la hoja evaluada.</div>
               </div>
               <div className="form-check mb-3">
                 <input

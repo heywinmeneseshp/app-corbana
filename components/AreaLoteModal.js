@@ -94,37 +94,41 @@ export default function AreaLoteModal() {
               </h3>
               <div className="d-flex flex-column gap-2">
                 {f.lotes.map((l) => (
-                  <div key={l.uuid} className="d-flex align-items-center gap-2 flex-wrap">
-                    <span className="text-secondary small" style={{ width: 110 }}>
-                      Lote {l.nombre}
-                    </span>
-                    <div className="input-group input-group-sm" style={{ maxWidth: 160 }}>
-                      <span className="input-group-text">Total</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        required
-                        className="form-control"
-                        placeholder="0.00"
-                        value={valores[`${l.uuid}|total`] ?? ""}
-                        onChange={(e) => setValor(l.uuid, "total", e.target.value)}
-                      />
-                      <span className="input-group-text">Ha</span>
+                  <div key={l.uuid} className="row g-2 align-items-center">
+                    <div className="col-12 col-md-3">
+                      <span className="text-secondary small fw-medium d-block">Lote {l.nombre}</span>
                     </div>
-                    <div className="input-group input-group-sm" style={{ maxWidth: 180 }}>
-                      <span className="input-group-text">En producción</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        required
-                        className="form-control"
-                        placeholder="0.00"
-                        value={valores[`${l.uuid}|produccion`] ?? ""}
-                        onChange={(e) => setValor(l.uuid, "produccion", e.target.value)}
-                      />
-                      <span className="input-group-text">Ha</span>
+                    <div className="col-12 col-md-4">
+                      <div className="input-group input-group-sm">
+                        <span className="input-group-text">Total</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          required
+                          className="form-control"
+                          placeholder="0.00"
+                          value={valores[`${l.uuid}|total`] ?? ""}
+                          onChange={(e) => setValor(l.uuid, "total", e.target.value)}
+                        />
+                        <span className="input-group-text">Ha</span>
+                      </div>
+                    </div>
+                    <div className="col-12 col-md-5">
+                      <div className="input-group input-group-sm">
+                        <span className="input-group-text">En producción</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          required
+                          className="form-control"
+                          placeholder="0.00"
+                          value={valores[`${l.uuid}|produccion`] ?? ""}
+                          onChange={(e) => setValor(l.uuid, "produccion", e.target.value)}
+                        />
+                        <span className="input-group-text">Ha</span>
+                      </div>
                     </div>
                   </div>
                 ))}

@@ -89,31 +89,40 @@ export default function RegistrarEmbolsePage() {
     [rows],
   );
 
-  const puedeRegistrar =
-    fincaUuid &&
-    semanaEmbolseUuid &&
-    fechaRegistro &&
-    rows.every((r) => r.loteUuid && Number(r.cantidad) > 0);
+  const camposFaltantes = useMemo(() => {
+    const faltan = [];
+    if (!fincaUuid) faltan.push("Finca");
+    if (!semanaEmbolseUuid) faltan.push("Semana de embolse");
+    if (!fechaRegistro) faltan.push("Fecha de registro");
+    rows.forEach((r, idx) => {
+      const n = idx + 1;
+      if (!r.loteUuid) faltan.push(`Línea ${n}: lote`);
+      if (!(Number(r.cantidad) > 0)) faltan.push(`Línea ${n}: cantidad`);
+    });
+    return faltan;
+  }, [fincaUuid, semanaEmbolseUuid, fechaRegistro, rows]);
+
+  const puedeRegistrar = camposFaltantes.length === 0;
 
   async function handleSubmit() {
     setError("");
     setSuccess("");
     setSaving(true);
     try {
-      for (const r of rows) {
-        await apiFetch("/racimo-movimientos", {
-          method: "POST",
-          body: JSON.stringify({
-            fincaUuid,
+      await apiFetch("/racimo-movimientos/lote", {
+        method: "POST",
+        body: JSON.stringify({
+          fincaUuid,
+          semanaRegistroUuid: semanaEmbolseUuid,
+          fecha: fechaRegistro,
+          movimientos: rows.map((r) => ({
+            tipo: "EMBOLSE",
             loteUuid: r.loteUuid,
             semanaEmbolseUuid,
-            semanaRegistroUuid: semanaEmbolseUuid,
-            tipo: "EMBOLSE",
             cantidad: Number(r.cantidad),
-            fecha: fechaRegistro,
-          }),
-        });
-      }
+          })),
+        }),
+      });
       setSuccess(`${rows.length} embolse(s) registrado(s) correctamente (${totalRacimos} racimos).`);
       setRows([emptyRow()]);
     } catch (err) {
@@ -271,7 +280,12 @@ export default function RegistrarEmbolsePage() {
                 <span className="fs-4 fw-bold">{totalRacimos}</span>
               </div>
 
-              <div className="d-flex justify-content-end gap-2 mt-4">
+              {!puedeRegistrar && (
+                <div className="alert alert-warning py-2 small mt-4 mb-0">
+                  Falta completar: {camposFaltantes.join(", ")}.
+                </div>
+              )}
+              <div className="d-flex justify-content-end gap-2 mt-3">
                 <button type="button" className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2" onClick={handleLimpiar}>
                   <FiRotateCcw /> Limpiar
                 </button>

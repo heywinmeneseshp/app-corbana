@@ -71,7 +71,7 @@ export default function CalendarioLaboresPage() {
         setError(err.message);
       }
       try {
-        const { items: usuariosData } = await apiFetch("/usuarios?limit=100");
+        const { items: usuariosData } = await apiFetch("/users?limit=100");
         setUsuarios(usuariosData);
       } catch {
         setUsuarios([]); // sin permiso para listar usuarios: el campo Responsable queda oculto
