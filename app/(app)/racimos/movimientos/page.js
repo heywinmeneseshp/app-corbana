@@ -8,6 +8,10 @@ import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import { COLOR_HEX } from "@/lib/semanaColor";
 
+function nombreCompleto(u) {
+  return `${u.nombre} ${u.apellido}`.trim();
+}
+
 const TIPO_BADGE = {
   EMBOLSE: { label: "EMBOLSE", bg: "#d1fae5", color: "#047857" },
   REPIQUE: { label: "REPIQUE", bg: "#fef3c7", color: "#b45309" },
@@ -66,6 +70,28 @@ function SemanaAutocomplete({ semanas, value, onChange }) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Si el usuario escribe el código exacto de una semana (sin llegar a
+  // hacer clic en la sugerencia) y sale del campo, se toma igual como
+  // elegida — antes quedaba el texto puesto pero sin valor real
+  // seleccionado, así que los filtros y el botón de exportar (que valida
+  // el valor, no el texto) lo trataban como si no hubiera nada filtrado.
+  function confirmarTexto() {
+    const q = text.trim().toLowerCase();
+    if (!q) {
+      if (value) onChange("");
+      return;
+    }
+    const exacta = semanas.find((s) => s.codigo.toLowerCase() === q);
+    if (exacta) {
+      if (exacta.uuid !== value) onChange(exacta.uuid);
+    } else {
+      // No coincide con ninguna semana real: revierte al valor vigente (o
+      // lo limpia) para no dejar texto que parezca aplicado sin estarlo.
+      const actual = value ? semanaMap[value] : null;
+      setText(actual ? actual.codigo : "");
+    }
+  }
+
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <input
@@ -76,6 +102,15 @@ function SemanaAutocomplete({ semanas, value, onChange }) {
         placeholder="Todas"
         onChange={(e) => { setText(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
+        onBlur={confirmarTexto}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            confirmarTexto();
+            setOpen(false);
+            e.target.blur();
+          }
+        }}
       />
       {open && filtered.length > 0 && (
         <div
@@ -106,15 +141,18 @@ function SemanaAutocomplete({ semanas, value, onChange }) {
 
 export default function MovimientosPage() {
   const puedeEliminar = hasPermission("racimo_movimiento.eliminar");
+  const puedeEliminarMasivo = hasPermission("racimo_movimiento.eliminar_masivo");
   const [fincas, setFincas] = useState([]);
   const [lotes, setLotes] = useState([]);
   const [semanas, setSemanas] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
 
   const [fincaUuid, setFincaUuid] = useState("");
   const [loteUuid, setLoteUuid] = useState("");
   const [semanaEmbolseUuid, setSemanaEmbolseUuid] = useState("");
   const [semanaRegistroDesdeUuid, setSemanaRegistroDesdeUuid] = useState("");
   const [semanaRegistroHastaUuid, setSemanaRegistroHastaUuid] = useState("");
+  const [usuarioUuid, setUsuarioUuid] = useState("");
 
   const semanasDisponibles = useMemo(() => {
     const hoy = new Date();
@@ -122,10 +160,13 @@ export default function MovimientosPage() {
   }, [semanas]);
 
   const [tipo, setTipo] = useState("");
+  const [limit, setLimit] = useState(20);
 
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
+  const [seleccionados, setSeleccionados] = useState(new Set());
+  const [eliminandoMasivo, setEliminandoMasivo] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -143,6 +184,12 @@ export default function MovimientosPage() {
         setSemanas(semanasRes.items);
       } catch (err) {
         setError(err.message);
+      }
+      try {
+        const usuariosRes = await apiFetch("/users?limit=100");
+        setUsuarios(usuariosRes.items);
+      } catch {
+        setUsuarios([]); // sin permiso para listar usuarios: el filtro queda oculto
       }
     }
     loadFiltros();
@@ -163,17 +210,19 @@ export default function MovimientosPage() {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       if (fincaUuid) params.set("fincaUuid", fincaUuid);
       if (loteUuid) params.set("loteUuid", loteUuid);
       if (semanaEmbolseUuid) params.set("semanaEmbolseUuid", semanaEmbolseUuid);
       if (semanaRegistroDesdeUuid) params.set("semanaRegistroDesdeUuid", semanaRegistroDesdeUuid);
       if (semanaRegistroHastaUuid) params.set("semanaRegistroHastaUuid", semanaRegistroHastaUuid);
+      if (usuarioUuid) params.set("usuarioUuid", usuarioUuid);
       if (tipo) params.set("tipo", tipo);
 
       const { items: rows, meta: m } = await apiFetch(`/racimo-movimientos?${params.toString()}`);
       setItems(rows);
       setMeta(m);
+      setSeleccionados(new Set());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -184,7 +233,7 @@ export default function MovimientosPage() {
   useEffect(() => {
     loadMovimientos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, fincaUuid, loteUuid, semanaEmbolseUuid, semanaRegistroDesdeUuid, semanaRegistroHastaUuid, tipo]);
+  }, [page, limit, fincaUuid, loteUuid, semanaEmbolseUuid, semanaRegistroDesdeUuid, semanaRegistroHastaUuid, usuarioUuid, tipo]);
 
   async function handleDelete(uuid) {
     if (!confirm("¿Eliminar este movimiento? Esto afecta el saldo de la cohorte.")) return;
@@ -193,6 +242,45 @@ export default function MovimientosPage() {
       loadMovimientos();
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  function toggleSeleccionado(uuid) {
+    setSeleccionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(uuid)) next.delete(uuid);
+      else next.add(uuid);
+      return next;
+    });
+  }
+
+  const filasSeleccionables = items.filter((item) => !item.esHistorico || meta.puedeEliminarHistorico);
+  const todasSeleccionadas =
+    filasSeleccionables.length > 0 && filasSeleccionables.every((item) => seleccionados.has(item.uuid));
+
+  function toggleSeleccionarTodas() {
+    setSeleccionados((prev) => {
+      if (todasSeleccionadas) return new Set();
+      return new Set(filasSeleccionables.map((item) => item.uuid));
+    });
+  }
+
+  async function handleDeleteMasivo() {
+    const cantidad = seleccionados.size;
+    if (cantidad === 0) return;
+    if (!confirm(`¿Eliminar ${cantidad} movimiento(s) seleccionados? Esto afecta el saldo de las cohortes.`)) return;
+    setEliminandoMasivo(true);
+    setError("");
+    try {
+      await apiFetch("/racimo-movimientos/eliminar-en-lote", {
+        method: "POST",
+        body: JSON.stringify({ uuids: [...seleccionados] }),
+      });
+      loadMovimientos();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEliminandoMasivo(false);
     }
   }
 
@@ -212,6 +300,7 @@ export default function MovimientosPage() {
       if (semanaEmbolseUuid) params.set("semanaEmbolseUuid", semanaEmbolseUuid);
       if (semanaRegistroDesdeUuid) params.set("semanaRegistroDesdeUuid", semanaRegistroDesdeUuid);
       if (semanaRegistroHastaUuid) params.set("semanaRegistroHastaUuid", semanaRegistroHastaUuid);
+      if (usuarioUuid) params.set("usuarioUuid", usuarioUuid);
       if (tipo) params.set("tipo", tipo);
 
       const blob = await apiFetchBlob(`/racimo-movimientos/exportar?${params.toString()}`);
@@ -341,14 +430,77 @@ export default function MovimientosPage() {
                 <option value="RECUSE">Recusado</option>
               </select>
             </div>
+            {usuarios.length > 0 && (
+              <div className="col-6 col-md-2">
+                <label className="form-label small fw-medium mb-1">Usuario</label>
+                <select
+                  className="form-select form-select-sm rounded-3"
+                  value={usuarioUuid}
+                  onChange={(e) => {
+                    setPage(1);
+                    setUsuarioUuid(e.target.value);
+                  }}
+                >
+                  <option value="">Todos</option>
+                  {usuarios.map((u) => (
+                    <option key={u.uuid} value={u.uuid}>
+                      {nombreCompleto(u)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="col-6 col-md-2">
+              <label className="form-label small fw-medium mb-1">Filas por página</label>
+              <select
+                className="form-select form-select-sm rounded-3"
+                value={limit}
+                onChange={(e) => {
+                  setPage(1);
+                  setLimit(Number(e.target.value));
+                }}
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={500}>500</option>
+              </select>
+            </div>
           </div>
         </div>
+
+        {puedeEliminarMasivo && seleccionados.size > 0 && (
+          <div className="alert alert-warning py-2 px-3 mb-3 d-flex align-items-center justify-content-between gap-2">
+            <span className="small fw-medium">{seleccionados.size} movimiento(s) seleccionados</span>
+            <button
+              type="button"
+              className="btn btn-sm btn-danger rounded-3 d-flex align-items-center gap-1"
+              onClick={handleDeleteMasivo}
+              disabled={eliminandoMasivo}
+            >
+              <FiTrash2 /> {eliminandoMasivo ? "Eliminando..." : "Eliminar seleccionados"}
+            </button>
+          </div>
+        )}
 
         <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
             <table className="table table-hover mb-0 align-middle">
               <thead className="table-light">
                 <tr className="small">
+                  {puedeEliminarMasivo && (
+                    <th style={{ width: "2rem" }}>
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={todasSeleccionadas}
+                        onChange={toggleSeleccionarTodas}
+                        disabled={filasSeleccionables.length === 0}
+                        title="Seleccionar todas"
+                      />
+                    </th>
+                  )}
                   <th>Fecha registro</th>
                   <th>Semana Registro</th>
                   <th>Semana Embolse</th>
@@ -365,14 +517,14 @@ export default function MovimientosPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={11} className="text-center text-secondary py-4">
+                    <td colSpan={puedeEliminarMasivo ? 12 : 11} className="text-center text-secondary py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="text-center text-secondary py-4">
+                    <td colSpan={puedeEliminarMasivo ? 12 : 11} className="text-center text-secondary py-4">
                       No hay movimientos para los filtros seleccionados.
                     </td>
                   </tr>
@@ -381,8 +533,21 @@ export default function MovimientosPage() {
                   items.map((item) => {
                     const badge = TIPO_BADGE[item.tipo];
                     const esPositivo = item.tipo === "EMBOLSE";
+                    const esSeleccionable = !item.esHistorico || meta.puedeEliminarHistorico;
                     return (
                       <tr key={item.uuid}>
+                        {puedeEliminarMasivo && (
+                          <td>
+                            {esSeleccionable && (
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                checked={seleccionados.has(item.uuid)}
+                                onChange={() => toggleSeleccionado(item.uuid)}
+                              />
+                            )}
+                          </td>
+                        )}
                         <td className="small">{item.fecha}</td>
                         <td>
                           <WeekBadge semana={item.semanaRegistro} />

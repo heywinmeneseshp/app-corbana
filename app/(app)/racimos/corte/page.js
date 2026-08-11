@@ -1,13 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FiPlus, FiTrash2, FiSave, FiRotateCcw, FiInfo, FiCheckCircle } from "react-icons/fi";
+import { FiPlus, FiTrash2, FiSave, FiRotateCcw, FiInfo, FiCheckCircle, FiAlertTriangle } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import { COLOR_EMOJI, ultimasSemanasConEdad } from "@/lib/semanaColor";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// El backend reporta el error de una línea puntual como "Línea N: mensaje"
+// (ver crearMovimientosEnLote) — se parsea para marcar esa fila en la tabla
+// en vez de dejar el mensaje solo en el cartel de arriba. Acá "N" es la
+// posición dentro del arreglo combinado que se manda (procesado primero,
+// luego recusado), así que hay que traducirlo a la fila correcta de cada
+// una de las dos tablas.
+function parseLineaError(mensaje) {
+  const m = /^Línea (\d+):\s*([\s\S]*)$/.exec(mensaje || "");
+  return m ? { numero: Number(m[1]), mensaje: m[2] } : null;
 }
 
 function emptyProcesadoRow() {
@@ -149,6 +160,19 @@ export default function RegistrarCortePage() {
 
   const procesadoRowsActivas = procesadoRows.filter((r) => r.loteUuid || r.semanaEmbolseUuid || r.cantidad);
   const recusadoRowsActivas = recusadoRows.filter((r) => r.loteUuid || r.semanaEmbolseUuid || r.cantidad);
+
+  const filaConError = useMemo(() => parseLineaError(error), [error]);
+  // El envío manda primero procesado y después recusado (ver handleSubmit),
+  // así que la línea N del error cae en procesado si N <= cantidad de
+  // procesadas activas; si no, en recusado, restando ese offset.
+  const filaProcesadoConErrorKey = useMemo(() => {
+    if (!filaConError || filaConError.numero > procesadoRowsActivas.length) return null;
+    return procesadoRowsActivas[filaConError.numero - 1]?.key ?? null;
+  }, [filaConError, procesadoRowsActivas]);
+  const filaRecusadoConErrorKey = useMemo(() => {
+    if (!filaConError || filaConError.numero <= procesadoRowsActivas.length) return null;
+    return recusadoRowsActivas[filaConError.numero - procesadoRowsActivas.length - 1]?.key ?? null;
+  }, [filaConError, procesadoRowsActivas, recusadoRowsActivas]);
 
   const camposFaltantes = useMemo(() => {
     const faltan = [];
@@ -350,8 +374,15 @@ export default function RegistrarCortePage() {
                     </thead>
                     <tbody>
                       {procesadoRows.map((row, idx) => (
-                        <tr key={row.key}>
-                          <td className="small text-secondary">{idx + 1}</td>
+                        <tr key={row.key} className={row.key === filaProcesadoConErrorKey ? "table-danger" : undefined}>
+                          <td className="small text-secondary">
+                            <span className="d-inline-flex align-items-center gap-1">
+                              {idx + 1}
+                              {row.key === filaProcesadoConErrorKey && (
+                                <FiAlertTriangle className="text-danger" title={filaConError.mensaje} />
+                              )}
+                            </span>
+                          </td>
                           <td>
                             <select
                               className="form-select form-select-sm rounded-3"
@@ -439,8 +470,15 @@ export default function RegistrarCortePage() {
                     </thead>
                     <tbody>
                       {recusadoRows.map((row, idx) => (
-                        <tr key={row.key}>
-                          <td className="small text-secondary">{idx + 1}</td>
+                        <tr key={row.key} className={row.key === filaRecusadoConErrorKey ? "table-danger" : undefined}>
+                          <td className="small text-secondary">
+                            <span className="d-inline-flex align-items-center gap-1">
+                              {idx + 1}
+                              {row.key === filaRecusadoConErrorKey && (
+                                <FiAlertTriangle className="text-danger" title={filaConError.mensaje} />
+                              )}
+                            </span>
+                          </td>
                           <td>
                             <select
                               className="form-select form-select-sm rounded-3"

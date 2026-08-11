@@ -1,13 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FiPlus, FiTrash2, FiSave, FiRotateCcw, FiInfo, FiCheckCircle } from "react-icons/fi";
+import { FiPlus, FiTrash2, FiSave, FiRotateCcw, FiInfo, FiCheckCircle, FiAlertTriangle } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import { COLOR_EMOJI, ultimasSemanasConEdad } from "@/lib/semanaColor";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// El backend reporta el error de una línea puntual como "Línea N: mensaje"
+// (ver crearMovimientosEnLote) — se parsea para marcar esa fila en la tabla
+// en vez de dejar el mensaje solo en el cartel de arriba, donde hay que
+// contar las filas a mano para encontrar cuál es.
+function parseLineaError(mensaje) {
+  const m = /^Línea (\d+):\s*([\s\S]*)$/.exec(mensaje || "");
+  return m ? { numero: Number(m[1]), mensaje: m[2] } : null;
 }
 
 function emptyRow() {
@@ -134,6 +143,8 @@ export default function RegistrarRepiquesPage() {
     () => rows.reduce((sum, r) => sum + (Number(r.cantidad) || 0), 0),
     [rows],
   );
+
+  const filaConError = useMemo(() => parseLineaError(error), [error]);
 
   const camposFaltantes = useMemo(() => {
     const faltan = [];
@@ -292,8 +303,15 @@ export default function RegistrarRepiquesPage() {
                     </thead>
                     <tbody>
                       {rows.map((row, idx) => (
-                        <tr key={row.key}>
-                          <td className="small text-secondary">{idx + 1}</td>
+                        <tr key={row.key} className={filaConError?.numero === idx + 1 ? "table-danger" : undefined}>
+                          <td className="small text-secondary">
+                            <span className="d-inline-flex align-items-center gap-1">
+                              {idx + 1}
+                              {filaConError?.numero === idx + 1 && (
+                                <FiAlertTriangle className="text-danger" title={filaConError.mensaje} />
+                              )}
+                            </span>
+                          </td>
                           <td>
                             <select
                               className="form-select form-select-sm rounded-3"
