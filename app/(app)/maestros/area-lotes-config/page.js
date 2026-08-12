@@ -86,7 +86,7 @@ export default function AreaLotesConfigPage() {
   };
 
   return (
-    <RequirePermission code="area_lote.ver">
+    <RequirePermission code="menu.maestros.area_lotes">
       <div className="p-4 p-md-5">
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1 d-flex align-items-center gap-2">

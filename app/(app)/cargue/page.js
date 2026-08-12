@@ -9,7 +9,7 @@ import { hasPermission } from "@/lib/auth";
 
 export default function CargueMasivoPage() {
   return (
-    <RequirePermission anyOf={["finca.crear", "lote.crear", "racimo_movimiento.crear", "motivo_repique.crear", "motivo_recuse.crear", "produccion.crear"]}>
+    <RequirePermission code="menu.cargue_masivo">
     <div className="p-4 p-md-5">
       <div className="mb-4">
         <h1 className="fw-bold h3 mb-1">Cargue Masivo</h1>
@@ -134,6 +134,27 @@ export default function CargueMasivoPage() {
             templateHeaders={["semana", "fincaCodigo", "cajas"]}
             templateExampleRow={["S30-2026", "525", "1500"]}
             templateFilename="plantilla_produccion.xlsx"
+            chunkSize={10000}
+            renderResult={(r) => (
+              <>
+                <p className="mb-1">
+                  {r.totalFilas} fila(s) procesadas: <strong>{r.creados}</strong> registro(s) creado(s)
+                  {r.saltados > 0 && <>, <strong>{r.saltados}</strong> omitido(s) por duplicado</>}.
+                </p>
+                <ErrorList errores={r.errores} />
+              </>
+            )}
+          />
+        )}
+
+        {hasPermission("clima.crear") && (
+          <BulkUploadCard
+            title="Cargue masivo de Clima"
+            description="Columnas esperadas: fincaCodigo, fecha (AAAA-MM-DD), mm (precipitación), temperatura (opcional), humedadRelativa (opcional). La semana se calcula sola a partir de la fecha. Si ya existe un registro para la misma finca y fecha, se omite. Máximo 15,000 filas por archivo — si tenés más, dividilo por año y subí cada parte por separado."
+            endpoint="/clima/bulk-upload"
+            templateHeaders={["fincaCodigo", "fecha", "mm", "temperatura", "humedadRelativa"]}
+            templateExampleRow={["525", "2026-04-20", "12.5", "27.3", "80"]}
+            templateFilename="plantilla_clima.xlsx"
             chunkSize={10000}
             renderResult={(r) => (
               <>

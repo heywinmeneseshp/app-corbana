@@ -91,7 +91,7 @@ export default function ProduccionSemanalPage() {
   }
 
   return (
-    <RequirePermission code="produccion.ver">
+    <RequirePermission code="menu.produccion_semanal">
       <div className="p-4 p-md-5">
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1 d-flex align-items-center gap-2">

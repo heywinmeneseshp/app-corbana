@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { FiArrowLeft, FiCheck, FiX, FiDroplet, FiThermometer, FiWind } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
+import RequirePermission from "@/components/RequirePermission";
 
 const ESTADO_BADGE = {
   Hecho: "text-bg-success",
@@ -47,6 +48,7 @@ export default function VisitaLaborCulturalPage() {
   }, [visitaUuid]);
 
   return (
+    <RequirePermission code="menu.sanidad_vegetal.labores">
     <div className="p-4 p-md-5" style={{ maxWidth: 900 }}>
       <button
         type="button"
@@ -196,5 +198,6 @@ export default function VisitaLaborCulturalPage() {
         </div>
       ) : null}
     </div>
+    </RequirePermission>
   );
 }

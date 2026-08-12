@@ -143,7 +143,7 @@ export default function RegistrarEmbolsePage() {
   }
 
   return (
-    <RequirePermission code="racimo_movimiento.crear">
+    <RequirePermission code="menu.racimos.registrar">
       <div className="p-4 p-md-5">
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1">Registrar Embolse</h1>

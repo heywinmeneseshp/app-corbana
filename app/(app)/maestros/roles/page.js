@@ -46,7 +46,7 @@ export default function RolesPage() {
   };
 
   return (
-    <RequirePermission code="roles.ver">
+    <RequirePermission code="menu.maestros.roles">
     <div className="p-4 p-md-5">
       <div className="mb-4">
         <h1 className="fw-bold h3 mb-1">Roles</h1>

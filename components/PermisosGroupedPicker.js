@@ -10,26 +10,42 @@ import { useMemo, useState } from "react";
 const GRUPOS = [
   {
     titulo: "Maestros · Fincas y Lotes",
-    prefijos: ["finca.", "grupo_finca.", "lote.", "planta.", "categoria_planta."],
+    prefijos: ["menu.maestros.fincas", "menu.maestros.grupos_finca", "finca.", "grupo_finca.", "lote.", "planta.", "categoria_planta."],
   },
-  { titulo: "Maestros · Usuarios", prefijos: ["usuarios."] },
-  { titulo: "Maestros · Roles y Permisos", prefijos: ["roles.", "permisos.", "menu."] },
-  { titulo: "Maestros · Semanas y Calendario", prefijos: ["semana."] },
-  { titulo: "Maestros · Motivos de Repique", prefijos: ["motivo_repique."] },
-  { titulo: "Maestros · Motivos de Recuse", prefijos: ["motivo_recuse."] },
-  { titulo: "Maestros · Categorías de Labor", prefijos: ["categoria_labor."] },
-  { titulo: "Maestros · Labores", prefijos: ["labor."] },
-  { titulo: "Maestros · Estadios de Sigatoka", prefijos: ["estadio_sigatoka."] },
-  { titulo: "Racimos", prefijos: ["racimo_movimiento."] },
-  { titulo: "Labores · Calendario de Labores", prefijos: ["labor_programacion."] },
-  { titulo: "Precipitación Diaria", prefijos: ["precipitacion_diaria."] },
-  { titulo: "Área de Lotes", prefijos: ["area_lote."] },
+  { titulo: "Maestros · Usuarios", prefijos: ["menu.maestros.usuarios", "usuarios."] },
+  { titulo: "Maestros · Roles y Permisos", prefijos: ["menu.maestros.roles", "roles.", "permisos.", "menu.ver", "menu.crear", "menu.editar", "menu.eliminar"] },
+  { titulo: "Maestros · Semanas y Calendario", prefijos: ["menu.maestros.semanas", "menu.maestros.calendario", "semana."] },
+  { titulo: "Maestros · Motivos de Repique", prefijos: ["menu.maestros.motivos_repique", "motivo_repique."] },
+  { titulo: "Maestros · Motivos de Recuse", prefijos: ["menu.maestros.motivos_recuse", "motivo_recuse."] },
+  { titulo: "Maestros · Categorías de Labor", prefijos: ["menu.maestros.categorias_labor", "categoria_labor."] },
+  { titulo: "Maestros · Labores", prefijos: ["menu.maestros.labores", "labor."] },
+  { titulo: "Maestros · Estadios de Sigatoka", prefijos: ["menu.maestros.estadios_sigatoka", "estadio_sigatoka."] },
+  { titulo: "Maestros · Área de Lotes", prefijos: ["menu.maestros.area_lotes", "area_lote."] },
+  { titulo: "Maestros · Versión App Móvil", prefijos: ["menu.maestros.version_app"] },
+  {
+    titulo: "Racimos",
+    prefijos: [
+      "menu.racimos.movimientos", "menu.racimos.registrar", "menu.racimos.saldos_lotes_cintas",
+      "menu.racimos.reporte_embolses", "racimo_movimiento.",
+    ],
+  },
+  { titulo: "Labores · Calendario de Labores", prefijos: ["menu.labores.calendario", "menu.labores.estados", "labor_programacion."] },
+  { titulo: "Precipitación Diaria", prefijos: ["menu.precipitacion_diaria", "precipitacion_diaria."] },
   {
     titulo: "Sanidad Vegetal",
-    prefijos: ["evaluacion.", "infeccion.", "conteo_hojas.", "suma_bruta.", "tipo_evaluacion.", "labor_evaluacion."],
+    prefijos: [
+      "menu.sanidad_vegetal.evaluaciones", "menu.sanidad_vegetal.graficos", "menu.sanidad_vegetal.labores",
+      "evaluacion.", "infeccion.", "conteo_hojas.", "suma_bruta.", "tipo_evaluacion.", "labor_evaluacion.",
+    ],
   },
-  { titulo: "Producción", prefijos: ["produccion."] },
+  { titulo: "Producción Semanal", prefijos: ["menu.produccion_semanal", "produccion."] },
+  { titulo: "Pronóstico de Cajas", prefijos: ["menu.pronostico", "pronostico."] },
+  { titulo: "Cargue Masivo", prefijos: ["menu.cargue_masivo", "clima."] },
+  { titulo: "Reportes", prefijos: ["menu.reportes"] },
   { titulo: "Sistema", prefijos: ["sistema."] },
+  // Botones de nivel 1 (secciones completas del menú) que no calzan en
+  // ningún grupo de módulo puntual de arriba.
+  { titulo: "Navegación — Secciones del menú", prefijos: ["menu.maestros", "menu.racimos", "menu.labores", "menu.sanidad_vegetal"] },
 ];
 
 const grupoDe = (codigo) => GRUPOS.find((g) => g.prefijos.some((p) => codigo?.startsWith(p)))?.titulo || "Otros";

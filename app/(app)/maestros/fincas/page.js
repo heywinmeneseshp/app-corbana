@@ -87,7 +87,7 @@ export default function FincasPage() {
   };
 
   return (
-    <RequirePermission code="finca.ver">
+    <RequirePermission code="menu.maestros.fincas">
     <div className="p-4 p-md-5">
       <div className="mb-4">
         <h1 className="fw-bold h3 mb-1">Fincas</h1>

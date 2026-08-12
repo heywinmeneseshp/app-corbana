@@ -47,7 +47,7 @@ export default function VersionAppPage() {
   };
 
   return (
-    <RequirePermission code="roles.ver">
+    <RequirePermission code="menu.maestros.version_app">
       <div className="p-4 p-md-5" style={{ maxWidth: 640 }}>
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1">Versión de la App Móvil</h1>

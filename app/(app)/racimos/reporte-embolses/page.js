@@ -99,7 +99,7 @@ export default function ReporteEmbolsesPage() {
   const chartData = data ? pivotData(data.anios) : [];
 
   return (
-    <RequirePermission code="racimo_movimiento.ver">
+    <RequirePermission code="menu.racimos.reporte_embolses">
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-start justify-content-between gap-3">
           <div>

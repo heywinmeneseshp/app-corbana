@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiActivity, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain, FiFolder, FiCheckSquare, FiClipboard, FiMap, FiPackage } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
-import { clearSession, hasPermission, hasAnyPermission } from "@/lib/auth";
+import { clearSession, hasPermission } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
 
 export default function Sidebar() {
@@ -32,33 +32,46 @@ export default function Sidebar() {
 
   useEffect(() => {
     setPerms({
-      fincas: hasPermission("finca.ver"),
-      gruposFinca: hasPermission("grupo_finca.ver"),
-      areaLoteConfig: hasPermission("area_lote.ver"),
-      usuarios: hasPermission("usuarios.ver"),
-      roles: hasPermission("roles.ver"),
-      semanas: hasPermission("semana.ver"),
-      motivoRepique: hasPermission("motivo_repique.ver"),
-      motivoRecuse: hasPermission("motivo_recuse.ver"),
-      categoriaLabor: hasPermission("categoria_labor.ver"),
-      labor: hasPermission("labor.ver"),
-      estadioSigatoka: hasPermission("estadio_sigatoka.ver"),
-      calendarioLabores: hasPermission("labor_programacion.ver"),
-      versionApp: hasPermission("roles.ver"),
-      cargue: hasAnyPermission([
-        "finca.crear",
-        "lote.crear",
-        "racimo_movimiento.crear",
-        "motivo_repique.crear",
-        "motivo_recuse.crear",
-      ]),
-      racimoMovimientoCrear: hasPermission("racimo_movimiento.crear"),
-      racimoMovimientoVer: hasPermission("racimo_movimiento.ver"),
-      precipitacionDiaria: hasPermission("precipitacion_diaria.ver"),
-      produccionSemanal: hasPermission("produccion.ver"),
-      pronostico: hasPermission("pronostico.ver"),
-      sanidadVegetal: hasPermission("infeccion.ver"),
-      laborEvaluacion: hasPermission("labor_evaluacion.ver"),
+      // Menú (nivel 1 — muestra/oculta la sección completa) y submenú
+      // (nivel 2 — cada link puntual, ya con la sección visible). Capa
+      // separada de los permisos granulares de acción (finca.ver,
+      // infeccion.crear, etc.), que siguen controlando el backend y los
+      // botones puntuales dentro de cada pantalla — ver
+      // permissions.constants.js.
+      maestrosMenu: hasPermission("menu.maestros"),
+      fincas: hasPermission("menu.maestros.fincas"),
+      gruposFinca: hasPermission("menu.maestros.grupos_finca"),
+      areaLoteConfig: hasPermission("menu.maestros.area_lotes"),
+      usuarios: hasPermission("menu.maestros.usuarios"),
+      roles: hasPermission("menu.maestros.roles"),
+      semanas: hasPermission("menu.maestros.semanas"),
+      calendario: hasPermission("menu.maestros.calendario"),
+      motivoRepique: hasPermission("menu.maestros.motivos_repique"),
+      motivoRecuse: hasPermission("menu.maestros.motivos_recuse"),
+      categoriaLabor: hasPermission("menu.maestros.categorias_labor"),
+      labor: hasPermission("menu.maestros.labores"),
+      estadioSigatoka: hasPermission("menu.maestros.estadios_sigatoka"),
+      versionApp: hasPermission("menu.maestros.version_app"),
+
+      racimosMenu: hasPermission("menu.racimos"),
+      racimoMovimientoVer: hasPermission("menu.racimos.movimientos"),
+      racimoMovimientoCrear: hasPermission("menu.racimos.registrar"),
+      racimoSaldosLotesCintas: hasPermission("menu.racimos.saldos_lotes_cintas"),
+      racimoReporteEmbolses: hasPermission("menu.racimos.reporte_embolses"),
+
+      laboresMenu: hasPermission("menu.labores"),
+      calendarioLabores: hasPermission("menu.labores.calendario"),
+      estadosLabores: hasPermission("menu.labores.estados"),
+
+      sanidadVegetalMenu: hasPermission("menu.sanidad_vegetal"),
+      sanidadVegetal: hasPermission("menu.sanidad_vegetal.evaluaciones"),
+      sanidadGraficos: hasPermission("menu.sanidad_vegetal.graficos"),
+      laborEvaluacion: hasPermission("menu.sanidad_vegetal.labores"),
+
+      precipitacionDiaria: hasPermission("menu.precipitacion_diaria"),
+      produccionSemanal: hasPermission("menu.produccion_semanal"),
+      pronostico: hasPermission("menu.pronostico"),
+      cargue: hasPermission("menu.cargue_masivo"),
     });
   }, []);
 
@@ -76,19 +89,8 @@ export default function Sidebar() {
 
   if (!perms) return <aside className="flex-shrink-0" style={{ width, backgroundColor: "var(--brand-900)" }} />;
 
-  const maestrosVisible =
-    perms.fincas ||
-    perms.gruposFinca ||
-    perms.areaLoteConfig ||
-    perms.usuarios ||
-    perms.roles ||
-    perms.semanas ||
-    perms.motivoRepique ||
-    perms.motivoRecuse ||
-    perms.categoriaLabor ||
-    perms.estadioSigatoka ||
-    perms.versionApp;
-  const laboresVisible = perms.labor || perms.calendarioLabores;
+  const maestrosVisible = perms.maestrosMenu;
+  const laboresVisible = perms.laboresMenu;
   const label = (text) => (!collapsed ? text : null);
 
   return (
@@ -186,7 +188,7 @@ export default function Sidebar() {
                     Semanas
                   </Link>
                 )}
-                {perms.semanas && (
+                {perms.calendario && (
                   <Link href="/maestros/calendario" className={navLinkClass(pathname === "/maestros/calendario")}>
                     <FiCalendar size={16} />
                     Calendario
@@ -233,7 +235,7 @@ export default function Sidebar() {
           </>
         )}
 
-        {(perms.racimoMovimientoCrear || perms.racimoMovimientoVer) && (
+        {perms.racimosMenu && (
           <>
             <button
               type="button"
@@ -276,13 +278,13 @@ export default function Sidebar() {
                     </Link>
                   </>
                 )}
-                {perms.racimoMovimientoVer && (
+                {perms.racimoSaldosLotesCintas && (
                   <Link href="/racimos/saldos-lotes-cintas" className={navLinkClass(pathname === "/racimos/saldos-lotes-cintas")}>
                     <FiBarChart2 size={16} />
                     Saldos × Lotes y Cintas
                   </Link>
                 )}
-                {perms.racimoMovimientoVer && (
+                {perms.racimoReporteEmbolses && (
                   <Link href="/racimos/reporte-embolses" className={navLinkClass(pathname === "/racimos/reporte-embolses")}>
                     <FiTrendingUp size={16} />
                     Reporte de Embolses
@@ -319,7 +321,7 @@ export default function Sidebar() {
                     Calendario de Labores
                   </Link>
                 )}
-                {perms.calendarioLabores && (
+                {perms.estadosLabores && (
                   <Link href="/labores/estados" className={navLinkClass(pathname === "/labores/estados")}>
                     <FiCheckSquare size={16} />
                     Estados de Labores
@@ -359,7 +361,7 @@ export default function Sidebar() {
             {label("Pronóstico de Cajas")}
           </Link>
         )}
-        {(perms.sanidadVegetal || perms.laborEvaluacion) && (
+        {perms.sanidadVegetalMenu && (
           <>
             <button
               type="button"
@@ -386,7 +388,7 @@ export default function Sidebar() {
                     Evaluaciones
                   </Link>
                 )}
-                {perms.sanidadVegetal && (
+                {perms.sanidadGraficos && (
                   <Link href="/sanidad-vegetal/graficos" className={navLinkClass(pathname === "/sanidad-vegetal/graficos")}>
                     <FiBarChart2 size={16} />
                     Gráficos

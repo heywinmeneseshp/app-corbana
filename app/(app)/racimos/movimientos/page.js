@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FiFilter, FiPlus, FiChevronLeft, FiChevronRight, FiTrash2, FiDownload } from "react-icons/fi";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
+import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 import { COLOR_HEX } from "@/lib/semanaColor";
 
 function nombreCompleto(u) {
@@ -37,105 +38,6 @@ function CintaDot({ color }) {
       />
       <span className="small">{color}</span>
     </span>
-  );
-}
-
-function SemanaAutocomplete({ semanas, value, onChange }) {
-  const [text, setText] = useState("");
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  const semanaMap = useMemo(() => {
-    const m = {};
-    for (const s of semanas) m[s.uuid] = s;
-    return m;
-  }, [semanas]);
-
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (value) { const s = semanaMap[value]; if (s) setText(s.codigo); }
-    else setText("");
-  }, [value, semanaMap]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
-  const filtered = useMemo(() => {
-    if (!text) return semanas.slice(0, 20);
-    const q = text.toLowerCase();
-    return semanas.filter((s) => s.codigo.toLowerCase().includes(q)).slice(0, 20);
-  }, [semanas, text]);
-
-  useEffect(() => {
-    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  // Si el usuario escribe el código exacto de una semana (sin llegar a
-  // hacer clic en la sugerencia) y sale del campo, se toma igual como
-  // elegida — antes quedaba el texto puesto pero sin valor real
-  // seleccionado, así que los filtros y el botón de exportar (que valida
-  // el valor, no el texto) lo trataban como si no hubiera nada filtrado.
-  function confirmarTexto() {
-    const q = text.trim().toLowerCase();
-    if (!q) {
-      if (value) onChange("");
-      return;
-    }
-    const exacta = semanas.find((s) => s.codigo.toLowerCase() === q);
-    if (exacta) {
-      if (exacta.uuid !== value) onChange(exacta.uuid);
-    } else {
-      // No coincide con ninguna semana real: revierte al valor vigente (o
-      // lo limpia) para no dejar texto que parezca aplicado sin estarlo.
-      const actual = value ? semanaMap[value] : null;
-      setText(actual ? actual.codigo : "");
-    }
-  }
-
-  return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <input
-        type="text"
-        className="form-control form-control-sm rounded-3"
-        style={{ width: "7rem" }}
-        value={text}
-        placeholder="Todas"
-        onChange={(e) => { setText(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        onBlur={confirmarTexto}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            confirmarTexto();
-            setOpen(false);
-            e.target.blur();
-          }
-        }}
-      />
-      {open && filtered.length > 0 && (
-        <div
-          style={{
-            position: "absolute", top: "100%", left: 0, right: 0, zIndex: 1050,
-            maxHeight: "300px", overflowY: "auto",
-            background: "#fff", border: "1px solid #d1d5db",
-            borderRadius: "0.5rem", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-          }}
-        >
-          {filtered.map((s) => (
-            <div
-              key={s.uuid}
-              className="px-2 py-1 small"
-              style={{ cursor: "pointer" }}
-              onMouseDown={() => { onChange(s.uuid); setText(s.codigo); setOpen(false); }}
-              onMouseOver={(e) => { e.target.style.background = "#f3f4f6"; }}
-              onMouseOut={(e) => { e.target.style.background = ""; }}
-            >
-              {s.codigo}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -316,7 +218,7 @@ export default function MovimientosPage() {
   }
 
   return (
-    <RequirePermission code="racimo_movimiento.ver">
+    <RequirePermission code="menu.racimos.movimientos">
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>

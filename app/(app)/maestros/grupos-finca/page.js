@@ -83,7 +83,7 @@ export default function GruposFincaPage() {
   }
 
   return (
-    <RequirePermission code="grupo_finca.ver">
+    <RequirePermission code="menu.maestros.grupos_finca">
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>

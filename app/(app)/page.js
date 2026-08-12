@@ -14,11 +14,14 @@ import {
   FiChevronUp,
   FiMaximize2,
   FiX,
+  FiCheck,
 } from "react-icons/fi";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import { apiFetch } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
+import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 import { COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 
 const FILAS_CONCEPTO = [
@@ -28,32 +31,76 @@ const FILAS_CONCEPTO = [
   { key: "totalProcesado", label: "Total Procesado", sign: -1, color: "#2563eb", Icon: FiCheckCircle },
 ];
 
-const LS_KEY = "dashboard_fincas";
+// Ligado al usuario (no al navegador a secas): si dos personas comparten la
+// misma computadora, cada una ve su propio filtro guardado en vez de
+// heredar el de quien entró antes.
+function claveFincasStorage() {
+  const uuid = getCurrentUser()?.uuid;
+  return uuid ? `dashboard_fincas_${uuid}` : "dashboard_fincas";
+}
 
 export default function InicioPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [allFincas, setAllFincas] = useState([]);
+  const [semanas, setSemanas] = useState([]);
+  const LS_KEY = useMemo(() => claveFincasStorage(), []);
+
+  // Cada filtro tiene un valor "pendiente" (lo que el usuario va tildando/
+  // eligiendo) y uno "aplicado" (lo que realmente se usó en el último
+  // fetch) — separados a propósito: antes cada click en una finca disparaba
+  // un fetch pesado (con debounce de 400ms, pero igual se notaba tildando
+  // varias). Ahora nada se recarga hasta tocar "Aplicar filtros".
   const [fincasParam, setFincasParam] = useState(() => localStorage.getItem(LS_KEY) || "");
   const [fetchParam, setFetchParam] = useState(() => localStorage.getItem(LS_KEY) || "");
   const [fincasOpen, setFincasOpen] = useState(false);
   const [expandedChart, setExpandedChart] = useState(null);
   const [anioGraficos, setAnioGraficos] = useState("");
-  const debounceRef = useRef(null);
+  const [fetchAnio, setFetchAnio] = useState("");
+  const [semanaUuid, setSemanaUuid] = useState("");
+  const [fetchSemanaUuid, setFetchSemanaUuid] = useState("");
   const initialFincasSet = useRef(false);
 
-  function updateFincasParam(next) {
-    setFincasParam(next);
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setFetchParam(next), 400);
+  const hayFiltrosPendientes =
+    fincasParam !== fetchParam || anioGraficos !== fetchAnio || semanaUuid !== fetchSemanaUuid;
+
+  function aplicarFiltros() {
+    setFetchParam(fincasParam);
+    setFetchAnio(anioGraficos);
+    setFetchSemanaUuid(semanaUuid);
   }
+
+  useEffect(() => {
+    // El límite máximo por página en /semanas es 100 (lo valida el backend),
+    // pero hay más de 100 semanas en total con varios años de historial —
+    // se traen todas las páginas para que el buscador pueda encontrar
+    // cualquier semana, no solo las últimas 100.
+    async function cargarSemanas() {
+      try {
+        const primera = await apiFetch("/semanas?limit=100&page=1");
+        let items = primera.items || [];
+        const totalPages = primera.meta?.totalPages || 1;
+        if (totalPages > 1) {
+          const resto = await Promise.all(
+            Array.from({ length: totalPages - 1 }, (_, i) => apiFetch(`/semanas?limit=100&page=${i + 2}`)),
+          );
+          items = items.concat(resto.flatMap((r) => r.items || []));
+        }
+        setSemanas(items);
+      } catch {
+        setSemanas([]);
+      }
+    }
+    cargarSemanas();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(true), 50);
     const params = new URLSearchParams();
     if (fetchParam) params.set("fincas", fetchParam);
-    if (anioGraficos) params.set("anio", anioGraficos);
+    if (fetchAnio) params.set("anio", fetchAnio);
+    if (fetchSemanaUuid) params.set("semanaUuid", fetchSemanaUuid);
     const qs = params.toString();
     const url = `/dashboard/resumen${qs ? `?${qs}` : ""}`;
     apiFetch(url)
@@ -72,7 +119,15 @@ export default function InicioPage() {
         setLoading(false);
       });
     return () => clearTimeout(timer);
-  }, [fetchParam, anioGraficos]);
+  }, [fetchParam, fetchAnio, fetchSemanaUuid]);
+
+  // El filtro de Semana no debe sugerir semanas futuras (no hay datos que
+  // filtrar todavía) — mismo criterio que ya usa el buscador de semana de
+  // Movimientos de Racimos.
+  const semanasDisponibles = useMemo(() => {
+    const hoy = new Date();
+    return semanas.filter((s) => new Date(s.fechaInicio) <= hoy);
+  }, [semanas]);
 
   // El backend ya marca `ratio: null` semana por semana según si esa semana
   // REALMENTE tiene cajas/racimos registrados o no (ver dashboard.service.js)
@@ -122,7 +177,7 @@ export default function InicioPage() {
       localStorage.setItem(LS_KEY, param);
       return param;
     })(fincasParam);
-    updateFincasParam(next);
+    setFincasParam(next);
   }
 
   const selectedSet = useMemo(() => {
@@ -203,6 +258,48 @@ export default function InicioPage() {
           </button>
           {fincasOpen && (
             <div className="px-3 pb-2" style={{ fontSize: "0.75rem" }}>
+              <div className="d-flex flex-wrap align-items-end gap-2 pb-2 mb-2 border-bottom">
+                <div>
+                  <label className="form-label mb-1" style={{ fontSize: "0.65rem" }}>
+                    Semana
+                  </label>
+                  <SemanaAutocomplete
+                    semanas={semanasDisponibles}
+                    value={semanaUuid}
+                    onChange={setSemanaUuid}
+                    placeholder="Más reciente"
+                  />
+                </div>
+                {data.aniosDisponibles?.length > 0 && (
+                  <div>
+                    <label htmlFor="anio-graficos" className="form-label mb-1" style={{ fontSize: "0.65rem" }}>
+                      Año de los gráficos
+                    </label>
+                    <select
+                      id="anio-graficos"
+                      className="form-select form-select-sm rounded-3"
+                      style={{ fontSize: "0.75rem" }}
+                      value={anioGraficos || String(data.anioSeleccionado || "")}
+                      onChange={(e) => setAnioGraficos(e.target.value)}
+                    >
+                      {data.aniosDisponibles.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-sm btn-brand rounded-3 d-flex align-items-center gap-1"
+                  style={{ fontSize: "0.75rem" }}
+                  onClick={aplicarFiltros}
+                  disabled={!hayFiltrosPendientes}
+                >
+                  <FiCheck /> Aplicar filtros
+                </button>
+              </div>
               {(() => {
                 const fincaDataMap = new Map((data.fincasActivas || []).map((f) => [f.id, f]));
                 const filas = allFincas.map((f) => {
@@ -219,34 +316,46 @@ export default function InicioPage() {
                           onChange={() => {
                             if (fincasParam === "") {
                               localStorage.setItem(LS_KEY, "none");
-                              updateFincasParam("none");
+                              setFincasParam("none");
                             } else {
                               localStorage.removeItem(LS_KEY);
-                              updateFincasParam("");
+                              setFincasParam("");
                             }
                           }}
                         />
                       </span>
                       <span style={{ width: "3rem" }}>Código</span>
-                      <span style={{ width: "9rem" }}>Finca</span>
-                      <span className="text-end" style={{ width: "4rem" }}>Cajas</span>
-                      <span className="text-end" style={{ width: "4rem" }}>Recus.</span>
-                      <span className="text-end" style={{ width: "4rem" }}>Proc.</span>
-                      <span className="text-end" style={{ width: "3.5rem" }}>Ratio</span>
+                      <span style={{ flex: 1, minWidth: "9rem" }}>Finca</span>
+                      <span className="text-end" style={{ width: "6rem" }}>Cajas</span>
+                      <span className="text-end" style={{ width: "6rem" }}>Recus.</span>
+                      <span className="text-end" style={{ width: "6rem" }}>Proc.</span>
+                      <span className="text-end" style={{ width: "5rem" }}>Ratio</span>
                     </div>
                     {filas.map((f) => {
                       const ratioColor = f.ratio >= 1 ? "#047857" : "#b45309";
                       return (
-                        <div key={f.id} className="d-flex align-items-center py-1 border-bottom border-light" style={{ fontSize: "0.75rem" }}>
+                        <div
+                          key={f.id}
+                          className="d-flex align-items-center py-1 border-bottom border-light finca-row"
+                          style={{ fontSize: "0.75rem", cursor: "pointer" }}
+                          onClick={() => toggleFinca(f.id)}
+                        >
                           <span style={{ width: "1.5rem" }}>
-                            <input type="checkbox" className="form-check-input m-0" style={{ transform: "scale(0.75)" }} checked={f.checked} onChange={() => toggleFinca(f.id)} />
+                            <input
+                              type="checkbox"
+                              className="form-check-input m-0"
+                              style={{ transform: "scale(0.75)" }}
+                              checked={f.checked}
+                              onChange={() => toggleFinca(f.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
                           </span>
                           <span className="fw-medium" style={{ width: "3rem" }}>{f.codigo}</span>
-                          <span className="text-secondary text-truncate" style={{ width: "9rem", fontSize: "0.7rem" }}>{f.nombre}</span>
-                          <span className="fw-medium text-end" style={{ width: "4rem" }}>{f.cajas > 0 ? f.cajas.toLocaleString("es") : "—"}</span>
-                          <span className="fw-medium text-end" style={{ width: "4rem", color: f.recusados > 0 ? "#ea580c" : undefined }}>{f.recusados > 0 ? f.recusados.toLocaleString("es") : "—"}</span>
-                          <span className="fw-medium text-end" style={{ width: "4rem", color: f.procesados > 0 ? "#2563eb" : undefined }}>{f.procesados > 0 ? f.procesados.toLocaleString("es") : "—"}</span>
-                          <span className="fw-bold text-end" style={{ width: "3.5rem", color: ratioColor }}>{f.ratio ?? "—"}</span>
+                          <span className="text-secondary text-truncate" style={{ flex: 1, minWidth: "9rem", fontSize: "0.7rem" }}>{f.nombre}</span>
+                          <span className="fw-medium text-end" style={{ width: "6rem" }}>{f.cajas > 0 ? f.cajas.toLocaleString("es") : "—"}</span>
+                          <span className="fw-medium text-end" style={{ width: "6rem", color: f.recusados > 0 ? "#ea580c" : undefined }}>{f.recusados > 0 ? f.recusados.toLocaleString("es") : "—"}</span>
+                          <span className="fw-medium text-end" style={{ width: "6rem", color: f.procesados > 0 ? "#2563eb" : undefined }}>{f.procesados > 0 ? f.procesados.toLocaleString("es") : "—"}</span>
+                          <span className="fw-bold text-end" style={{ width: "5rem", color: ratioColor }}>{f.ratio ?? "—"}</span>
                         </div>
                       );
                     })}
@@ -284,27 +393,6 @@ export default function InicioPage() {
           </div>
         </div>
       </div>
-
-      {data.aniosDisponibles?.length > 0 && (
-        <div className="d-flex align-items-center justify-content-end gap-2 mb-2">
-          <label htmlFor="anio-graficos" className="small text-secondary mb-0">
-            Año de los gráficos:
-          </label>
-          <select
-            id="anio-graficos"
-            className="form-select form-select-sm rounded-3"
-            style={{ width: "auto" }}
-            value={anioGraficos || String(data.anioSeleccionado || "")}
-            onChange={(e) => setAnioGraficos(e.target.value)}
-          >
-            {data.aniosDisponibles.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {!hayDatosDeRatio && (
         <div className="alert alert-light border small mb-3">
@@ -565,6 +653,9 @@ export default function InicioPage() {
       </div>
 
       <style jsx>{`
+        .finca-row:hover {
+          background-color: #cbd5e1;
+        }
         .sticky-col {
           position: sticky;
           left: 0;

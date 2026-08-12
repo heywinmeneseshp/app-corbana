@@ -179,7 +179,7 @@ export default function PronosticoPage() {
   }, [data]);
 
   return (
-    <RequirePermission code="pronostico.ver">
+    <RequirePermission code="menu.pronostico">
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-start justify-content-between gap-3">
           <div>

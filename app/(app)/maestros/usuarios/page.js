@@ -96,7 +96,7 @@ export default function UsuariosPage() {
   };
 
   return (
-    <RequirePermission code="usuarios.ver">
+    <RequirePermission code="menu.maestros.usuarios">
     <div className="p-4 p-md-5">
       <div className="mb-4">
         <h1 className="fw-bold h3 mb-1">Usuarios</h1>

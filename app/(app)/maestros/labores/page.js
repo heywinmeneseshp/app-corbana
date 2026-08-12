@@ -120,7 +120,7 @@ export default function LaboresPage() {
   }
 
   return (
-    <RequirePermission code="labor.ver">
+    <RequirePermission code="menu.maestros.labores">
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>

@@ -121,7 +121,7 @@ export default function SemanasPage() {
   const totalPages = Math.max(1, Math.ceil(weeks.length / 20));
 
   return (
-    <RequirePermission code="semana.ver">
+    <RequirePermission code="menu.maestros.semanas">
     <div className="p-4 p-md-5">
       <div className="mb-4">
         <h1 className="fw-bold h3 mb-1">Semanas</h1>

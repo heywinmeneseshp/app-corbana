@@ -84,7 +84,7 @@ export default function CategoriasLaborPage() {
   }
 
   return (
-    <RequirePermission code="categoria_labor.ver">
+    <RequirePermission code="menu.maestros.categorias_labor">
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>

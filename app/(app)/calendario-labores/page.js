@@ -203,7 +203,7 @@ export default function CalendarioLaboresPage() {
   }
 
   return (
-    <RequirePermission code="labor_programacion.ver">
+    <RequirePermission code="menu.labores.calendario">
       <div className="p-4 p-md-5">
         <div className="mb-3">
           <h1 className="fw-bold h3 mb-1">Calendario de Labores</h1>

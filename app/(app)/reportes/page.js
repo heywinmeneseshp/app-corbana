@@ -22,7 +22,7 @@ export default function ReportesPage() {
   const tabsVisibles = TABS.filter((t) => t.key !== "Racimos" || puedeVerRacimos);
 
   return (
-    <RequirePermission code="evaluacion.ver">
+    <RequirePermission code="menu.reportes">
       <div className="p-4 p-md-5">
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1">Reportes</h1>

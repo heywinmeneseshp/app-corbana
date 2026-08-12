@@ -26,7 +26,7 @@ export default function SanidadEvaluacionesPage() {
   const tabsVisibles = TIPOS.filter((t) => !t.permiso || hasPermission(t.permiso));
 
   return (
-    <RequirePermission code="infeccion.ver">
+    <RequirePermission code="menu.sanidad_vegetal.evaluaciones">
       <div className="p-4 p-md-5">
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1">Sanidad Vegetal — Evaluaciones</h1>

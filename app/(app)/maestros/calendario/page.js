@@ -66,7 +66,7 @@ export default function CalendarioPage() {
   }
 
   return (
-    <RequirePermission code="semana.ver">
+    <RequirePermission code="menu.maestros.calendario">
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-end justify-content-between gap-3">
           <div>

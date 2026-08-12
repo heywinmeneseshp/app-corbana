@@ -74,7 +74,7 @@ export default function EstadiosSigatokaPage() {
   }
 
   return (
-    <RequirePermission code="estadio_sigatoka.ver">
+    <RequirePermission code="menu.maestros.estadios_sigatoka">
       <div className="p-4 p-md-5">
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1">Estadios de Sigatoka</h1>
