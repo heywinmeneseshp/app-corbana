@@ -129,8 +129,9 @@ export default function CargueMasivoPage() {
         {hasPermission("produccion.crear") && (
           <BulkUploadCard
             title="Cargue masivo de Producción Semanal"
-            description="Columnas esperadas: semana (código de semana, ej: S30-2026), fincaCodigo, cajas (cajas de 20 kg producidas). Si ya existe un registro para la misma semana y finca, se omite. Máximo 15,000 filas por archivo — si tenés más, dividilo por año y subí cada parte por separado."
+            description="Columnas esperadas: semana (código de semana, ej: S30-2026), fincaCodigo, cajas (cajas de 20 kg producidas). Si ya existe un registro para la misma semana y finca, se omite (podés elegir sobrescribirlo después de cargar). Máximo 15,000 filas por archivo — si tenés más, dividilo por año y subí cada parte por separado."
             endpoint="/produccion-semanal/bulk-upload"
+            overwriteEndpoint={hasPermission("produccion.actualizar_masivo") ? "/produccion-semanal/bulk-update" : null}
             templateHeaders={["semana", "fincaCodigo", "cajas"]}
             templateExampleRow={["S30-2026", "525", "1500"]}
             templateFilename="plantilla_produccion.xlsx"
@@ -143,6 +144,11 @@ export default function CargueMasivoPage() {
                 </p>
                 <ErrorList errores={r.errores} />
               </>
+            )}
+            renderResultOverwrite={(r) => (
+              <p className="mb-1">
+                {r.totalFilas} fila(s) procesadas: <strong>{r.actualizados}</strong> sobrescrita(s), <strong>{r.creados}</strong> creada(s) de nuevo.
+              </p>
             )}
           />
         )}
@@ -215,8 +221,13 @@ function ErrorList({ errores, rawFileRows, templateHeaders }) {
   );
 }
 
-function BulkUploadCard({ title, description, endpoint, templateHeaders, templateExampleRow, templateFilename, renderResult, chunkSize }) {
+function BulkUploadCard({
+  title, description, endpoint, templateHeaders, templateExampleRow, templateFilename, renderResult, chunkSize,
+  overwriteEndpoint, renderResultOverwrite,
+}) {
   const [rawFileRows, setRawFileRows] = useState([]);
+  const [fueSobrescrito, setFueSobrescrito] = useState(false); // para saber qué renderResult usar
+  const [parseandoArchivo, setParseandoArchivo] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
@@ -289,6 +300,7 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
     setSelectedFile(file);
     setError("");
     setResult(null);
+    setFueSobrescrito(false);
     setPreview(null);
     setRequireConfirmation(null);
     setFailedChunk(null);
@@ -296,20 +308,31 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
     setProcPct(0);
     setProcFase("");
     setRawFileRows([]);
+    setParseandoArchivo(true);
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf);
       const ws = wb.Sheets[wb.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
       setRawFileRows(json.map((r, i) => ({ fila: i + 2, datos: r })));
-    } catch { setRawFileRows([]); }
+    } catch {
+      setRawFileRows([]);
+    } finally {
+      // Mientras esto está en true, "Iniciar carga" queda deshabilitado —
+      // si no, en un archivo grande el usuario puede hacer clic antes de
+      // que termine de contar las filas, y como en ese instante
+      // rawFileRows.length todavía es 0, el botón manda el archivo
+      // COMPLETO sin trocear (choca contra el límite de filas del backend
+      // en vez de dividirse en partes automáticamente).
+      setParseandoArchivo(false);
+    }
   };
 
   // Sube el archivo una sola vez. El servidor valida primero; si no hay
   // errores inserta todo en una transacción (mode=auto). Si hay errores,
   // los devuelve sin escribir nada — el usuario decide si corregir o forzar.
   // Si el admin tiene saldos negativos, pide confirmación antes de insertar.
-  const handleUpload = async () => {
+  const handleUpload = async (endpointDestino = endpoint, esSobrescritura = false) => {
     if (!selectedFile) return;
     setError("");
     setResult(null);
@@ -319,10 +342,11 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
     setProcPct(0);
     setProcFase("validando");
     setUploading(true);
+    setFueSobrescrito(esSobrescritura);
     const token = progressToken.current;
     startPolling(token);
     try {
-      const data = await apiUploadConProgreso(endpoint, selectedFile, setUploadPct, { mode: "auto", progressToken: token });
+      const data = await apiUploadConProgreso(endpointDestino, selectedFile, setUploadPct, { mode: "auto", progressToken: token });
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
@@ -335,7 +359,10 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
         setResult(data);
         setProcFase("completado");
         setProcPct(100);
-        setSelectedFile(null);
+        // Si todavía se puede ofrecer "sobrescribir" (quedaron omitidos y
+        // hay a dónde mandarlo), no se borra el archivo — se necesita para
+        // ese segundo envío.
+        if (!(overwriteEndpoint && !esSobrescritura && data.saltados > 0)) setSelectedFile(null);
       } else {
         setPreview(data);
         setProcFase("completado");
@@ -351,8 +378,20 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
 
   // Construye un archivo .xlsx solo con un pedazo de filas (mismo header),
   // para subirlo como si fuera un cargue independiente.
+  //
+  // No se fuerza `header: templateHeaders` acá: esas son las columnas EN
+  // SU FORMA CANÓNICA (ej. "fincaCodigo"), pero el backend en realidad
+  // acepta cualquier variante de mayúsculas/espacios/acentos y las
+  // normaliza él mismo (ver bulkFileParser.js). Si el archivo real tenía
+  // los encabezados escritos distinto (ej. "Finca Codigo"), forzar el
+  // header canónico acá hacía que json_to_sheet buscara esa clave exacta
+  // en cada fila, no la encontrara, y dejara la columna en blanco — "faltan
+  // columnas" en todas las filas después de trocear. Dejando que
+  // json_to_sheet use las claves reales de cada objeto (sin `header`) se
+  // preserva el encabezado tal cual estaba en el archivo original, igual
+  // que como llegaría si no se hubiera troceado.
   const buildChunkFile = (rowsSlice, baseName, idx, totalChunks) => {
-    const worksheet = XLSX.utils.json_to_sheet(rowsSlice, { header: templateHeaders });
+    const worksheet = XLSX.utils.json_to_sheet(rowsSlice);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Datos");
     const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
@@ -368,7 +407,7 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
   // porque el orden importa para validar el saldo de cada cohorte). Si una
   // parte pide confirmación por saldo negativo, se pausa y se le pregunta al
   // usuario antes de seguir con la siguiente.
-  const handleUploadChunked = async (resumeFrom) => {
+  const handleUploadChunked = async (resumeFrom, endpointDestino = endpoint, esSobrescritura = false) => {
     if (!selectedFile || rawFileRows.length === 0) return;
     setError("");
     setResult(null);
@@ -378,6 +417,7 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
     setUploadPct(0);
     setProcPct(0);
     setUploading(true);
+    setFueSobrescrito(esSobrescritura);
 
     const rows = rawFileRows.map((r) => r.datos);
     const totalChunks = Math.ceil(rows.length / chunkSize);
@@ -404,7 +444,7 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
       startPolling(token);
 
       try {
-        let data = await apiUploadConProgreso(endpoint, chunkFile, setUploadPct, { progressToken: token });
+        let data = await apiUploadConProgreso(endpointDestino, chunkFile, setUploadPct, { progressToken: token });
         if (pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
@@ -432,7 +472,7 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
           setProcFase("validando");
           setProcPct(0);
           startPolling(token);
-          data = await apiUploadConProgreso(endpoint, null, setUploadPct, { progressToken: token, forceNegativeSaldos: "true" });
+          data = await apiUploadConProgreso(endpointDestino, null, setUploadPct, { progressToken: token, forceNegativeSaldos: "true" });
           if (pollRef.current) {
             clearInterval(pollRef.current);
             pollRef.current = null;
@@ -465,7 +505,7 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
     }
 
     setResult(acumulado);
-    setSelectedFile(null);
+    if (!(overwriteEndpoint && !esSobrescritura && acumulado.saltados > 0)) setSelectedFile(null);
     setFailedChunk(null);
     setUploading(false);
     setChunkInfo(null);
@@ -629,7 +669,11 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
         </p>
       )}
 
-      {selectedFile && !uploading && !result && !preview && (
+      {selectedFile && parseandoArchivo && !uploading && !result && !preview && (
+        <p className="small text-secondary mt-2 mb-0">Leyendo archivo...</p>
+      )}
+
+      {selectedFile && !parseandoArchivo && !uploading && !result && !preview && (
         <button
           type="button"
           className="btn btn-brand rounded-3 w-100 mt-3 d-flex align-items-center justify-content-center gap-2"
@@ -768,14 +812,31 @@ function BulkUploadCard({ title, description, endpoint, templateHeaders, templat
             <button
               type="button"
               className="btn btn-brand btn-sm rounded-3 d-inline-flex align-items-center gap-2 mt-2"
-              onClick={() => handleUploadChunked(failedChunk)}
+              onClick={() => handleUploadChunked(failedChunk, fueSobrescrito ? overwriteEndpoint : endpoint, fueSobrescrito)}
             >
               <FiUploadCloud /> Reanudar desde la parte {failedChunk.idx + 1} de {failedChunk.totalChunks}
             </button>
           )}
         </div>
       )}
-      {result && <div className="alert alert-success py-2 small mt-3 mb-0">{renderResult(result)}</div>}
+      {result && (
+        <div className="alert alert-success py-2 small mt-3 mb-0">
+          {fueSobrescrito && renderResultOverwrite ? renderResultOverwrite(result) : renderResult(result)}
+        </div>
+      )}
+      {result && !fueSobrescrito && overwriteEndpoint && result.saltados > 0 && selectedFile && !uploading && (
+        <button
+          type="button"
+          className="btn btn-outline-warning btn-sm rounded-3 d-inline-flex align-items-center gap-2 mt-2"
+          onClick={() => {
+            if (!confirm(`Esto va a sobrescribir los ${result.saltados} registro(s) que ya existían con los valores de este mismo archivo. ¿Continuar?`)) return;
+            if (chunkSize && rawFileRows.length > chunkSize) handleUploadChunked(undefined, overwriteEndpoint, true);
+            else handleUpload(overwriteEndpoint, true);
+          }}
+        >
+          <FiUploadCloud /> Sobrescribir los {result.saltados} que ya existían
+        </button>
+      )}
     </div>
   );
 }

@@ -96,7 +96,7 @@ export default function Sidebar() {
   return (
     <aside
       className="d-flex flex-column flex-shrink-0"
-      style={{ width, backgroundColor: "var(--brand-900)", transition: "width .15s", height: "100vh", position: "sticky", top: 0 }}
+      style={{ width, backgroundColor: "var(--brand-900)", transition: "width .15s", height: "100%", position: "sticky", top: 0 }}
     >
       <div className={`d-flex align-items-center text-white py-4 ${collapsed ? "justify-content-center px-2" : "justify-content-between px-4"}`}>
         <div className="d-flex align-items-center gap-2">

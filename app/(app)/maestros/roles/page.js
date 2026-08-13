@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiKey, FiSave, FiX } from "react-icons/fi";
+import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiKey, FiSave, FiX, FiEye } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 import PermisosGroupedPicker from "@/components/PermisosGroupedPicker";
 import RequirePermission from "@/components/RequirePermission";
-import { hasPermission } from "@/lib/auth";
+import { hasPermission, startPreviewRol } from "@/lib/auth";
 
 export default function RolesPage() {
   const [roles, setRoles] = useState([]);
@@ -40,6 +40,20 @@ export default function RolesPage() {
     try {
       await apiFetch(`/roles/${uuid}`, { method: "DELETE" });
       loadRoles();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // "Ver como": trae los permisos reales de ese rol y los guarda como
+  // simulación (ver lib/auth.js) — solo cambia lo que se ve en el frontend,
+  // no crea una sesión nueva. Confirmamos con el usuario que así estaba
+  // bien, en vez de una suplantación real con sesión propia.
+  const handleVerComo = async (rol) => {
+    try {
+      const misPermisos = await apiFetch(`/roles/${rol.uuid}/permisos`);
+      startPreviewRol(rol.nombre, misPermisos.map((p) => p.codigo));
+      window.location.assign("/");
     } catch (err) {
       setError(err.message);
     }
@@ -126,6 +140,16 @@ export default function RolesPage() {
                             onClick={() => setPermisosModal(rol)}
                           >
                             <FiKey /> Permisos
+                          </button>
+                        )}
+                        {hasPermission("roles.asignar_permiso") && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 text-nowrap"
+                            title="Ver el menú y las pantallas como este rol"
+                            onClick={() => handleVerComo(rol)}
+                          >
+                            <FiEye /> Ver como
                           </button>
                         )}
                         {hasPermission("roles.eliminar") && (
@@ -238,8 +262,22 @@ function PermisosModal({ rol, onClose }) {
     setLoading(true);
     setError("");
     try {
-      const [{ items: todosLosPermisos }, misPermisos] = await Promise.all([
-        apiFetch(`/permisos?limit=100`),
+      // El backend limita /permisos a 100 por página (ya hay más de 100
+      // permisos entre los granulares y los nuevos de menú/submenú) — hay
+      // que traer todas las páginas, no solo la primera.
+      const cargarTodosLosPermisos = async () => {
+        const primera = await apiFetch(`/permisos?limit=100&page=1`);
+        const todos = [...primera.items];
+        const totalPages = primera.meta?.totalPages || 1;
+        for (let page = 2; page <= totalPages; page++) {
+          const siguiente = await apiFetch(`/permisos?limit=100&page=${page}`);
+          todos.push(...siguiente.items);
+        }
+        return todos;
+      };
+
+      const [todosLosPermisos, misPermisos] = await Promise.all([
+        cargarTodosLosPermisos(),
         apiFetch(`/roles/${rol.uuid}/permisos`),
       ]);
       setAllItems(todosLosPermisos.map((p) => ({ uuid: p.uuid, label: p.nombre, sublabel: p.codigo })));
@@ -281,7 +319,7 @@ function PermisosModal({ rol, onClose }) {
   };
 
   return (
-    <ModalShell title={`Permisos de ${rol.nombre}`} onClose={onClose} size="lg">
+    <ModalShell title={`Permisos de ${rol.nombre}`} onClose={onClose} size="xl">
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       {loading ? (

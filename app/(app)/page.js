@@ -13,7 +13,6 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiMaximize2,
-  FiX,
   FiCheck,
 } from "react-icons/fi";
 import {
@@ -22,6 +21,7 @@ import {
 import { apiFetch } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
+import ChartCompareModal from "@/components/dashboard/ChartCompareModal";
 import { COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 
 const FILAS_CONCEPTO = [
@@ -464,11 +464,15 @@ export default function InicioPage() {
               }
 
               const charts = [
-                { id: "ratio", title: "Ratio", subtitle: "Cajas producidas / racimos procesados, por semana", data: ratioFiltrado, dataKey: "ratio", color: "#6d28d9", decimal: true, prefix: "Ratio" },
-                { id: "cajas", title: "Cajas Producidas", subtitle: "Por semana de registro", data: cajasData, dataKey: "cajas", color: "#16a34a", prefix: "Cajas" },
-                { id: "embolses", title: "Embolses", subtitle: "Por semana de embolse", data: embolseData, dataKey: "embolse", color: "#2563eb", prefix: "Embolses" },
-                { id: "aprovechamiento", title: "Aprovechamiento", subtitle: "(RECUSE + PROCESADO) / embolsado", data: aproData, dataKey: "aprovechamiento", color: "#047857", yDomain: [0, 100], yUnit: "%", decimal: true, prefix: "Aprov." },
+                { id: "ratio", title: "Ratio", subtitle: "Cajas producidas / racimos procesados, por semana", data: ratioFiltrado, metricKey: "ratio", arrayField: "ratioAnual", color: "#6d28d9", decimal: true, prefix: "Ratio" },
+                { id: "cajas", title: "Cajas Producidas", subtitle: "Por semana de registro", data: cajasData, metricKey: "cajas", arrayField: "ratioAnual", color: "#16a34a", prefix: "Cajas" },
+                { id: "embolses", title: "Embolses", subtitle: "Por semana de embolse", data: embolseData, metricKey: "embolse", arrayField: "embolseAnual", color: "#2563eb", prefix: "Embolses" },
+                { id: "aprovechamiento", title: "Aprovechamiento", subtitle: "(RECUSE + PROCESADO) / embolsado", data: aproData, metricKey: "aprovechamiento", arrayField: "aprovechamientoAnual", color: "#047857", yDomain: [0, 100], yUnit: "%", decimal: true, prefix: "Aprov." },
               ];
+
+              const fincaBaseLabel = fetchParam
+                ? `${fetchParam.split(",").length} finca(s) seleccionada(s)`
+                : "Todas las fincas activas";
 
               return (
                 <>
@@ -503,36 +507,23 @@ export default function InicioPage() {
                     const cfg = charts.find((c) => c.id === expandedChart);
                     if (!cfg) return null;
                     return (
-                      <div style={{ position: "fixed", inset: 0, zIndex: 1060, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
-                        <div className="bg-white rounded-4 shadow-lg p-4 d-flex flex-column" style={{ width: "90vw", height: "85vh" }}>
-                          <div className="d-flex align-items-center justify-content-between mb-2">
-                            <div>
-                              <h2 className="h5 fw-bold mb-0">{cfg.title}</h2>
-                              <p className="text-secondary small mb-0">{cfg.subtitle}</p>
-                            </div>
-                            <button className="btn btn-sm p-1 border-0" onClick={() => setExpandedChart(null)}>
-                              <FiX size={24} />
-                            </button>
-                          </div>
-                          <div style={{ flex: 1, minHeight: 0 }}>
-                            {cfg.data.length > 0 && (
-                              <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={cfg.data} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                  <XAxis dataKey="numeroSemana" tick={{ fontSize: 12 }} domain={[1, 53]} ticks={[1,5,10,15,20,25,30,35,40,45,50]} />
-                                  <YAxis tick={{ fontSize: 12 }} width={50} domain={cfg.yDomain || ['auto', 'auto']} unit={cfg.yUnit || ''} />
-                                  <Tooltip content={<ChartTooltip dataKey={cfg.dataKey} prefix={cfg.prefix} decimal={cfg.decimal} />} labelFormatter={(l) => {
-                                    const s = cfg.data.find((r) => r.numeroSemana === l);
-                                    return s ? s.semanaCodigo : `Semana ${l}`;
-                                  }} />
-                                  {cfg.dataKey === 'ratio' && <ReferenceLine y={1} stroke="#b45309" strokeDasharray="4 4" />}
-                                  <Line type="monotone" dataKey={cfg.dataKey} stroke={cfg.color} strokeWidth={3} dot={(p) => p.payload?.[cfg.dataKey] != null ? <circle cx={p.cx} cy={p.cy} r={5} fill={cfg.color} stroke="#374151" strokeWidth={2} /> : null} connectNulls={false} />
-                                </LineChart>
-                              </ResponsiveContainer>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <ChartCompareModal
+                        open
+                        onClose={() => setExpandedChart(null)}
+                        title={cfg.title}
+                        subtitle={cfg.subtitle}
+                        metricKey={cfg.metricKey}
+                        arrayField={cfg.arrayField}
+                        baseData={cfg.data}
+                        baseColor={cfg.color}
+                        decimal={cfg.decimal}
+                        prefix={cfg.prefix}
+                        yDomain={cfg.yDomain}
+                        yUnit={cfg.yUnit}
+                        aniosDisponibles={data.aniosDisponibles}
+                        anioBase={data.anioSeleccionado}
+                        fincaBaseLabel={fincaBaseLabel}
+                      />
                     );
                   })()}
                 </>

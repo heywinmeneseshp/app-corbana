@@ -1,154 +1,273 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import SelectAddPicker from "@/components/SelectAddPicker";
 
-// Agrupa los permisos siguiendo la misma jerarquía menú/submenú del Sidebar
-// (ver components/Sidebar.js) en vez de una taxonomía conceptual aparte —
-// así el grupo donde aparece cada permiso es el mismo módulo que se ve al
-// navegar la app, y no queda nada en "Otros" salvo un permiso realmente sin
-// pantalla propia.
-const GRUPOS = [
+// Árbol de navegación: cada sección del menú (nivel 1) tiene sus submenús
+// (nivel 2), y cada submenú lista los prefijos de los permisos granulares
+// de acción (crear/editar/eliminar/etc.) que viven en esa pantalla (nivel
+// 3). Mismo patrón que app-banarica (Nuevo Usuario → Permisos): agregás la
+// sección con un desplegable, aparece la lista de submenús para agregar, y
+// dentro de cada submenú aparecen los permisos puntuales de esa pantalla —
+// en vez de una sola lista plana con checkboxes. Cada nivel se ve más chico
+// y suave que el anterior para que la jerarquía se note de un vistazo.
+const MENU_TREE = [
   {
-    titulo: "Maestros · Fincas y Lotes",
-    prefijos: ["menu.maestros.fincas", "menu.maestros.grupos_finca", "finca.", "grupo_finca.", "lote.", "planta.", "categoria_planta."],
-  },
-  { titulo: "Maestros · Usuarios", prefijos: ["menu.maestros.usuarios", "usuarios."] },
-  { titulo: "Maestros · Roles y Permisos", prefijos: ["menu.maestros.roles", "roles.", "permisos.", "menu.ver", "menu.crear", "menu.editar", "menu.eliminar"] },
-  { titulo: "Maestros · Semanas y Calendario", prefijos: ["menu.maestros.semanas", "menu.maestros.calendario", "semana."] },
-  { titulo: "Maestros · Motivos de Repique", prefijos: ["menu.maestros.motivos_repique", "motivo_repique."] },
-  { titulo: "Maestros · Motivos de Recuse", prefijos: ["menu.maestros.motivos_recuse", "motivo_recuse."] },
-  { titulo: "Maestros · Categorías de Labor", prefijos: ["menu.maestros.categorias_labor", "categoria_labor."] },
-  { titulo: "Maestros · Labores", prefijos: ["menu.maestros.labores", "labor."] },
-  { titulo: "Maestros · Estadios de Sigatoka", prefijos: ["menu.maestros.estadios_sigatoka", "estadio_sigatoka."] },
-  { titulo: "Maestros · Área de Lotes", prefijos: ["menu.maestros.area_lotes", "area_lote."] },
-  { titulo: "Maestros · Versión App Móvil", prefijos: ["menu.maestros.version_app"] },
-  {
-    titulo: "Racimos",
-    prefijos: [
-      "menu.racimos.movimientos", "menu.racimos.registrar", "menu.racimos.saldos_lotes_cintas",
-      "menu.racimos.reporte_embolses", "racimo_movimiento.",
+    codigo: "menu.maestros",
+    nombre: "Maestros",
+    submenus: [
+      { codigo: "menu.maestros.fincas", nombre: "Fincas", prefijos: ["finca.", "lote.", "planta.", "categoria_planta."] },
+      { codigo: "menu.maestros.grupos_finca", nombre: "Grupos de Finca", prefijos: ["grupo_finca."] },
+      { codigo: "menu.maestros.area_lotes", nombre: "Área de Lotes", prefijos: ["area_lote."] },
+      { codigo: "menu.maestros.usuarios", nombre: "Usuarios", prefijos: ["usuarios."] },
+      { codigo: "menu.maestros.roles", nombre: "Roles", prefijos: ["roles.", "permisos."] },
+      { codigo: "menu.maestros.semanas", nombre: "Semanas", prefijos: ["semana."] },
+      { codigo: "menu.maestros.calendario", nombre: "Calendario", prefijos: [] },
+      { codigo: "menu.maestros.motivos_repique", nombre: "Motivos de Repique", prefijos: ["motivo_repique."] },
+      { codigo: "menu.maestros.motivos_recuse", nombre: "Motivos de Recuse", prefijos: ["motivo_recuse."] },
+      { codigo: "menu.maestros.categorias_labor", nombre: "Categorías de Labor", prefijos: ["categoria_labor."] },
+      { codigo: "menu.maestros.labores", nombre: "Labores", prefijos: ["labor."] },
+      { codigo: "menu.maestros.estadios_sigatoka", nombre: "Estadios de Sigatoka", prefijos: ["estadio_sigatoka."] },
+      { codigo: "menu.maestros.version_app", nombre: "Versión App Móvil", prefijos: [] },
     ],
   },
-  { titulo: "Labores · Calendario de Labores", prefijos: ["menu.labores.calendario", "menu.labores.estados", "labor_programacion."] },
-  { titulo: "Precipitación Diaria", prefijos: ["menu.precipitacion_diaria", "precipitacion_diaria."] },
   {
-    titulo: "Sanidad Vegetal",
-    prefijos: [
-      "menu.sanidad_vegetal.evaluaciones", "menu.sanidad_vegetal.graficos", "menu.sanidad_vegetal.labores",
-      "evaluacion.", "infeccion.", "conteo_hojas.", "suma_bruta.", "tipo_evaluacion.", "labor_evaluacion.",
+    codigo: "menu.racimos",
+    nombre: "Racimos",
+    submenus: [
+      {
+        codigo: "menu.racimos.movimientos",
+        nombre: "Movimientos",
+        prefijos: ["racimo_movimiento.ver", "racimo_movimiento.editar", "racimo_movimiento.eliminar", "racimo_movimiento.editar_historico", "racimo_movimiento.eliminar_masivo"],
+      },
+      { codigo: "menu.racimos.registrar", nombre: "Registrar Embolse/Repique/Corte", prefijos: ["racimo_movimiento.crear", "racimo_movimiento.forzar_saldo_negativo"] },
+      { codigo: "menu.racimos.saldos_lotes_cintas", nombre: "Saldos × Lotes y Cintas", prefijos: [] },
+      { codigo: "menu.racimos.reporte_embolses", nombre: "Reporte de Embolses", prefijos: [] },
     ],
   },
-  { titulo: "Producción Semanal", prefijos: ["menu.produccion_semanal", "produccion."] },
-  { titulo: "Pronóstico de Cajas", prefijos: ["menu.pronostico", "pronostico."] },
-  { titulo: "Cargue Masivo", prefijos: ["menu.cargue_masivo", "clima."] },
-  { titulo: "Reportes", prefijos: ["menu.reportes"] },
-  { titulo: "Sistema", prefijos: ["sistema."] },
-  // Botones de nivel 1 (secciones completas del menú) que no calzan en
-  // ningún grupo de módulo puntual de arriba.
-  { titulo: "Navegación — Secciones del menú", prefijos: ["menu.maestros", "menu.racimos", "menu.labores", "menu.sanidad_vegetal"] },
+  {
+    codigo: "menu.labores",
+    nombre: "Labores",
+    submenus: [
+      { codigo: "menu.labores.calendario", nombre: "Calendario de Labores", prefijos: ["labor_programacion."] },
+      { codigo: "menu.labores.estados", nombre: "Estados de Labores", prefijos: [] },
+    ],
+  },
+  {
+    codigo: "menu.sanidad_vegetal",
+    nombre: "Sanidad Vegetal",
+    submenus: [
+      {
+        codigo: "menu.sanidad_vegetal.evaluaciones",
+        nombre: "Evaluaciones",
+        prefijos: ["evaluacion.", "infeccion.", "conteo_hojas.", "suma_bruta.", "tipo_evaluacion.", "estadio_sigatoka."],
+      },
+      { codigo: "menu.sanidad_vegetal.graficos", nombre: "Gráficos", prefijos: [] },
+      { codigo: "menu.sanidad_vegetal.labores", nombre: "Evaluación de Labores", prefijos: ["labor_evaluacion."] },
+    ],
+  },
 ];
 
-const grupoDe = (codigo) => GRUPOS.find((g) => g.prefijos.some((p) => codigo?.startsWith(p)))?.titulo || "Otros";
+// Ítems planos del menú (sin submenú propio) — se agregan como tag al mismo
+// nivel que las secciones, y al agregarlos muestran directo sus permisos
+// granulares (sin el paso intermedio de submenú).
+const ITEMS_PLANOS = [
+  { codigo: "menu.precipitacion_diaria", nombre: "Precipitación Diaria", prefijos: ["precipitacion_diaria."] },
+  { codigo: "menu.produccion_semanal", nombre: "Producción Semanal", prefijos: ["produccion."] },
+  { codigo: "menu.pronostico", nombre: "Pronóstico de Cajas", prefijos: ["pronostico."] },
+  { codigo: "menu.cargue_masivo", nombre: "Cargue Masivo", prefijos: ["clima.crear"] },
+  { codigo: "menu.reportes", nombre: "Reportes", prefijos: [] },
+];
+
+const TODOS_LOS_CODIGOS_DE_MENU = new Set([
+  ...MENU_TREE.map((m) => m.codigo),
+  ...MENU_TREE.flatMap((m) => m.submenus.map((s) => s.codigo)),
+  ...ITEMS_PLANOS.map((i) => i.codigo),
+]);
 
 /**
- * Selector de permisos agrupado por módulo, con un checkbox "Seleccionar
- * todo" por grupo — pensado específicamente para la pantalla de Roles.
- * `items` / `selected`: arreglos de { uuid, label, sublabel }, igual que
- * TagPicker (mismo contrato), para no tocar la lógica de guardado.
+ * Selector de permisos en cascada Menú → Submenú → Permisos de la pantalla,
+ * con una lista desplegable + botón "Agregar" en cada nivel (ver
+ * SelectAddPicker) — pensado específicamente para la pantalla de
+ * Roles → Permisos.
+ * `items` / `selected`: arreglos de { uuid, label, sublabel }, donde
+ * `sublabel` es el código del permiso (finca.ver, menu.maestros.fincas,
+ * etc.) — mismo contrato que ya usaba este componente.
  */
 export default function PermisosGroupedPicker({ items, selected, onChange }) {
-  const [query, setQuery] = useState("");
+  const itemPorCodigo = useMemo(() => new Map(items.map((i) => [i.sublabel, i])), [items]);
+  const selectedCodigos = useMemo(() => new Set(selected.map((s) => s.sublabel)), [selected]);
 
-  const selectedUuids = useMemo(() => new Set(selected.map((s) => s.uuid)), [selected]);
+  // Items del "picker" de nivel 1: secciones del menú + ítems planos, en el
+  // mismo desplegable (misma UX que app-banarica: un solo campo "Habilitar
+  // menú" donde se agregan tanto secciones como accesos directos).
+  const nivel1Items = useMemo(() => {
+    const codigos = [...MENU_TREE.map((m) => m.codigo), ...ITEMS_PLANOS.map((i) => i.codigo)];
+    return codigos.map((c) => itemPorCodigo.get(c)).filter(Boolean);
+  }, [itemPorCodigo]);
+  const nivel1Selected = selected.filter((s) => nivel1Items.some((i) => i.uuid === s.uuid));
 
-  const grupos = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const porGrupo = new Map();
-    for (const item of items) {
-      if (q && !item.label.toLowerCase().includes(q) && !item.sublabel?.toLowerCase().includes(q)) continue;
-      const titulo = grupoDe(item.sublabel);
-      if (!porGrupo.has(titulo)) porGrupo.set(titulo, []);
-      porGrupo.get(titulo).push(item);
+  const toggleNivel1 = (nuevaLista) => {
+    // Si se quita una sección/ítem plano, se quitan en cascada todos sus
+    // submenús y permisos granulares ya agregados (no tiene sentido dejar
+    // un permiso de submenú suelto sin la sección que lo contiene).
+    const codigosNuevos = new Set(nuevaLista.map((i) => i.sublabel));
+    const quitados = nivel1Selected.filter((s) => !codigosNuevos.has(s.sublabel));
+    if (quitados.length === 0) {
+      onChange([...selected.filter((s) => !nivel1Items.some((i) => i.uuid === s.uuid)), ...nuevaLista]);
+      return;
     }
-    const orden = [...GRUPOS.map((g) => g.titulo), "Otros"];
-    return orden.filter((t) => porGrupo.has(t)).map((titulo) => ({ titulo, items: porGrupo.get(titulo) }));
-  }, [items, query]);
-
-  const toggleUno = (item) => {
-    if (selectedUuids.has(item.uuid)) {
-      onChange(selected.filter((s) => s.uuid !== item.uuid));
-    } else {
-      onChange([...selected, item]);
+    let resultado = [...selected.filter((s) => !nivel1Items.some((i) => i.uuid === s.uuid)), ...nuevaLista];
+    for (const q of quitados) {
+      const seccion = MENU_TREE.find((m) => m.codigo === q.sublabel);
+      if (!seccion) continue;
+      const codigosHijos = new Set(seccion.submenus.map((s) => s.codigo));
+      const prefijosNietos = seccion.submenus.flatMap((s) => s.prefijos);
+      resultado = resultado.filter(
+        (s) => !codigosHijos.has(s.sublabel) && !prefijosNietos.some((p) => s.sublabel?.startsWith(p)),
+      );
     }
+    onChange(resultado);
   };
 
-  const toggleGrupo = (itemsDelGrupo, marcarTodos) => {
-    if (marcarTodos) {
-      const nuevos = itemsDelGrupo.filter((i) => !selectedUuids.has(i.uuid));
-      onChange([...selected, ...nuevos]);
-    } else {
-      const idsDelGrupo = new Set(itemsDelGrupo.map((i) => i.uuid));
-      onChange(selected.filter((s) => !idsDelGrupo.has(s.uuid)));
-    }
-  };
+  const seccionesSeleccionadas = MENU_TREE.filter((m) => selectedCodigos.has(m.codigo));
+  const itemsPlanosSeleccionados = ITEMS_PLANOS.filter((i) => selectedCodigos.has(i.codigo));
 
   return (
     <div>
-      <input
-        type="text"
-        className="form-control rounded-3 mb-2"
-        placeholder="Filtrar por nombre o código (ej: finca, ver, crear...)"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+        <label className="form-label small fw-semibold text-secondary text-uppercase mb-2" style={{ fontSize: "0.7rem", letterSpacing: "0.03em" }}>
+          Paso 1 · Habilitar menú
+        </label>
+        <SelectAddPicker items={nivel1Items} selected={nivel1Selected} onChange={toggleNivel1} placeholder="Selecciona una sección o ítem del menú..." />
+      </div>
 
-      <div className="border rounded-3 p-2" style={{ maxHeight: "22rem", overflowY: "auto" }}>
-        {grupos.length === 0 && <p className="text-secondary small text-center py-3 mb-0">Sin resultados.</p>}
-        {grupos.map(({ titulo, items: itemsDelGrupo }) => {
-          const todosSeleccionados = itemsDelGrupo.every((i) => selectedUuids.has(i.uuid));
-          const algunoSeleccionado = itemsDelGrupo.some((i) => selectedUuids.has(i.uuid));
+      {seccionesSeleccionadas.map((seccion) => (
+        <SubmenuBlock key={seccion.codigo} seccion={seccion} items={items} selected={selected} onChange={onChange} />
+      ))}
+
+      {itemsPlanosSeleccionados.map((item) => {
+        const permisosItem = items.filter((i) => item.prefijos.some((p) => i.sublabel?.startsWith(p)));
+        if (permisosItem.length === 0) return null;
+        return (
+          <div key={item.codigo} className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+            <div className="fw-semibold small mb-2">{item.nombre}</div>
+            <PermisosSubBlock
+              permisos={permisosItem}
+              selected={selected}
+              onChange={onChange}
+              prefijos={item.prefijos}
+            />
+          </div>
+        );
+      })}
+
+      {/* Permisos que no calzan en ningún menú/submenú (ej. sistema.reset_datos,
+          los legacy menu.ver/crear/editar/eliminar de gestión de menú tipo CMS) —
+          quedan disponibles al final para no dejar nada inalcanzable. */}
+      <OtrosPermisos items={items} selected={selected} onChange={onChange} />
+    </div>
+  );
+}
+
+function PermisosSubBlock({ permisos, selected, onChange, prefijos }) {
+  return (
+    <div className="ps-3 border-start border-3 border-brand">
+      <span className="text-secondary" style={{ fontSize: "0.7rem" }}>
+        Permisos de esta pantalla
+      </span>
+      <SelectAddPicker
+        items={permisos}
+        selected={selected.filter((s) => prefijos.some((p) => s.sublabel?.startsWith(p)))}
+        onChange={(nuevaLista) => {
+          const codigosDelGrupo = new Set(permisos.map((i) => i.uuid));
+          onChange([...selected.filter((s) => !codigosDelGrupo.has(s.uuid)), ...nuevaLista]);
+        }}
+        placeholder="Selecciona un permiso..."
+        variante="outline"
+        compact
+      />
+    </div>
+  );
+}
+
+function SubmenuBlock({ seccion, items, selected, onChange }) {
+  const submenuItems = useMemo(
+    () => seccion.submenus.map((s) => items.find((i) => i.sublabel === s.codigo)).filter(Boolean),
+    [seccion, items],
+  );
+  const submenuSelected = selected.filter((s) => submenuItems.some((i) => i.uuid === s.uuid));
+  const selectedCodigos = new Set(selected.map((s) => s.sublabel));
+
+  const toggleSubmenu = (nuevaLista) => {
+    const codigosNuevos = new Set(nuevaLista.map((i) => i.sublabel));
+    const quitados = submenuSelected.filter((s) => !codigosNuevos.has(s.sublabel));
+    let resultado = [...selected.filter((s) => !submenuItems.some((i) => i.uuid === s.uuid)), ...nuevaLista];
+    for (const q of quitados) {
+      const submenu = seccion.submenus.find((s) => s.codigo === q.sublabel);
+      if (!submenu) continue;
+      resultado = resultado.filter((s) => !submenu.prefijos.some((p) => s.sublabel?.startsWith(p)));
+    }
+    onChange(resultado);
+  };
+
+  const submenusSeleccionados = seccion.submenus.filter((s) => selectedCodigos.has(s.codigo));
+
+  return (
+    <div className="card border-0 shadow-sm rounded-4 mb-3 overflow-hidden">
+      <div className="bg-brand px-3 py-2 fw-semibold small text-white">{seccion.nombre}</div>
+      <div className="p-3">
+        <label className="form-label small text-secondary mb-2">Habilitar submenú</label>
+        <SelectAddPicker
+          items={submenuItems}
+          selected={submenuSelected}
+          onChange={toggleSubmenu}
+          placeholder="Selecciona un submenú..."
+          variante="suave"
+          compact
+        />
+
+        {submenusSeleccionados.map((submenu) => {
+          const permisosSubmenu = items.filter((i) => submenu.prefijos.some((p) => i.sublabel?.startsWith(p)));
+          if (permisosSubmenu.length === 0) return null;
           return (
-            <div key={titulo} className="mb-3">
-              <div className="d-flex align-items-center justify-content-between border-bottom pb-1 mb-2">
-                <span className="fw-semibold small">{titulo}</span>
-                <label className="small d-flex align-items-center gap-2 text-secondary" style={{ cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    className="form-check-input m-0"
-                    checked={todosSeleccionados}
-                    ref={(el) => el && (el.indeterminate = !todosSeleccionados && algunoSeleccionado)}
-                    onChange={(e) => toggleGrupo(itemsDelGrupo, e.target.checked)}
-                  />
-                  Seleccionar todo
-                </label>
-              </div>
-              <div className="row g-1">
-                {itemsDelGrupo.map((item) => (
-                  <div className="col-6" key={item.uuid}>
-                    <label className="d-flex align-items-start gap-2 small py-1" style={{ cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        className="form-check-input m-0 mt-1"
-                        checked={selectedUuids.has(item.uuid)}
-                        onChange={() => toggleUno(item)}
-                      />
-                      <span>
-                        {item.label}
-                        <br />
-                        <span className="text-secondary" style={{ fontSize: "0.7rem" }}>
-                          {item.sublabel}
-                        </span>
-                      </span>
-                    </label>
-                  </div>
-                ))}
-              </div>
+            <div key={submenu.codigo} className="mt-3">
+              <div className="fw-medium small mb-1">{submenu.nombre}</div>
+              <PermisosSubBlock permisos={permisosSubmenu} selected={selected} onChange={onChange} prefijos={submenu.prefijos} />
             </div>
           );
         })}
       </div>
-
-      <p className="small text-secondary mt-2 mb-0">{selected.length} permiso(s) seleccionado(s) en total.</p>
     </div>
   );
 }
+
+function OtrosPermisos({ items, selected, onChange }) {
+  const otros = items.filter((i) => !TODOS_LOS_CODIGOS_DE_MENU.has(i.sublabel) && !esGranularCubierto(i.sublabel));
+  if (otros.length === 0) return null;
+  const otrosSelected = selected.filter((s) => otros.some((i) => i.uuid === s.uuid));
+
+  return (
+    <div className="card border-0 shadow-sm rounded-4 p-3">
+      <div className="fw-semibold small mb-2">Otros permisos</div>
+      <SelectAddPicker
+        items={otros}
+        selected={otrosSelected}
+        onChange={(nuevaLista) => {
+          const codigosDelGrupo = new Set(otros.map((i) => i.uuid));
+          onChange([...selected.filter((s) => !codigosDelGrupo.has(s.uuid)), ...nuevaLista]);
+        }}
+        placeholder="Selecciona un permiso..."
+        variante="outline"
+        compact
+      />
+    </div>
+  );
+}
+
+const TODOS_LOS_PREFIJOS_GRANULARES = [
+  ...MENU_TREE.flatMap((m) => m.submenus.flatMap((s) => s.prefijos)),
+  ...ITEMS_PLANOS.flatMap((i) => i.prefijos),
+];
+
+const esGranularCubierto = (codigo) => TODOS_LOS_PREFIJOS_GRANULARES.some((p) => codigo?.startsWith(p));
