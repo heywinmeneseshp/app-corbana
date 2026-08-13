@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FiTrendingUp } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ReporteEvaluacion from "@/components/reportes/ReporteEvaluacion";
+import IndicadoresEvaluaciones from "@/components/reportes/IndicadoresEvaluaciones";
 
 const TIPOS = [
   { key: "Índice de infección", label: "Índice de Infección", permiso: "infeccion.ver" },
@@ -12,9 +14,11 @@ const TIPOS = [
   { key: "Suma Bruta", label: "Suma Bruta", permiso: "suma_bruta.ver" },
 ];
 
+const TAB_INDICADORES = "indicadores";
+
 export default function SanidadEvaluacionesPage() {
   const [tiposEvaluacion, setTiposEvaluacion] = useState([]);
-  const [tab, setTab] = useState(TIPOS[0].key);
+  const [tab, setTab] = useState(TAB_INDICADORES);
 
   useEffect(() => {
     apiFetch("/tipos-evaluacion?limit=100")
@@ -34,6 +38,15 @@ export default function SanidadEvaluacionesPage() {
         </div>
 
         <ul className="nav nav-pills mb-4 gap-2">
+          <li className="nav-item">
+            <button
+              type="button"
+              className={`nav-link rounded-3 ${tab === TAB_INDICADORES ? "btn-brand text-white" : "btn btn-outline-secondary"}`}
+              onClick={() => setTab(TAB_INDICADORES)}
+            >
+              <FiTrendingUp className="me-1" /> Indicadores
+            </button>
+          </li>
           {tabsVisibles.map((t) => (
             <li className="nav-item" key={t.key}>
               <button
@@ -47,7 +60,9 @@ export default function SanidadEvaluacionesPage() {
           ))}
         </ul>
 
-        {tipoActual ? (
+        {tab === TAB_INDICADORES ? (
+          <IndicadoresEvaluaciones />
+        ) : tipoActual ? (
           <ReporteEvaluacion tipoEvaluacionUuid={tipoActual.uuid} tab={tab} />
         ) : (
           <p className="text-secondary small">Cargando tipos de evaluación...</p>
