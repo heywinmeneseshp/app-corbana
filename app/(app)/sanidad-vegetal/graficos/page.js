@@ -1,12 +1,134 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { hasPermission } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import PromedioPorSemanaChart from "@/components/reportes/PromedioPorSemanaChart";
 import PromedioPorEdadChart from "@/components/reportes/PromedioPorEdadChart";
 import PromedioInfeccionChart from "@/components/reportes/PromedioInfeccionChart";
+import PromedioSumaBrutaPorHojaChart from "@/components/reportes/PromedioSumaBrutaPorHojaChart";
+import EvaluacionCompareModal from "@/components/reportes/EvaluacionCompareModal";
 import ClimaChart from "@/components/reportes/ClimaChart";
+
+const LIMITES_SB_SEMANA = [{ valor: 1200, color: "#dc2626" }];
+const LIMITES_SB_HOJA = [
+  { valor: 450, color: "#f59e0b" },
+  { valor: 650, color: "#dc2626" },
+];
+const LINEAS_SB_SEMANA = [{ key: "promedio", label: "Promedio", color: "#16a34a" }];
+const LINEAS_SB_HOJA = [
+  { key: "h3", label: "Suma Bruta Hoja 3", color: "#2563eb", filtro: (i) => i.hoja === 3 },
+  { key: "h5", label: "Suma Bruta Hoja 5", color: "#f59e0b", filtro: (i) => i.hoja === 5 },
+];
+
+const INFO_SB_SEMANA = (
+  <>
+    <p className="fw-semibold mb-1">Suma Bruta por planta</p>
+    <p className="mb-2">SB_planta = Hoja_3_val + Hoja_4_val + Hoja_5_val</p>
+    <p className="fw-semibold mb-1">Promedio de la finca</p>
+    <p className="mb-2">SB_Finca = (Σ SB_planta) / N.° de lotes evaluados</p>
+    <p className="mb-0 fst-italic">
+      No se divide entre la cantidad de plantas: cada lote suma todas sus plantas evaluadas y ese total
+      es lo que se promedia entre lotes — así un lote con más plantas evaluadas no pesa más que uno con
+      menos.
+    </p>
+  </>
+);
+
+const INFO_SB_HOJA = (
+  <>
+    <p className="fw-semibold mb-1">Corrección por candela</p>
+    <p className="mb-2">CC_hoja = Candela × 10 (solo si esa hoja fue evaluada; si está vacía, CC = 0)</p>
+    <p className="fw-semibold mb-1">Indicador por hoja</p>
+    <p className="mb-1">SB_H3 = 10 × [(Σ Hoja_3_val − Σ CC_H3) / N.° de plantas evaluadas]</p>
+    <p className="mb-2">SB_H5 = 10 × [(Σ Hoja_5_val − Σ CC_H5) / N.° de plantas evaluadas]</p>
+    <p className="mb-0 fst-italic">
+      N.° de plantas es siempre la cantidad real de plantas del grupo (finca + semana), nunca un valor
+      fijo — normaliza el resultado a una base equivalente de 10 plantas sin importar cuántas se hayan
+      evaluado en realidad.
+    </p>
+  </>
+);
+
+// Finca compartida entre los dos gráficos de Suma Bruta (antes cada uno
+// tenía su propio selector independiente). Por defecto los dos muestran el
+// año actual — igual que ClimaChart — y cada uno tiene su botón de
+// expandir para comparar entre fincas y entre años.
+function SumaBrutaGraficos() {
+  const [fincas, setFincas] = useState([]);
+  const [fincaUuid, setFincaUuid] = useState("");
+  const [modalAbierto, setModalAbierto] = useState(null); // null | "semana" | "hoja"
+
+  useEffect(() => {
+    apiFetch("/fincas?limit=100")
+      .then((data) => setFincas(data.items))
+      .catch(() => {});
+  }, []);
+
+  const fincaNombre = fincas.find((f) => f.uuid === fincaUuid)?.nombre || "Todas las fincas";
+
+  return (
+    <>
+      <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+        <label className="form-label small fw-medium mb-1">Finca</label>
+        <select
+          className="form-select form-select-sm rounded-3"
+          style={{ width: "auto" }}
+          value={fincaUuid}
+          onChange={(e) => setFincaUuid(e.target.value)}
+        >
+          <option value="">Todas las fincas</option>
+          {fincas.map((f) => (
+            <option key={f.uuid} value={f.uuid}>
+              {f.nombre}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <PromedioPorSemanaChart
+        titulo="Promedio de Suma Bruta por Semana"
+        endpoint="/evaluaciones/suma-bruta-promedio"
+        colorLinea="#16a34a"
+        mensajeVacio="No hay evaluaciones de Suma Bruta para mostrar."
+        limitesControl={LIMITES_SB_SEMANA}
+        fincaUuid={fincaUuid}
+        onExpand={() => setModalAbierto("semana")}
+        info={INFO_SB_SEMANA}
+      />
+      <PromedioSumaBrutaPorHojaChart
+        titulo="Promedio de Suma Bruta por Hoja"
+        endpoint="/evaluaciones/suma-bruta-promedio-por-hoja"
+        mensajeVacio="No hay evaluaciones de Suma Bruta para mostrar."
+        fincaUuid={fincaUuid}
+        onExpand={() => setModalAbierto("hoja")}
+        info={INFO_SB_HOJA}
+      />
+
+      <EvaluacionCompareModal
+        open={modalAbierto === "semana"}
+        onClose={() => setModalAbierto(null)}
+        titulo="Promedio de Suma Bruta por Semana"
+        endpoint="/evaluaciones/suma-bruta-promedio"
+        lineas={LINEAS_SB_SEMANA}
+        limitesControl={LIMITES_SB_SEMANA}
+        fincaUuidBase={fincaUuid}
+        fincaBaseLabel={fincaNombre}
+      />
+      <EvaluacionCompareModal
+        open={modalAbierto === "hoja"}
+        onClose={() => setModalAbierto(null)}
+        titulo="Promedio de Suma Bruta por Hoja"
+        endpoint="/evaluaciones/suma-bruta-promedio-por-hoja"
+        lineas={LINEAS_SB_HOJA}
+        limitesControl={LIMITES_SB_HOJA}
+        fincaUuidBase={fincaUuid}
+        fincaBaseLabel={fincaNombre}
+      />
+    </>
+  );
+}
 
 // El permiso null en Clima es intencional: la lista de clima (GET /clima) ya
 // es visible para cualquier usuario autenticado, sin permiso puntual — el
@@ -61,12 +183,7 @@ export default function SanidadGraficosPage() {
             mensajeVacio="No hay evaluaciones de Conteo de Hojas para mostrar."
           />
         ) : tab === "Suma Bruta" ? (
-          <PromedioPorSemanaChart
-            titulo="Promedio de Suma Bruta por Semana"
-            endpoint="/evaluaciones/suma-bruta-promedio"
-            colorLinea="#16a34a"
-            mensajeVacio="No hay evaluaciones de Suma Bruta para mostrar."
-          />
+          <SumaBrutaGraficos />
         ) : tab === "Clima" ? (
           <ClimaChart mensajeVacio="No hay registros de clima para mostrar." />
         ) : null}

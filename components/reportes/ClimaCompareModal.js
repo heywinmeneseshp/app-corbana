@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { FiX, FiPlus } from "react-icons/fi";
+import { FiX, FiPlus, FiCloudRain, FiUsers, FiSliders } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 
 const COLORES_COMPARACION = ["#dc2626", "#f59e0b", "#0891b2", "#7c3aed", "#db2777", "#65a30d", "#0f172a"];
@@ -15,6 +15,18 @@ const diaDelAnio = (fechaIso) => {
   const d = new Date(`${fechaIso}T00:00:00Z`);
   const inicioAnio = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
   return Math.floor((d - inicioAnio) / (24 * 60 * 60 * 1000)) + 1;
+};
+
+// Inverso de diaDelAnio — para mostrar la fecha real en el eje X y en el
+// tooltip de la vista Diaria, en vez del número de día "pelado" (1-366).
+// El año de referencia es el de la línea base: como `periodo` es solo la
+// posición dentro del año, comparar 2024 vs 2025 en el mismo eje ya asume
+// que ambos se alinean por día del año, así que la fecha mostrada es
+// siempre respecto a ese año de referencia.
+const fechaDeDiaDelAnio = (dia, anioRef) => {
+  if (!dia || !anioRef) return "";
+  const d = new Date(Date.UTC(anioRef, 0, dia));
+  return d.toLocaleDateString("es", { day: "2-digit", month: "short", timeZone: "UTC" });
 };
 
 // `periodo` ubica cada punto DENTRO de su año (lo que antes era siempre
@@ -302,20 +314,33 @@ export default function ClimaCompareModal({
 
   if (!open) return null;
 
+  const totalFincasDetalle = detalle?.fincas?.length ?? 0;
+  const maxDetalle = totalFincasDetalle > 0 ? Math.max(...detalle.fincas.map((f) => f[metricaCampo] || 0), 0.0001) : 0;
+
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1060, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
-      <div className="bg-white rounded-4 shadow-lg p-4 d-flex flex-column" style={{ width: "90vw", height: "90vh" }}>
-        <div className="d-flex align-items-center justify-content-between mb-2">
-          <div>
-            <h2 className="h5 fw-bold mb-0">{metricaLabel}</h2>
-            <p className="text-secondary small mb-0">Comparación entre fincas y años</p>
+    <div style={{ position: "fixed", inset: 0, zIndex: 1060, backgroundColor: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+      <div className="bg-white rounded-4 shadow-lg d-flex flex-column" style={{ width: "90vw", maxWidth: "80rem", height: "90vh", overflow: "hidden" }}>
+        {/* Encabezado fijo */}
+        <div className="d-flex align-items-center justify-content-between px-4 pt-4 pb-3 border-bottom">
+          <div className="d-flex align-items-center gap-3">
+            <div
+              className="d-flex align-items-center justify-content-center rounded-3"
+              style={{ width: "2.75rem", height: "2.75rem", backgroundColor: "var(--brand-100)", color: metricaColor }}
+            >
+              <FiCloudRain size={20} />
+            </div>
+            <div>
+              <h2 className="h5 fw-bold mb-0">{metricaLabel}</h2>
+              <p className="text-secondary small mb-0">Comparación entre fincas y años</p>
+            </div>
           </div>
-          <button className="btn btn-sm p-1 border-0" onClick={onClose}>
-            <FiX size={24} />
+          <button className="btn btn-sm btn-light rounded-circle d-flex align-items-center justify-content-center p-0" style={{ width: "2rem", height: "2rem" }} onClick={onClose}>
+            <FiX size={18} />
           </button>
         </div>
 
-        <div className="d-flex gap-2 mb-2">
+        {/* Pestañas de granularidad, fijas */}
+        <div className="d-flex gap-2 px-4 pt-3">
           {GRANULARIDADES.map((g) => (
             <button
               key={g.key}
@@ -328,239 +353,269 @@ export default function ClimaCompareModal({
           ))}
         </div>
 
-        {error && <div className="alert alert-danger py-2 small">{error}</div>}
+        {/* Cuerpo scrolleable — el gráfico tiene alto fijo, así que el panel
+            de detalle no lo achica: se agrega debajo y, si no entra todo en
+            pantalla, se scrollea el modal en vez de comprimir el gráfico. */}
+        <div className="flex-grow-1 overflow-auto px-4 pb-4 pt-3">
+          {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-        <div className="border rounded-3 p-3 mb-3">
-          <label className="form-label small fw-semibold mb-2">Comparar con otra finca u otro año</label>
-          <div className="d-flex flex-wrap gap-2 align-items-end">
-            <div>
-              <label className="form-label small text-secondary mb-1">Finca</label>
-              <div className="d-flex gap-1">
-                <select className="form-select form-select-sm rounded-3" style={{ width: "13rem" }} value={fincaParaAgregar} onChange={(e) => setFincaParaAgregar(e.target.value)}>
-                  <option value="">Elegir finca...</option>
-                  {fincas.filter((f) => !fincasPendientes.some((p) => p.uuid === f.uuid)).map((f) => (
-                    <option key={f.uuid} value={f.uuid}>{f.codigo} — {f.nombre}</option>
-                  ))}
-                </select>
-                <button type="button" className="btn btn-sm btn-outline-secondary rounded-3" title="Sumar esta finca a la comparación" disabled={!fincaParaAgregar} onClick={agregarFincaAlCombo}>
-                  <FiPlus />
-                </button>
+          <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+            <label className="form-label small fw-semibold mb-2 d-flex align-items-center gap-2">
+              <FiSliders size={14} className="text-secondary" /> Comparar con otra finca u otro año
+            </label>
+            <div className="d-flex flex-wrap gap-3 align-items-end">
+              <div>
+                <label className="form-label small text-secondary mb-1">Finca</label>
+                <div className="d-flex gap-1">
+                  <select className="form-select form-select-sm rounded-3" style={{ width: "13rem" }} value={fincaParaAgregar} onChange={(e) => setFincaParaAgregar(e.target.value)}>
+                    <option value="">Elegir finca...</option>
+                    {fincas.filter((f) => !fincasPendientes.some((p) => p.uuid === f.uuid)).map((f) => (
+                      <option key={f.uuid} value={f.uuid}>{f.codigo} — {f.nombre}</option>
+                    ))}
+                  </select>
+                  <button type="button" className="btn btn-sm btn-outline-secondary rounded-3" title="Sumar esta finca a la comparación" disabled={!fincaParaAgregar} onClick={agregarFincaAlCombo}>
+                    <FiPlus />
+                  </button>
+                </div>
               </div>
+              <div>
+                <label className="form-label small text-secondary mb-1">Año</label>
+                <div className="d-flex gap-1">
+                  <select className="form-select form-select-sm rounded-3" style={{ width: "7rem" }} value={anioElegido || ""} onChange={(e) => setAnioElegido(Number(e.target.value))}>
+                    {aniosDisponibles.filter((a) => !aniosPendientes.includes(a)).map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                  <button type="button" className="btn btn-sm btn-outline-secondary rounded-3" title="Sumar este año al promedio de la comparación" onClick={agregarAnioAlCombo}>
+                    <FiPlus />
+                  </button>
+                </div>
+              </div>
+
+              {granularidad === "dia" ? (
+                <div className="d-flex align-items-end gap-2">
+                  <div>
+                    <label className="form-label small text-secondary mb-1">Fecha desde</label>
+                    <input
+                      type="date"
+                      className="form-control form-control-sm rounded-3"
+                      value={fechaDiaDesde}
+                      onChange={(e) => setFechaDiaDesde(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label small text-secondary mb-1">hasta</label>
+                    <input
+                      type="date"
+                      className="form-control form-control-sm rounded-3"
+                      value={fechaDiaHasta}
+                      onChange={(e) => setFechaDiaHasta(e.target.value)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="d-flex align-items-end gap-2">
+                  <div>
+                    <label className="form-label small text-secondary mb-1">{granularidadActual.etiqueta} desde</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={granularidadActual.max}
+                      className="form-control form-control-sm rounded-3"
+                      style={{ width: "6rem" }}
+                      value={semanaDesde}
+                      onChange={(e) => setSemanaDesde(Math.min(granularidadActual.max, Math.max(1, Number(e.target.value) || 1)))}
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label small text-secondary mb-1">hasta</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={granularidadActual.max}
+                      className="form-control form-control-sm rounded-3"
+                      style={{ width: "6rem" }}
+                      value={semanaHasta}
+                      onChange={(e) => setSemanaHasta(Math.min(granularidadActual.max, Math.max(1, Number(e.target.value) || granularidadActual.max)))}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button type="button" className="btn btn-sm btn-brand rounded-3 d-flex align-items-center gap-1" onClick={agregarComparacion}>
+                <FiPlus /> Agregar comparación
+              </button>
             </div>
-            <div>
-              <label className="form-label small text-secondary mb-1">Año</label>
-              <div className="d-flex gap-1">
-                <select className="form-select form-select-sm rounded-3" style={{ width: "7rem" }} value={anioElegido || ""} onChange={(e) => setAnioElegido(Number(e.target.value))}>
-                  {aniosDisponibles.filter((a) => !aniosPendientes.includes(a)).map((a) => (
-                    <option key={a} value={a}>{a}</option>
-                  ))}
-                </select>
-                <button type="button" className="btn btn-sm btn-outline-secondary rounded-3" title="Sumar este año al promedio de la comparación" onClick={agregarAnioAlCombo}>
-                  <FiPlus />
-                </button>
-              </div>
-            </div>
-            <button type="button" className="btn btn-sm btn-brand rounded-3 d-flex align-items-center gap-1" onClick={agregarComparacion}>
-              <FiPlus /> Agregar comparación
-            </button>
-            {granularidad === "dia" ? (
-              <div className="d-flex align-items-end gap-2 ms-md-3">
-                <div>
-                  <label className="form-label small text-secondary mb-1">Fecha desde</label>
-                  <input
-                    type="date"
-                    className="form-control form-control-sm rounded-3"
-                    value={fechaDiaDesde}
-                    onChange={(e) => setFechaDiaDesde(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="form-label small text-secondary mb-1">hasta</label>
-                  <input
-                    type="date"
-                    className="form-control form-control-sm rounded-3"
-                    value={fechaDiaHasta}
-                    onChange={(e) => setFechaDiaHasta(e.target.value)}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="d-flex align-items-end gap-2 ms-md-3">
-                <div>
-                  <label className="form-label small text-secondary mb-1">{granularidadActual.etiqueta} desde</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={granularidadActual.max}
-                    className="form-control form-control-sm rounded-3"
-                    style={{ width: "6rem" }}
-                    value={semanaDesde}
-                    onChange={(e) => setSemanaDesde(Math.min(granularidadActual.max, Math.max(1, Number(e.target.value) || 1)))}
-                  />
-                </div>
-                <div>
-                  <label className="form-label small text-secondary mb-1">hasta</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={granularidadActual.max}
-                    className="form-control form-control-sm rounded-3"
-                    style={{ width: "6rem" }}
-                    value={semanaHasta}
-                    onChange={(e) => setSemanaHasta(Math.min(granularidadActual.max, Math.max(1, Number(e.target.value) || granularidadActual.max)))}
-                  />
-                </div>
+
+            {fincasPendientes.length > 0 && (
+              <div className="d-flex flex-wrap align-items-center gap-2 mt-3">
+                <span className="text-secondary small">Fincas a promediar juntas en una sola línea:</span>
+                {fincasPendientes.map((f) => (
+                  <span
+                    key={f.uuid}
+                    className="badge rounded-pill d-inline-flex align-items-center gap-2 py-2 px-3"
+                    style={{ backgroundColor: "var(--brand-100)", color: "var(--brand-800)" }}
+                  >
+                    {f.nombre}
+                    <button type="button" className="btn-close" style={{ fontSize: "0.5rem" }} onClick={() => quitarFincaDelCombo(f.uuid)} aria-label="Quitar"></button>
+                  </span>
+                ))}
               </div>
             )}
-          </div>
 
-          {fincasPendientes.length > 0 && (
-            <div className="d-flex flex-wrap align-items-center gap-2 mt-2">
-              <span className="text-secondary small">Fincas a promediar juntas en una sola línea:</span>
-              {fincasPendientes.map((f) => (
-                <span key={f.uuid} className="badge rounded-pill bg-secondary d-inline-flex align-items-center gap-2">
-                  {f.nombre}
-                  <button type="button" className="btn-close btn-close-white" style={{ fontSize: "0.55rem" }} onClick={() => quitarFincaDelCombo(f.uuid)} aria-label="Quitar"></button>
-                </span>
-              ))}
-            </div>
-          )}
+            {aniosPendientes.length > 0 && (
+              <div className="d-flex flex-wrap align-items-center gap-2 mt-2">
+                <span className="text-secondary small">Años a promediar en una sola línea:</span>
+                {aniosPendientes.map((a) => (
+                  <span
+                    key={a}
+                    className="badge rounded-pill d-inline-flex align-items-center gap-2 py-2 px-3"
+                    style={{ backgroundColor: "var(--brand-100)", color: "var(--brand-800)" }}
+                  >
+                    {a}
+                    <button type="button" className="btn-close" style={{ fontSize: "0.5rem" }} onClick={() => quitarAnioDelCombo(a)} aria-label="Quitar"></button>
+                  </span>
+                ))}
+              </div>
+            )}
 
-          {aniosPendientes.length > 0 && (
-            <div className="d-flex flex-wrap align-items-center gap-2 mt-2">
-              <span className="text-secondary small">Años a promediar en una sola línea:</span>
-              {aniosPendientes.map((a) => (
-                <span key={a} className="badge rounded-pill bg-secondary d-inline-flex align-items-center gap-2">
-                  {a}
-                  <button type="button" className="btn-close btn-close-white" style={{ fontSize: "0.55rem" }} onClick={() => quitarAnioDelCombo(a)} aria-label="Quitar"></button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {(mostrarBase || comparaciones.length > 0) && (
-            <div className="d-flex flex-wrap gap-2 mt-3">
-              {mostrarBase && (
-                <span className="badge rounded-pill d-inline-flex align-items-center gap-2" style={{ backgroundColor: metricaColor }}>
-                  {fincaBaseLabel || "Selección actual"} · {anioBase}
-                  <button type="button" className="btn-close btn-close-white" style={{ fontSize: "0.55rem" }} onClick={() => setMostrarBase(false)} aria-label="Quitar"></button>
-                </span>
-              )}
-              {comparaciones.map((c) => (
-                <span key={c.id} className="badge rounded-pill d-inline-flex align-items-center gap-2" style={{ backgroundColor: c.color }}>
-                  {c.loading ? "Cargando..." : c.error ? `Error: ${c.error}` : `${c.fincaLabel} · ${c.anio}`}
-                  <button type="button" className="btn-close btn-close-white" style={{ fontSize: "0.55rem" }} onClick={() => quitarComparacion(c.id)} aria-label="Quitar"></button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0 }}>
-          {cargandoBase ? (
-            <p className="text-secondary small text-center py-5">Cargando...</p>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={mergedData}
-                margin={{ top: 10, right: 30, left: 0, bottom: 10 }}
-                onClick={(e) => {
-                  // Respaldo por si el clic no cae justo en el punto: toma la
-                  // línea base de ese período (solo tiene sentido en vista
-                  // Semanal, que es la única con semanaUuid).
-                  const punto = e?.activePayload?.[0]?.payload;
-                  if (mostrarBase && punto?.baseSemanaUuid) verDetalleSemana(punto.baseSemanaUuid, fincaUuidBase);
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="periodo" tick={{ fontSize: 12 }} domain={[desde, hasta]} type="number" allowDecimals={false} />
-                <YAxis tick={{ fontSize: 12 }} width={50} unit={metricaUnidad || ""} />
-                <Tooltip
-                  formatter={(value, name) => [value != null ? `${Number(value).toLocaleString("es")} ${metricaUnidad}` : "—", nombreSerie(name)]}
-                  labelFormatter={(l) => `${granularidadActual.etiqueta} ${l}`}
-                />
-                <Legend formatter={(value) => nombreSerie(value)} />
+            {(mostrarBase || comparaciones.length > 0) && (
+              <div className="d-flex flex-wrap gap-2 mt-3 pt-3 border-top">
                 {mostrarBase && (
-                  <Line
-                    type="monotone"
-                    dataKey="base"
-                    name="base"
-                    stroke={metricaColor}
-                    strokeWidth={3}
-                    dot={dotClicleable(metricaColor, "baseSemanaUuid", fincaUuidBase)}
-                    connectNulls={false}
-                  />
+                  <span className="badge rounded-pill d-inline-flex align-items-center gap-2 py-2 px-3 text-white" style={{ backgroundColor: metricaColor }}>
+                    {fincaBaseLabel || "Selección actual"} · {anioBase}
+                    <button type="button" className="btn-close btn-close-white" style={{ fontSize: "0.5rem" }} onClick={() => setMostrarBase(false)} aria-label="Quitar"></button>
+                  </span>
                 )}
                 {comparaciones.map((c) => (
-                  <Line
-                    key={c.id}
-                    type="monotone"
-                    dataKey={c.id}
-                    name={c.id}
-                    stroke={c.color}
-                    strokeWidth={2}
-                    dot={dotClicleable(c.color, `${c.id}SemanaUuid`, (c.fincaUuids || []).join(","))}
-                    connectNulls={false}
-                  />
+                  <span key={c.id} className="badge rounded-pill d-inline-flex align-items-center gap-2 py-2 px-3 text-white" style={{ backgroundColor: c.color }}>
+                    {c.loading ? "Cargando..." : c.error ? `Error: ${c.error}` : `${c.fincaLabel} · ${c.anio}`}
+                    <button type="button" className="btn-close btn-close-white" style={{ fontSize: "0.5rem" }} onClick={() => quitarComparacion(c.id)} aria-label="Quitar"></button>
+                  </span>
                 ))}
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-          <p className="text-secondary mb-0 mt-1" style={{ fontSize: "0.7rem" }}>
-            {granularidad === "semana"
-              ? "Hacé clic en un punto para ver el detalle por finca de esa semana (no disponible en líneas que promedian varios años)."
-              : "El detalle por finca solo está disponible en la vista Semanal."}
-          </p>
-        </div>
-
-        {(cargandoDetalle || errorDetalle || detalle) && (
-          <div className="border rounded-3 p-3 mt-2" style={{ maxHeight: "12rem", overflowY: "auto" }}>
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <span className="fw-semibold small">
-                Detalle por finca {detalle ? `— ${detalle.semanaCodigo}` : ""}
-              </span>
-              <button
-                type="button"
-                className="btn-close"
-                style={{ fontSize: "0.6rem" }}
-                onClick={() => {
-                  setDetalle(null);
-                  setErrorDetalle("");
-                }}
-                aria-label="Cerrar"
-              ></button>
-            </div>
-            {cargandoDetalle && <p className="text-secondary small mb-0">Cargando...</p>}
-            {errorDetalle && <p className="text-danger small mb-0">{errorDetalle}</p>}
-            {detalle && !cargandoDetalle && (
-              <table className="table table-sm mb-0">
-                <thead>
-                  <tr className="text-secondary small">
-                    <th>Finca</th>
-                    <th className="text-end">{metricaLabel}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detalle.fincas.length === 0 && (
-                    <tr>
-                      <td colSpan={2} className="text-secondary small text-center py-2">
-                        Ninguna finca estaba siendo monitoreada esa semana.
-                      </td>
-                    </tr>
-                  )}
-                  {detalle.fincas.map((f) => (
-                    <tr key={f.fincaUuid}>
-                      <td className="small">{f.fincaNombre}</td>
-                      <td className="text-end small fw-medium">
-                        {f[metricaCampo] != null ? `${f[metricaCampo]} ${metricaUnidad}` : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              </div>
             )}
           </div>
-        )}
+
+          <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+            <div style={{ height: "24rem" }}>
+              {cargandoBase ? (
+                <div className="d-flex align-items-center justify-content-center h-100">
+                  <p className="text-secondary small mb-0">Cargando...</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={mergedData}
+                    margin={{ top: 10, right: 30, left: 0, bottom: 10 }}
+                    onClick={(e) => {
+                      // Respaldo por si el clic no cae justo en el punto: toma
+                      // la línea base de ese período (solo tiene sentido en
+                      // vista Semanal, que es la única con semanaUuid).
+                      const punto = e?.activePayload?.[0]?.payload;
+                      if (mostrarBase && punto?.baseSemanaUuid) verDetalleSemana(punto.baseSemanaUuid, fincaUuidBase);
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="periodo"
+                      tick={{ fontSize: 12 }}
+                      domain={[desde, hasta]}
+                      type="number"
+                      allowDecimals={false}
+                      tickFormatter={(v) => (granularidad === "dia" ? fechaDeDiaDelAnio(v, anioBase) : v)}
+                    />
+                    <YAxis tick={{ fontSize: 12 }} width={50} unit={metricaUnidad || ""} />
+                    <Tooltip
+                      formatter={(value, name) => [value != null ? `${Number(value).toLocaleString("es")} ${metricaUnidad}` : "—", nombreSerie(name)]}
+                      labelFormatter={(l) => (granularidad === "dia" ? fechaDeDiaDelAnio(l, anioBase) : `${granularidadActual.etiqueta} ${l}`)}
+                    />
+                    <Legend formatter={(value) => nombreSerie(value)} />
+                    {mostrarBase && (
+                      <Line
+                        type="monotone"
+                        dataKey="base"
+                        name="base"
+                        stroke={metricaColor}
+                        strokeWidth={3}
+                        dot={dotClicleable(metricaColor, "baseSemanaUuid", fincaUuidBase)}
+                        connectNulls={false}
+                      />
+                    )}
+                    {comparaciones.map((c) => (
+                      <Line
+                        key={c.id}
+                        type="monotone"
+                        dataKey={c.id}
+                        name={c.id}
+                        stroke={c.color}
+                        strokeWidth={2}
+                        dot={dotClicleable(c.color, `${c.id}SemanaUuid`, (c.fincaUuids || []).join(","))}
+                        connectNulls={false}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <p className="text-secondary mb-0 mt-2" style={{ fontSize: "0.75rem" }}>
+              {granularidad === "semana"
+                ? "Hacé clic en un punto para ver el detalle por finca de esa semana (no disponible en líneas que promedian varios años)."
+                : "El detalle por finca solo está disponible en la vista Semanal."}
+            </p>
+          </div>
+
+          {(cargandoDetalle || errorDetalle || detalle) && (
+            <div className="card border-0 shadow-sm rounded-4 p-3">
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                <span className="fw-semibold small d-flex align-items-center gap-2">
+                  <FiUsers size={14} className="text-secondary" />
+                  Detalle por finca {detalle ? `— ${detalle.semanaCodigo}` : ""}
+                </span>
+                <button
+                  type="button"
+                  className="btn-close"
+                  style={{ fontSize: "0.6rem" }}
+                  onClick={() => {
+                    setDetalle(null);
+                    setErrorDetalle("");
+                  }}
+                  aria-label="Cerrar"
+                ></button>
+              </div>
+              {cargandoDetalle && <p className="text-secondary small mb-0">Cargando...</p>}
+              {errorDetalle && <p className="text-danger small mb-0">{errorDetalle}</p>}
+              {detalle && !cargandoDetalle && (
+                <>
+                  {detalle.fincas.length === 0 ? (
+                    <p className="text-secondary small text-center py-3 mb-0">Ninguna finca estaba siendo monitoreada esa semana.</p>
+                  ) : (
+                    <div className="d-flex flex-column gap-2">
+                      {detalle.fincas.map((f) => {
+                        const valor = f[metricaCampo];
+                        const pct = valor != null ? Math.max(4, Math.round((valor / maxDetalle) * 100)) : 0;
+                        return (
+                          <div key={f.fincaUuid} className="d-flex align-items-center gap-3">
+                            <span className="small text-nowrap" style={{ width: "9rem" }}>{f.fincaNombre}</span>
+                            <div className="flex-grow-1 bg-light rounded-pill" style={{ height: "0.6rem" }}>
+                              <div
+                                className="rounded-pill"
+                                style={{ width: `${valor != null ? pct : 0}%`, height: "100%", backgroundColor: metricaColor, opacity: valor != null ? 1 : 0.2 }}
+                              ></div>
+                            </div>
+                            <span className="small fw-semibold text-nowrap" style={{ width: "5rem" }}>
+                              {valor != null ? `${valor} ${metricaUnidad}` : "—"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

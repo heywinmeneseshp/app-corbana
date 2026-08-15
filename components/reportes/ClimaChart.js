@@ -5,6 +5,19 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { FiMaximize2 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ClimaCompareModal from "@/components/reportes/ClimaCompareModal";
+import InfoTooltip from "@/components/reportes/InfoTooltip";
+
+const INFO_CLIMA = (
+  <>
+    <p className="fw-semibold mb-1">Precipitación total (mm)</p>
+    <p className="mb-2">
+      Suma de la lluvia de cada día de la semana. Los días sin registro dentro del rango real de captura
+      de la finca cuentan como 0 mm (no se excluyen ni se inventan datos fuera de ese rango).
+    </p>
+    <p className="fw-semibold mb-1">Temperatura y humedad relativa</p>
+    <p className="mb-0">Promedio simple de los días con dato real de esa semana (no se rellenan con 0).</p>
+  </>
+);
 
 // Precipitación (mm), temperatura (°C) y humedad relativa (%) tienen escalas
 // muy distintas — en vez de una sola gráfica con tres líneas ilegibles, se
@@ -103,7 +116,10 @@ export default function ClimaChart({ mensajeVacio = "No hay registros de clima p
     <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
       <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
         <div>
-          <h2 className="h6 fw-bold mb-0">Promedio Semanal de Clima</h2>
+          <span className="d-flex align-items-center gap-2">
+            <h2 className="h6 fw-bold mb-0">Promedio Semanal de Clima</h2>
+            <InfoTooltip texto={INFO_CLIMA} />
+          </span>
           <p className="text-secondary small mb-0">{fincaNombre}</p>
         </div>
         <div className="d-flex align-items-center gap-2">
@@ -172,7 +188,18 @@ export default function ClimaChart({ mensajeVacio = "No hay registros de clima p
                 scale="time"
                 domain={["dataMin", "dataMax"]}
                 tick={{ fontSize: 10 }}
-                tickFormatter={(ts) => new Date(ts).toLocaleDateString("es", { month: "short", year: "2-digit" })}
+                tickFormatter={(ts) => {
+                  // El eje sigue siendo por tiempo real (para que la
+                  // distancia entre puntos refleje semanas saltadas), pero
+                  // la etiqueta muestra la semana más cercana a ese tick en
+                  // vez del mes — el tick generado por Recharts no siempre
+                  // cae justo en un punto real.
+                  let cercano = dataMetrica[0];
+                  for (const it of dataMetrica) {
+                    if (Math.abs(it.ts - ts) < Math.abs(cercano.ts - ts)) cercano = it;
+                  }
+                  return cercano?.semanaCodigo || "";
+                }}
               />
               <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
               <Tooltip

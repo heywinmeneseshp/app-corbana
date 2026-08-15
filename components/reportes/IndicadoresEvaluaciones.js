@@ -17,6 +17,7 @@ import {
 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
+import { COLORES_CINTA } from "@/components/reportes/PromedioPorSemanaChart";
 
 const TIPOS_COLUMNA = ["Índice de infección", "Conteo de Hojas", "Suma Bruta"];
 const LABELS = {
@@ -498,6 +499,7 @@ export default function IndicadoresEvaluaciones() {
                   >
                     <tr>
                       <th className="small fw-semibold text-secondary py-2">Edad (semanas)</th>
+                      <th className="small fw-semibold text-secondary py-2">Embolse</th>
                       <th className="small fw-semibold text-secondary text-end py-2">Hojas</th>
                       <th className="small fw-semibold text-secondary text-end py-2">N°</th>
                       <th className="small fw-semibold text-secondary text-end py-2" style={{ width: 40 }}></th>
@@ -506,7 +508,7 @@ export default function IndicadoresEvaluaciones() {
                   <tbody>
                     {resumen.promedios.hojasPorEdad.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="text-center text-secondary py-4">
+                        <td colSpan={5} className="text-center text-secondary py-4">
                           Sin conteos de hojas en esta semana.
                         </td>
                       </tr>
@@ -542,6 +544,18 @@ function FilaEdad({ edad, onOpen }) {
     >
       <td className="py-2 fw-semibold" style={{ color: "#0f172a" }}>
         {edad.edad}
+      </td>
+      <td className="py-2">
+        {edad.semanaEmbolseCodigo && (
+          <span className="d-inline-flex align-items-center gap-2 small text-secondary">
+            <span
+              className="d-inline-block rounded-circle"
+              style={{ width: 10, height: 10, backgroundColor: COLORES_CINTA[edad.cintaEmbolse] || "#94a3b8" }}
+              title={edad.cintaEmbolse}
+            />
+            {edad.semanaEmbolseCodigo}
+          </span>
+        )}
       </td>
       <td className="text-end py-2">
         <span className="d-inline-flex align-items-center gap-2 justify-content-end w-100">

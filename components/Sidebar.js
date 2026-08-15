@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiActivity, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain, FiFolder, FiCheckSquare, FiClipboard, FiMap, FiPackage } from "react-icons/fi";
+import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiActivity, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain, FiFolder, FiCheckSquare, FiClipboard, FiMap, FiPackage, FiAlertTriangle } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
 import CorbanaLogo from "@/components/CorbanaLogo";
@@ -67,6 +67,7 @@ export default function Sidebar() {
       sanidadVegetal: hasPermission("menu.sanidad_vegetal.evaluaciones"),
       sanidadGraficos: hasPermission("menu.sanidad_vegetal.graficos"),
       laborEvaluacion: hasPermission("menu.sanidad_vegetal.labores"),
+      sanidadAlertas: hasPermission("menu.sanidad_vegetal.alertas"),
 
       precipitacionDiaria: hasPermission("menu.precipitacion_diaria"),
       produccionSemanal: hasPermission("menu.produccion_semanal"),
@@ -398,6 +399,12 @@ export default function Sidebar() {
                   <Link href="/sanidad-vegetal/labores" className={navLinkClass(pathname === "/sanidad-vegetal/labores")}>
                     <GiFarmTractor size={16} />
                     Evaluación de Labores
+                  </Link>
+                )}
+                {perms.sanidadAlertas && (
+                  <Link href="/sanidad-vegetal/alertas" className={navLinkClass(pathname === "/sanidad-vegetal/alertas")}>
+                    <FiAlertTriangle size={16} />
+                    Alertas
                   </Link>
                 )}
               </div>

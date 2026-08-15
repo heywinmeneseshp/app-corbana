@@ -64,6 +64,7 @@ const MENU_TREE = [
       },
       { codigo: "menu.sanidad_vegetal.graficos", nombre: "Gráficos", prefijos: [] },
       { codigo: "menu.sanidad_vegetal.labores", nombre: "Evaluación de Labores", prefijos: ["labor_evaluacion."] },
+      { codigo: "menu.sanidad_vegetal.alertas", nombre: "Alertas", prefijos: [] },
     ],
   },
 ];
