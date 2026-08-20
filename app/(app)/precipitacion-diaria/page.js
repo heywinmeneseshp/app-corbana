@@ -418,66 +418,66 @@ export default function PrecipitacionDiariaPage() {
                       <p className="text-secondary small mb-0">No hay inconsistencias pendientes.</p>
                     ) : (
                       <div className="table-responsive">
-                    <table className="table table-sm align-middle mb-0">
-                      <thead>
-                        <tr className="text-secondary small">
-                          <th>Fecha</th>
-                          <th>Finca</th>
-                          <th>Precipitación Diaria (mm)</th>
-                          <th>Clima (mm)</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {inconsistencias.map((i) => (
-                          <tr key={i.uuid}>
-                            <td>{i.fecha}</td>
-                            <td>{i.fincaNombre}</td>
-                            <td>{i.precipitacionDiaria.mm}</td>
-                            <td>
-                              {i.clima && i.clima.mm !== null ? (
-                                i.clima.mm
-                              ) : (
-                                <span className="text-secondary">
-                                  {i.clima ? "Creado, sin dato aún" : "Sin registro"}
-                                </span>
-                              )}
-                            </td>
-                            <td className="text-end">
-                              {resueltos.has(i.uuid) ? (
-                                <span className="badge bg-success-subtle text-success-emphasis d-inline-flex align-items-center gap-1">
-                                  <FiCheck /> Resuelto
-                                </span>
-                              ) : hasPermission("precipitacion_diaria.sincronizar_precipitaciones") && (
-                                <div className="d-flex gap-1 justify-content-end">
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
-                                    disabled={resolviendo === i.uuid}
-                                    onClick={() => handleResolver(i.uuid, "precipitacion_diaria")}
-                                    title="Tomar el valor de Precipitación Diaria como correcto"
-                                  >
-                                    <FiCheck /> Usar Precipitación Diaria
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
-                                    disabled={resolviendo === i.uuid || !i.clima || i.clima.mm === null}
-                                    onClick={() => handleResolver(i.uuid, "clima")}
-                                    title="Tomar el valor de Clima como correcto"
-                                  >
-                                    <FiCheck /> Usar Clima
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        <table className="table table-sm align-middle mb-0">
+                          <thead>
+                            <tr className="text-secondary small">
+                              <th>Fecha</th>
+                              <th>Finca</th>
+                              <th>Precipitación Diaria (mm)</th>
+                              <th>Clima (mm)</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {inconsistencias.map((i) => (
+                              <tr key={i.uuid}>
+                                <td>{i.fecha}</td>
+                                <td>{i.fincaNombre}</td>
+                                <td>{i.precipitacionDiaria.mm}</td>
+                                <td>
+                                  {i.clima && i.clima.mm !== null ? (
+                                    i.clima.mm
+                                  ) : (
+                                    <span className="text-secondary">
+                                      {i.clima ? "Creado, sin dato aún" : "Sin registro"}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="text-end">
+                                  {resueltos.has(i.uuid) ? (
+                                    <span className="badge bg-success-subtle text-success-emphasis d-inline-flex align-items-center gap-1">
+                                      <FiCheck /> Resuelto
+                                    </span>
+                                  ) : hasPermission("precipitacion_diaria.sincronizar_precipitaciones") && (
+                                    <div className="d-flex gap-1 justify-content-end">
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+                                        disabled={resolviendo === i.uuid}
+                                        onClick={() => handleResolver(i.uuid, "precipitacion_diaria")}
+                                        title="Tomar el valor de Precipitación Diaria como correcto"
+                                      >
+                                        <FiCheck /> Usar Precipitación Diaria
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+                                        disabled={resolviendo === i.uuid || !i.clima || i.clima.mm === null}
+                                        onClick={() => handleResolver(i.uuid, "clima")}
+                                        title="Tomar el valor de Clima como correcto"
+                                      >
+                                        <FiCheck /> Usar Clima
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                )}
-                </div>
                 )}
               </div>
             </div>
