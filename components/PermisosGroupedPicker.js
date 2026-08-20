@@ -17,6 +17,7 @@ const MENU_TREE = [
     nombre: "Maestros",
     submenus: [
       { codigo: "menu.maestros.fincas", nombre: "Fincas", prefijos: ["finca.", "lote.", "planta.", "categoria_planta."] },
+      { codigo: "menu.maestros.productos", nombre: "Productos", prefijos: ["producto."] },
       { codigo: "menu.maestros.grupos_finca", nombre: "Grupos de Finca", prefijos: ["grupo_finca."] },
       { codigo: "menu.maestros.area_lotes", nombre: "Área de Lotes", prefijos: ["area_lote."] },
       { codigo: "menu.maestros.usuarios", nombre: "Usuarios", prefijos: ["usuarios."] },
@@ -27,8 +28,8 @@ const MENU_TREE = [
       { codigo: "menu.maestros.motivos_recuse", nombre: "Motivos de Recuse", prefijos: ["motivo_recuse."] },
       { codigo: "menu.maestros.categorias_labor", nombre: "Categorías de Labor", prefijos: ["categoria_labor."] },
       { codigo: "menu.maestros.labores", nombre: "Labores", prefijos: ["labor."] },
+      { codigo: "menu.maestros.colaboradores", nombre: "Colaboradores", prefijos: ["colaborador."] },
       { codigo: "menu.maestros.estadios_sigatoka", nombre: "Estadios de Sigatoka", prefijos: ["estadio_sigatoka."] },
-      { codigo: "menu.maestros.version_app", nombre: "Versión App Móvil", prefijos: [] },
     ],
   },
   {
@@ -76,7 +77,7 @@ const ITEMS_PLANOS = [
   { codigo: "menu.precipitacion_diaria", nombre: "Precipitación Diaria", prefijos: ["precipitacion_diaria."] },
   { codigo: "menu.produccion_semanal", nombre: "Producción Semanal", prefijos: ["produccion."] },
   { codigo: "menu.pronostico", nombre: "Pronóstico de Cajas", prefijos: ["pronostico."] },
-  { codigo: "menu.cargue_masivo", nombre: "Cargue Masivo", prefijos: ["clima.crear"] },
+  { codigo: "menu.programacion_corte", nombre: "Programación de Corte", prefijos: ["programacion_corte."] },
   { codigo: "menu.reportes", nombre: "Reportes", prefijos: [] },
 ];
 

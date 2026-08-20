@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { FiUploadCloud, FiDownload, FiArrowRight, FiAlertTriangle, FiX } from "react-icons/fi";
 import { apiUploadConProgreso, apiFetch } from "@/lib/api";
-import RequirePermission from "@/components/RequirePermission";
+import RequireAdmin from "@/components/RequireAdmin";
 import { hasPermission } from "@/lib/auth";
 
 export default function CargueMasivoPage() {
   return (
-    <RequirePermission code="menu.cargue_masivo">
+    <RequireAdmin>
     <div className="p-4 p-md-5">
       <div className="mb-4">
         <h1 className="fw-bold h3 mb-1">Cargue Masivo</h1>
@@ -153,6 +153,27 @@ export default function CargueMasivoPage() {
           />
         )}
 
+        {hasPermission("programacion_corte.crear") && (
+          <BulkUploadCard
+            title="Cargue masivo de Programación de Corte"
+            description="Columnas esperadas: fecha (AAAA-MM-DD), fincaCodigo, semana (código de semana, ej: S30-2026), producto, cajasProgramadas. Si ya existe un registro para la misma fecha, finca y producto, se omite. Máximo 15,000 filas por archivo — si tenés más, dividilo por semana y subí cada parte por separado."
+            endpoint="/programacion-corte/bulk-upload"
+            templateHeaders={["fecha", "fincaCodigo", "semana", "producto", "cajasProgramadas"]}
+            templateExampleRow={["2026-04-20", "525", "S17-2026", "Banano", "1500"]}
+            templateFilename="plantilla_programacion_corte.xlsx"
+            chunkSize={10000}
+            renderResult={(r) => (
+              <>
+                <p className="mb-1">
+                  {r.totalFilas} fila(s) procesadas: <strong>{r.creados}</strong> registro(s) creado(s)
+                  {r.saltados > 0 && <>, <strong>{r.saltados}</strong> omitido(s) por duplicado</>}.
+                </p>
+                <ErrorList errores={r.errores} />
+              </>
+            )}
+          />
+        )}
+
         {hasPermission("clima.crear") && (
           <BulkUploadCard
             title="Cargue masivo de Clima"
@@ -175,7 +196,7 @@ export default function CargueMasivoPage() {
         )}
       </div>
     </div>
-    </RequirePermission>
+    </RequireAdmin>
   );
 }
 

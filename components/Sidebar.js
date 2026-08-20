@@ -1,22 +1,164 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FiHome, FiLayers, FiUploadCloud, FiBarChart2, FiTrendingUp, FiActivity, FiLogOut, FiChevronRight, FiChevronLeft, FiChevronsRight, FiUsers, FiShield, FiCalendar, FiList, FiUser, FiSmartphone, FiCloudRain, FiFolder, FiCheckSquare, FiClipboard, FiMap, FiPackage, FiAlertTriangle } from "react-icons/fi";
+import {
+  FiHome,
+  FiLayers,
+  FiUploadCloud,
+  FiBarChart2,
+  FiTrendingUp,
+  FiActivity,
+  FiLogOut,
+  FiChevronRight,
+  FiChevronLeft,
+  FiChevronsRight,
+  FiUsers,
+  FiShield,
+  FiCalendar,
+  FiList,
+  FiUser,
+  FiCloudRain,
+  FiFolder,
+  FiCheckSquare,
+  FiClipboard,
+  FiMap,
+  FiPackage,
+  FiAlertTriangle,
+  FiSearch,
+  FiX,
+  FiSettings,
+  FiShare2,
+  FiSmartphone,
+  FiDatabase,
+  FiBox,
+} from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
+import { esAdministrador } from "@/lib/laborEstados";
 import CorbanaLogo from "@/components/CorbanaLogo";
+
+// Estructura del menú como datos, no JSX repetido — permite ordenar los
+// submenús alfabéticamente y filtrarlos por el buscador con la misma lógica
+// en vez de cuatro bloques de render casi idénticos. El orden de las
+// SECCIONES de nivel 1 (Maestros, Racimos, ...) se respeta tal cual está acá
+// (no se ordena solo); lo que pidió el usuario es que los ITEMS DENTRO de
+// cada sección salgan alfabéticos, ya que van creciendo con el tiempo.
+const NAV = [
+  {
+    type: "section",
+    key: "maestros",
+    label: "Maestros",
+    icon: FiLayers,
+    permKey: "maestrosMenu",
+    pathPrefix: "/maestros",
+    items: [
+      { key: "fincas", label: "Fincas", icon: GiFarmTractor, permKey: "fincas", href: "/maestros/fincas" },
+      { key: "productos", label: "Productos", icon: FiBox, permKey: "productos", href: "/maestros/productos" },
+      { key: "gruposFinca", label: "Grupos de Finca", icon: GiFarmTractor, permKey: "gruposFinca", href: "/maestros/grupos-finca" },
+      { key: "areaLoteConfig", label: "Área de Lotes", icon: FiMap, permKey: "areaLoteConfig", href: "/maestros/area-lotes-config" },
+      { key: "usuarios", label: "Usuarios", icon: FiUsers, permKey: "usuarios", href: "/maestros/usuarios" },
+      { key: "roles", label: "Roles", icon: FiShield, permKey: "roles", href: "/maestros/roles" },
+      { key: "semanas", label: "Semanas", icon: FiCalendar, permKey: "semanas", href: "/maestros/semanas" },
+      { key: "calendario", label: "Calendario", icon: FiCalendar, permKey: "calendario", href: "/maestros/calendario" },
+      { key: "motivoRepique", label: "Motivos de Repique", icon: GiCancel, permKey: "motivoRepique", href: "/maestros/motivos-repique" },
+      { key: "motivoRecuse", label: "Motivos de Recuse", icon: GiFruitBowl, permKey: "motivoRecuse", href: "/maestros/motivos-recuse" },
+      { key: "categoriaLabor", label: "Categorías de Labor", icon: FiFolder, permKey: "categoriaLabor", href: "/maestros/categorias-labor" },
+      { key: "labor", label: "Labores", icon: FiCheckSquare, permKey: "labor", href: "/maestros/labores" },
+      { key: "colaboradores", label: "Colaboradores", icon: FiUsers, permKey: "colaboradores", href: "/maestros/colaboradores" },
+      { key: "estadioSigatoka", label: "Estadios de Sigatoka", icon: FiTrendingUp, permKey: "estadioSigatoka", href: "/maestros/estadios-sigatoka" },
+    ],
+  },
+  {
+    type: "section",
+    key: "racimos",
+    label: "Racimos",
+    icon: GiBananaBunch,
+    permKey: "racimosMenu",
+    pathPrefix: "/racimos",
+    items: [
+      { key: "racimoMovimientoVer", label: "Movimientos", icon: FiList, permKey: "racimoMovimientoVer", href: "/racimos/movimientos" },
+      { key: "racimoMovimientoCrear1", label: "Registrar Embolse", icon: GiBananaBunch, permKey: "racimoMovimientoCrear", href: "/racimos/embolses" },
+      { key: "racimoMovimientoCrear2", label: "Registrar Repiques", icon: GiCancel, permKey: "racimoMovimientoCrear", href: "/racimos/repiques" },
+      { key: "racimoMovimientoCrear3", label: "Registrar Corte", icon: GiScissors, permKey: "racimoMovimientoCrear", href: "/racimos/corte" },
+      { key: "racimoSaldosLotesCintas", label: "Saldos × Lotes y Cintas", icon: FiBarChart2, permKey: "racimoSaldosLotesCintas", href: "/racimos/saldos-lotes-cintas" },
+      { key: "racimoReporteEmbolses", label: "Reporte de Embolses", icon: FiTrendingUp, permKey: "racimoReporteEmbolses", href: "/racimos/reporte-embolses" },
+    ],
+  },
+  {
+    type: "section",
+    key: "labores",
+    label: "Labores",
+    icon: FiClipboard,
+    permKey: "laboresMenu",
+    pathPrefix: "/calendario-labores",
+    altPathPrefix: "/labores",
+    items: [
+      { key: "calendarioLabores", label: "Calendario de Labores", icon: FiCalendar, permKey: "calendarioLabores", href: "/calendario-labores" },
+      { key: "estadosLabores", label: "Estados de Labores", icon: FiCheckSquare, permKey: "estadosLabores", href: "/labores/estados" },
+    ],
+  },
+  { type: "link", key: "precipitacionDiaria", label: "Precipitación Diaria", icon: FiCloudRain, permKey: "precipitacionDiaria", href: "/precipitacion-diaria" },
+  { type: "link", key: "produccionSemanal", label: "Producción Semanal", icon: FiPackage, permKey: "produccionSemanal", href: "/produccion-semanal" },
+  { type: "link", key: "pronostico", label: "Pronóstico de Cajas", icon: FiActivity, permKey: "pronostico", href: "/pronostico" },
+  {
+    type: "section",
+    key: "sanidadVegetal",
+    label: "Sanidad Vegetal",
+    icon: FiTrendingUp,
+    permKey: "sanidadVegetalMenu",
+    pathPrefix: "/sanidad-vegetal",
+    items: [
+      { key: "sanidadVegetal", label: "Evaluaciones", icon: FiList, permKey: "sanidadVegetal", href: "/sanidad-vegetal/evaluaciones" },
+      { key: "sanidadGraficos", label: "Gráficos", icon: FiBarChart2, permKey: "sanidadGraficos", href: "/sanidad-vegetal/graficos" },
+      { key: "laborEvaluacion", label: "Evaluación de Labores", icon: GiFarmTractor, permKey: "laborEvaluacion", href: "/sanidad-vegetal/labores" },
+      { key: "sanidadAlertas", label: "Alertas", icon: FiAlertTriangle, permKey: "sanidadAlertas", href: "/sanidad-vegetal/alertas" },
+    ],
+  },
+  { type: "link", key: "programacionCorte", label: "Programación de Corte", icon: GiScissors, permKey: "programacionCorte", href: "/programacion-corte" },
+  { type: "link", key: "reportes", label: "Reportes", icon: FiBarChart2, permKey: null, href: "/reportes" },
+  {
+    type: "section",
+    key: "configuracion",
+    label: "Configuración",
+    icon: FiSettings,
+    permKey: "configuracionMenu",
+    pathPrefix: "/configuracion",
+    items: [
+      { key: "configLogistica", label: "Conexión con Logística", icon: FiShare2, permKey: "configuracion", href: "/configuracion/logistica" },
+      { key: "configVersionApp", label: "Versión App Móvil", icon: FiSmartphone, permKey: "configuracion", href: "/configuracion/version-app" },
+      { key: "configCargue", label: "Cargue Masivo", icon: FiUploadCloud, permKey: "configuracion", href: "/configuracion/cargue" },
+      { key: "configBackup", label: "Base de Datos", icon: FiDatabase, permKey: "configuracion", href: "/configuracion/backup" },
+      { key: "configConversion", label: "Tasa de Conversión", icon: FiPackage, permKey: "configuracion", href: "/configuracion/conversion" },
+    ],
+  },
+];
+
+// Quita tildes (vía NFD + rango unicode de marcas diacríticas) para que
+// buscar "grafico" encuentre "Gráficos" sin que el usuario tenga que
+// escribir la tilde.
+const DIACRITICOS = /[̀-ͯ]/g;
+const normalizar = (s) =>
+  (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(DIACRITICOS, "");
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [maestrosOpen, setMaestrosOpen] = useState(pathname.startsWith("/maestros"));
-  const [racimosOpen, setRacimosOpen] = useState(pathname.startsWith("/racimos"));
-  const [laboresOpen, setLaboresOpen] = useState(pathname.startsWith("/calendario-labores") || pathname.startsWith("/labores"));
-  const [sanidadOpen, setSanidadOpen] = useState(pathname.startsWith("/sanidad-vegetal"));
+  const [openSections, setOpenSections] = useState(() => {
+    const inicial = {};
+    for (const entry of NAV) {
+      if (entry.type !== "section") continue;
+      inicial[entry.key] = pathname.startsWith(entry.pathPrefix) || (entry.altPathPrefix && pathname.startsWith(entry.altPathPrefix));
+    }
+    return inicial;
+  });
   const [collapsed, setCollapsed] = useState(false);
   const [perms, setPerms] = useState(null); // null hasta montar en cliente, evita parpadeo/mismatch
+  const [busqueda, setBusqueda] = useState("");
 
   useEffect(() => {
     const saved = localStorage.getItem("corbana_sidebar_collapsed");
@@ -40,6 +182,7 @@ export default function Sidebar() {
       // permissions.constants.js.
       maestrosMenu: hasPermission("menu.maestros"),
       fincas: hasPermission("menu.maestros.fincas"),
+      productos: hasPermission("menu.maestros.productos"),
       gruposFinca: hasPermission("menu.maestros.grupos_finca"),
       areaLoteConfig: hasPermission("menu.maestros.area_lotes"),
       usuarios: hasPermission("menu.maestros.usuarios"),
@@ -50,8 +193,13 @@ export default function Sidebar() {
       motivoRecuse: hasPermission("menu.maestros.motivos_recuse"),
       categoriaLabor: hasPermission("menu.maestros.categorias_labor"),
       labor: hasPermission("menu.maestros.labores"),
+      colaboradores: hasPermission("menu.maestros.colaboradores"),
       estadioSigatoka: hasPermission("menu.maestros.estadios_sigatoka"),
-      versionApp: hasPermission("menu.maestros.version_app"),
+      // Sin código de permiso propio a propósito: Configuración es solo
+      // para el rol Administrador, nunca asignable a otros roles (ver
+      // components/RequireAdmin.js y requireAdmin.middleware.js).
+      configuracionMenu: esAdministrador(),
+      configuracion: esAdministrador(),
 
       racimosMenu: hasPermission("menu.racimos"),
       racimoMovimientoVer: hasPermission("menu.racimos.movimientos"),
@@ -72,7 +220,7 @@ export default function Sidebar() {
       precipitacionDiaria: hasPermission("menu.precipitacion_diaria"),
       produccionSemanal: hasPermission("menu.produccion_semanal"),
       pronostico: hasPermission("menu.pronostico"),
-      cargue: hasPermission("menu.cargue_masivo"),
+      programacionCorte: hasPermission("menu.programacion_corte"),
     });
   }, []);
 
@@ -88,11 +236,50 @@ export default function Sidebar() {
 
   const width = collapsed ? "4.25rem" : "16rem";
 
+  // Cada sección visible, con sus items ya filtrados por permiso y
+  // ORDENADOS ALFABÉTICAMENTE (localeCompare en español, para que las
+  // tildes ordenen bien) — antes salían en el orden fijo en que se habían
+  // ido agregando al código, cada vez más difícil de ubicar a simple vista
+  // a medida que crecen las opciones.
+  const secciones = useMemo(() => {
+    if (!perms) return [];
+    return NAV.map((entry) => {
+      if (entry.type === "link") {
+        return { ...entry, visible: entry.permKey === null || perms[entry.permKey] };
+      }
+      const items = entry.items
+        .filter((item) => perms[item.permKey])
+        .sort((a, b) => a.label.localeCompare(b.label, "es"));
+      return { ...entry, items, visible: perms[entry.permKey] && items.length > 0 };
+    });
+  }, [perms]);
+
+  // Con texto en el buscador: se filtra cada sección a solo los items que
+  // matchean (o, si el nombre de la SECCIÓN matchea, se muestran todos sus
+  // items ya visibles) y se fuerzan abiertas las que tengan algún
+  // resultado — sin esto, buscar "roles" no serviría de nada si "Maestros"
+  // estaba plegado.
+  const query = normalizar(busqueda.trim());
+  const resultados = useMemo(() => {
+    if (!query) return secciones;
+    return secciones
+      .map((entry) => {
+        if (entry.type === "link") {
+          return { ...entry, visible: entry.visible && normalizar(entry.label).includes(query) };
+        }
+        const seccionMatch = normalizar(entry.label).includes(query);
+        const items = seccionMatch ? entry.items : entry.items.filter((item) => normalizar(item.label).includes(query));
+        return { ...entry, items, visible: entry.visible && items.length > 0 };
+      })
+      .filter((entry) => entry.visible);
+  }, [secciones, query]);
+
   if (!perms) return <aside className="flex-shrink-0" style={{ width, backgroundColor: "var(--brand-900)" }} />;
 
-  const maestrosVisible = perms.maestrosMenu;
-  const laboresVisible = perms.laboresMenu;
   const label = (text) => (!collapsed ? text : null);
+  const buscando = query.length > 0;
+
+  const toggleSection = (key) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <aside
@@ -126,306 +313,95 @@ export default function Sidebar() {
         </button>
       )}
 
+      {!collapsed && (
+        <div className="px-3 mt-1">
+          <div className="position-relative">
+            <FiSearch
+              size={14}
+              className="position-absolute text-white-50"
+              style={{ top: "50%", left: "0.75rem", transform: "translateY(-50%)" }}
+            />
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar en el menú..."
+              className="sidebar-search-input form-control form-control-sm rounded-3 bg-transparent text-white border-white border-opacity-25"
+              style={{ paddingLeft: "2rem", paddingRight: busqueda ? "2rem" : undefined }}
+            />
+            {busqueda && (
+              <button
+                type="button"
+                onClick={() => setBusqueda("")}
+                className="btn btn-sm p-0 border-0 position-absolute text-white-50"
+                style={{ top: "50%", right: "0.5rem", transform: "translateY(-50%)" }}
+                title="Limpiar búsqueda"
+              >
+                <FiX size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <nav className="flex-grow-1 px-3 d-flex flex-column gap-1 mt-2 overflow-y-auto">
-        <Link href="/" className={navLinkClass(pathname === "/")} title="Inicio">
-          <FiHome size={18} />
-          {label("Inicio")}
-        </Link>
-
-        {maestrosVisible && (
-          <>
-            <button
-              type="button"
-              onClick={() => setMaestrosOpen((v) => !v)}
-              className={`d-flex align-items-center justify-content-between gap-2 px-3 py-2 rounded-3 border-0 bg-transparent small ${
-                pathname.startsWith("/maestros") ? "text-white fw-medium" : "text-white-50"
-              }`}
-              title="Maestros"
-            >
-              <span className="d-flex align-items-center gap-2">
-                <FiLayers size={18} />
-                {label("Maestros")}
-              </span>
-              {!collapsed && (
-                <FiChevronRight style={{ transform: maestrosOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
-              )}
-            </button>
-
-            {maestrosOpen && !collapsed && (
-              <div className="ps-4 d-flex flex-column gap-1">
-                {perms.fincas && (
-                  <Link href="/maestros/fincas" className={navLinkClass(pathname === "/maestros/fincas")}>
-                    <GiFarmTractor size={16} />
-                    Fincas
-                  </Link>
-                )}
-                {perms.gruposFinca && (
-                  <Link href="/maestros/grupos-finca" className={navLinkClass(pathname === "/maestros/grupos-finca")}>
-                    <GiFarmTractor size={16} />
-                    Grupos de Finca
-                  </Link>
-                )}
-                {perms.areaLoteConfig && (
-                  <Link href="/maestros/area-lotes-config" className={navLinkClass(pathname === "/maestros/area-lotes-config")}>
-                    <FiMap size={16} />
-                    Área de Lotes
-                  </Link>
-                )}
-                {perms.usuarios && (
-                  <Link href="/maestros/usuarios" className={navLinkClass(pathname === "/maestros/usuarios")}>
-                    <FiUsers size={16} />
-                    Usuarios
-                  </Link>
-                )}
-                {perms.roles && (
-                  <Link href="/maestros/roles" className={navLinkClass(pathname === "/maestros/roles")}>
-                    <FiShield size={16} />
-                    Roles
-                  </Link>
-                )}
-                {perms.semanas && (
-                  <Link href="/maestros/semanas" className={navLinkClass(pathname === "/maestros/semanas")}>
-                    <FiCalendar size={16} />
-                    Semanas
-                  </Link>
-                )}
-                {perms.calendario && (
-                  <Link href="/maestros/calendario" className={navLinkClass(pathname === "/maestros/calendario")}>
-                    <FiCalendar size={16} />
-                    Calendario
-                  </Link>
-                )}
-                {perms.motivoRepique && (
-                  <Link href="/maestros/motivos-repique" className={navLinkClass(pathname === "/maestros/motivos-repique")}>
-                    <GiCancel size={16} />
-                    Motivos de Repique
-                  </Link>
-                )}
-                {perms.motivoRecuse && (
-                  <Link href="/maestros/motivos-recuse" className={navLinkClass(pathname === "/maestros/motivos-recuse")}>
-                    <GiFruitBowl size={16} />
-                    Motivos de Recuse
-                  </Link>
-                )}
-                {perms.categoriaLabor && (
-                  <Link href="/maestros/categorias-labor" className={navLinkClass(pathname === "/maestros/categorias-labor")}>
-                    <FiFolder size={16} />
-                    Categorías de Labor
-                  </Link>
-                )}
-                {perms.labor && (
-                  <Link href="/maestros/labores" className={navLinkClass(pathname === "/maestros/labores")}>
-                    <FiCheckSquare size={16} />
-                    Labores
-                  </Link>
-                )}
-                {perms.estadioSigatoka && (
-                  <Link href="/maestros/estadios-sigatoka" className={navLinkClass(pathname === "/maestros/estadios-sigatoka")}>
-                    <FiTrendingUp size={16} />
-                    Estadios de Sigatoka
-                  </Link>
-                )}
-                {perms.versionApp && (
-                  <Link href="/maestros/version-app" className={navLinkClass(pathname === "/maestros/version-app")}>
-                    <FiSmartphone size={16} />
-                    Versión App Móvil
-                  </Link>
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {perms.racimosMenu && (
-          <>
-            <button
-              type="button"
-              onClick={() => setRacimosOpen((v) => !v)}
-              className={`d-flex align-items-center justify-content-between gap-2 px-3 py-2 rounded-3 border-0 bg-transparent small ${
-                pathname.startsWith("/racimos") ? "text-white fw-medium" : "text-white-50"
-              }`}
-              title="Racimos"
-            >
-              <span className="d-flex align-items-center gap-2">
-                <GiBananaBunch size={18} />
-                {label("Racimos")}
-              </span>
-              {!collapsed && (
-                <FiChevronRight style={{ transform: racimosOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
-              )}
-            </button>
-
-            {racimosOpen && !collapsed && (
-              <div className="ps-4 d-flex flex-column gap-1">
-                {perms.racimoMovimientoVer && (
-                  <Link href="/racimos/movimientos" className={navLinkClass(pathname === "/racimos/movimientos")}>
-                    <FiList size={16} />
-                    Movimientos
-                  </Link>
-                )}
-                {perms.racimoMovimientoCrear && (
-                  <>
-                    <Link href="/racimos/embolses" className={navLinkClass(pathname === "/racimos/embolses")}>
-                      <GiBananaBunch size={16} />
-                      Registrar Embolse
-                    </Link>
-                    <Link href="/racimos/repiques" className={navLinkClass(pathname === "/racimos/repiques")}>
-                      <GiCancel size={16} />
-                      Registrar Repiques
-                    </Link>
-                    <Link href="/racimos/corte" className={navLinkClass(pathname === "/racimos/corte")}>
-                      <GiScissors size={16} />
-                      Registrar Corte
-                    </Link>
-                  </>
-                )}
-                {perms.racimoSaldosLotesCintas && (
-                  <Link href="/racimos/saldos-lotes-cintas" className={navLinkClass(pathname === "/racimos/saldos-lotes-cintas")}>
-                    <FiBarChart2 size={16} />
-                    Saldos × Lotes y Cintas
-                  </Link>
-                )}
-                {perms.racimoReporteEmbolses && (
-                  <Link href="/racimos/reporte-embolses" className={navLinkClass(pathname === "/racimos/reporte-embolses")}>
-                    <FiTrendingUp size={16} />
-                    Reporte de Embolses
-                  </Link>
-                )}
-              </div>
-            )}
-          </>
-        )}
-        {laboresVisible && (
-          <>
-            <button
-              type="button"
-              onClick={() => setLaboresOpen((v) => !v)}
-              className={`d-flex align-items-center justify-content-between gap-2 px-3 py-2 rounded-3 border-0 bg-transparent small ${
-                pathname.startsWith("/calendario-labores") || pathname.startsWith("/labores") ? "text-white fw-medium" : "text-white-50"
-              }`}
-              title="Labores"
-            >
-              <span className="d-flex align-items-center gap-2">
-                <FiClipboard size={18} />
-                {label("Labores")}
-              </span>
-              {!collapsed && (
-                <FiChevronRight style={{ transform: laboresOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
-              )}
-            </button>
-
-            {laboresOpen && !collapsed && (
-              <div className="ps-4 d-flex flex-column gap-1">
-                {perms.calendarioLabores && (
-                  <Link href="/calendario-labores" className={navLinkClass(pathname.startsWith("/calendario-labores"))}>
-                    <FiCalendar size={16} />
-                    Calendario de Labores
-                  </Link>
-                )}
-                {perms.estadosLabores && (
-                  <Link href="/labores/estados" className={navLinkClass(pathname === "/labores/estados")}>
-                    <FiCheckSquare size={16} />
-                    Estados de Labores
-                  </Link>
-                )}
-              </div>
-            )}
-          </>
-        )}
-        {perms.precipitacionDiaria && (
-          <Link
-            href="/precipitacion-diaria"
-            className={navLinkClass(pathname.startsWith("/precipitacion-diaria"))}
-            title="Precipitación Diaria"
-          >
-            <FiCloudRain size={18} />
-            {label("Precipitación Diaria")}
+        {(!buscando || normalizar("Inicio").includes(query)) && (
+          <Link href="/" className={navLinkClass(pathname === "/")} title="Inicio">
+            <FiHome size={18} />
+            {label("Inicio")}
           </Link>
         )}
-        {perms.produccionSemanal && (
-          <Link
-            href="/produccion-semanal"
-            className={navLinkClass(pathname.startsWith("/produccion-semanal"))}
-            title="Producción Semanal"
-          >
-            <FiPackage size={18} />
-            {label("Producción Semanal")}
-          </Link>
-        )}
-        {perms.pronostico && (
-          <Link
-            href="/pronostico"
-            className={navLinkClass(pathname.startsWith("/pronostico"))}
-            title="Pronóstico de Cajas"
-          >
-            <FiActivity size={18} />
-            {label("Pronóstico de Cajas")}
-          </Link>
-        )}
-        {perms.sanidadVegetalMenu && (
-          <>
-            <button
-              type="button"
-              onClick={() => setSanidadOpen((v) => !v)}
-              className={`d-flex align-items-center justify-content-between gap-2 px-3 py-2 rounded-3 border-0 bg-transparent small ${
-                pathname.startsWith("/sanidad-vegetal") ? "text-white fw-medium" : "text-white-50"
-              }`}
-              title="Sanidad Vegetal"
-            >
-              <span className="d-flex align-items-center gap-2">
-                <FiTrendingUp size={18} />
-                {label("Sanidad Vegetal")}
-              </span>
-              {!collapsed && (
-                <FiChevronRight style={{ transform: sanidadOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+
+        {resultados.map((entry) => {
+          if (entry.type === "link") {
+            const Icon = entry.icon;
+            return (
+              <Link key={entry.key} href={entry.href} className={navLinkClass(pathname === entry.href || pathname.startsWith(`${entry.href}/`))} title={entry.label}>
+                <Icon size={18} />
+                {label(entry.label)}
+              </Link>
+            );
+          }
+
+          const Icon = entry.icon;
+          const abierta = buscando || openSections[entry.key];
+          const activa = pathname.startsWith(entry.pathPrefix) || (entry.altPathPrefix && pathname.startsWith(entry.altPathPrefix));
+
+          return (
+            <div key={entry.key}>
+              <button
+                type="button"
+                onClick={() => toggleSection(entry.key)}
+                className={`d-flex align-items-center justify-content-between gap-2 px-3 py-2 rounded-3 border-0 bg-transparent small w-100 ${
+                  activa ? "text-white fw-medium" : "text-white-50"
+                }`}
+                title={entry.label}
+              >
+                <span className="d-flex align-items-center gap-2">
+                  <Icon size={18} />
+                  {label(entry.label)}
+                </span>
+                {!collapsed && (
+                  <FiChevronRight style={{ transform: abierta ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+                )}
+              </button>
+
+              {abierta && !collapsed && (
+                <div className="ps-4 d-flex flex-column gap-1">
+                  {entry.items.map((item) => {
+                    const ItemIcon = item.icon;
+                    return (
+                      <Link key={item.key} href={item.href} className={navLinkClass(pathname === item.href || pathname.startsWith(`${item.href}/`))}>
+                        <ItemIcon size={16} />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
               )}
-            </button>
-
-            {sanidadOpen && !collapsed && (
-              <div className="ps-4 d-flex flex-column gap-1">
-                {perms.sanidadVegetal && (
-                  <Link href="/sanidad-vegetal/evaluaciones" className={navLinkClass(pathname === "/sanidad-vegetal/evaluaciones")}>
-                    <FiList size={16} />
-                    Evaluaciones
-                  </Link>
-                )}
-                {perms.sanidadGraficos && (
-                  <Link href="/sanidad-vegetal/graficos" className={navLinkClass(pathname === "/sanidad-vegetal/graficos")}>
-                    <FiBarChart2 size={16} />
-                    Gráficos
-                  </Link>
-                )}
-                {perms.laborEvaluacion && (
-                  <Link href="/sanidad-vegetal/labores" className={navLinkClass(pathname === "/sanidad-vegetal/labores")}>
-                    <GiFarmTractor size={16} />
-                    Evaluación de Labores
-                  </Link>
-                )}
-                {perms.sanidadAlertas && (
-                  <Link href="/sanidad-vegetal/alertas" className={navLinkClass(pathname === "/sanidad-vegetal/alertas")}>
-                    <FiAlertTriangle size={16} />
-                    Alertas
-                  </Link>
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {perms.cargue && (
-          <Link href="/cargue" className={navLinkClass(pathname === "/cargue")} title="Cargue Masivo">
-            <FiUploadCloud size={18} />
-            {label("Cargue Masivo")}
-          </Link>
-        )}
-        <Link
-          href="/reportes"
-          className={navLinkClass(pathname === "/reportes")}
-          title="Reportes"
-        >
-          <FiBarChart2 size={18} />
-          {label("Reportes")}
-        </Link>
+            </div>
+          );
+        })}
       </nav>
 
       <div className="px-3 pb-4 d-flex flex-column gap-1 flex-shrink-0">
@@ -443,6 +419,18 @@ export default function Sidebar() {
           {label("Cerrar Sesión")}
         </button>
       </div>
+
+      <style jsx>{`
+        .sidebar-search-input::placeholder {
+          color: rgba(255, 255, 255, 0.6);
+        }
+        .sidebar-search-input:focus {
+          color: #fff;
+          background-color: rgba(255, 255, 255, 0.08);
+          border-color: rgba(255, 255, 255, 0.5);
+          box-shadow: none;
+        }
+      `}</style>
     </aside>
   );
 }

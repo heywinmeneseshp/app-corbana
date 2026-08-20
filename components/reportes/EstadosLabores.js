@@ -180,7 +180,7 @@ export default function EstadosLabores() {
                   <th>Categoría</th>
                   <th>Ejecutada</th>
                   <th>Retraso</th>
-                  <th>Responsable</th>
+                  <th>Colaboradores</th>
                   <th>Estado</th>
                   <th>Serie</th>
                 </tr>
@@ -211,7 +211,7 @@ export default function EstadosLabores() {
                     <td className="text-nowrap">
                       {diasRetraso(oc) > 0 ? `${diasRetraso(oc)} día${diasRetraso(oc) === 1 ? "" : "s"}` : "—"}
                     </td>
-                    <td>{oc.responsable?.nombre ? `${oc.responsable.nombre} ${oc.responsable.apellido || ""}` : "—"}</td>
+                    <td>{oc.numeroColaboradores ?? "—"}</td>
                     <td><EstadoBadge oc={oc} /></td>
                     <td>{oc.serie?.esRecurrente ? "Recurrente" : "Puntual"}</td>
                   </tr>

@@ -45,7 +45,6 @@ export default function CalendarioLaboresPage() {
   const [ocurrencias, setOcurrencias] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [labores, setLabores] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -59,7 +58,7 @@ export default function CalendarioLaboresPage() {
     (async () => {
       try {
         const [{ items: fincasData }, { items: categoriasData }, { items: laboresData }] = await Promise.all([
-          apiFetch("/fincas?limit=100"),
+          apiFetch("/fincas?limit=100&soloOperativas=true"),
           apiFetch("/categorias-labor?limit=100"),
           apiFetch("/labores?limit=100"),
         ]);
@@ -69,12 +68,6 @@ export default function CalendarioLaboresPage() {
         if (fincasData.length > 0) setFincaUuid((prev) => prev || fincasData[0].uuid);
       } catch (err) {
         setError(err.message);
-      }
-      try {
-        const { items: usuariosData } = await apiFetch("/users?limit=100");
-        setUsuarios(usuariosData);
-      } catch {
-        setUsuarios([]); // sin permiso para listar usuarios: el campo Responsable queda oculto
       }
     })();
   }, []);
@@ -138,7 +131,6 @@ export default function CalendarioLaboresPage() {
       if (filtros.loteUuids.length && !filtros.loteUuids.includes(oc.lote?.uuid)) return false;
       if (filtros.categoriaUuids.length && !filtros.categoriaUuids.includes(oc.labor?.categoria?.uuid)) return false;
       if (filtros.laborUuids.length && !filtros.laborUuids.includes(oc.labor?.uuid)) return false;
-      if (filtros.responsableUuids.length && !filtros.responsableUuids.includes(oc.responsable?.uuid)) return false;
       if (filtros.estado === "VENCIDA") return oc.estado === "PROGRAMADA" && oc.fecha < hoyIso;
       if (filtros.estado === "PROGRAMADA") return oc.estado === "PROGRAMADA" && oc.fecha >= hoyIso;
       if (filtros.estado !== "TODAS" && oc.estado !== filtros.estado) return false;
@@ -304,7 +296,6 @@ export default function CalendarioLaboresPage() {
             fincaInicialUuid={fincaUuid}
             labores={labores}
             categorias={categorias}
-            usuarios={usuarios}
             fechaInicial={crearPrefill.fechaInicio}
             loteInicialUuid={crearPrefill.loteUuid}
             horaInicial={crearPrefill.hora}
@@ -325,7 +316,6 @@ export default function CalendarioLaboresPage() {
         {ocurrenciaSeleccionada && (
           <EditLaborDialog
             ocurrencia={ocurrenciaSeleccionada}
-            usuarios={usuarios}
             onClose={() => setOcurrenciaSeleccionada(null)}
             onChanged={() => {
               setOcurrenciaSeleccionada(null);
@@ -339,7 +329,6 @@ export default function CalendarioLaboresPage() {
             lotes={lotes}
             categorias={categorias}
             labores={labores}
-            usuarios={usuarios}
             filtros={filtros}
             onChange={setFiltros}
             onClose={() => setFiltrosAbiertos(false)}

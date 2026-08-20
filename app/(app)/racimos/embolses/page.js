@@ -43,7 +43,7 @@ export default function RegistrarEmbolsePage() {
       try {
         const year = new Date().getFullYear();
         const [fincasRes, semanasRes] = await Promise.all([
-          apiFetch("/fincas?limit=100"),
+          apiFetch("/fincas?limit=100&soloOperativas=true"),
           apiFetch(`/semanas?limit=55&anio=${year}`),
         ]);
         setFincas(fincasRes.items);

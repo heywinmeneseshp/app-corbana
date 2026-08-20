@@ -54,7 +54,7 @@ export default function RegistrarRepiquesPage() {
       try {
         const year = new Date().getFullYear();
         const [fincasRes, semanasRes, motivosRes] = await Promise.all([
-          apiFetch("/fincas?limit=100"),
+          apiFetch("/fincas?limit=100&soloOperativas=true"),
           apiFetch(`/semanas?limit=55&anio=${year}`),
           apiFetch("/motivos-repique?limit=100"),
         ]);

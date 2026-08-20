@@ -4,7 +4,6 @@ import { Fragment, useEffect, useState } from "react";
 import {
   FiPlus,
   FiRefreshCw,
-  FiSettings,
   FiSearch,
   FiEye,
   FiEdit2,
@@ -27,7 +26,6 @@ export default function FincasPage() {
 
   const [fincaModal, setFincaModal] = useState(null); // null | {} | finca
   const [lotesModal, setLotesModal] = useState(null); // null | finca
-  const [configModal, setConfigModal] = useState(false);
   const [syncModal, setSyncModal] = useState(false);
 
   async function loadFincas() {
@@ -117,17 +115,9 @@ export default function FincasPage() {
             className="btn btn-outline-secondary rounded-3 text-nowrap d-flex align-items-center gap-1"
             onClick={() => setSyncModal(true)}
           >
-            <FiRefreshCw /> Sincronizar con banarica
+            <FiRefreshCw /> Sincronización con Logística
           </button>
         )}
-        <button
-          type="button"
-          className="btn btn-outline-secondary rounded-3"
-          title="Configurar enlace del API de banarica"
-          onClick={() => setConfigModal(true)}
-        >
-          <FiSettings />
-        </button>
       </div>
 
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
@@ -190,7 +180,14 @@ export default function FincasPage() {
                       />
                     </td>
                     <td>
-                      <p className="fw-medium mb-0">{finca.nombre}</p>
+                      <p className="fw-medium mb-0 d-flex align-items-center gap-2">
+                        {finca.nombre}
+                        {finca.esExterna && (
+                          <span className="badge rounded-pill text-bg-secondary" title="No es propia — sin seguimiento de labores/racimos/lluvias">
+                            Externa
+                          </span>
+                        )}
+                      </p>
                       <p className="small text-secondary mb-0">Código: {finca.codigo}</p>
                     </td>
                     <td>
@@ -253,8 +250,6 @@ export default function FincasPage() {
 
       {lotesModal && <LotesModal finca={lotesModal} onClose={() => setLotesModal(null)} />}
 
-      {configModal && <ConfigModal onClose={() => setConfigModal(false)} />}
-
       {syncModal && <SyncModal onClose={() => setSyncModal(false)} onSynced={loadFincas} />}
     </div>
     </RequirePermission>
@@ -266,6 +261,7 @@ function FincaModal({ finca, onClose, onSaved }) {
   const [nombre, setNombre] = useState(finca?.nombre || "");
   const [codigo, setCodigo] = useState(finca?.codigo || "");
   const [estado, setEstado] = useState(finca ? finca.estado : true);
+  const [esExterna, setEsExterna] = useState(finca?.esExterna || false);
   const [grupoFincaUuid, setGrupoFincaUuid] = useState(finca?.grupoFinca?.uuid || "");
   const [grupos, setGrupos] = useState([]);
   const [fincasHermanas, setFincasHermanas] = useState([]);
@@ -297,7 +293,7 @@ function FincaModal({ finca, onClose, onSaved }) {
     try {
       await apiFetch(finca ? `/fincas/${finca.uuid}` : "/fincas", {
         method: finca ? "PUT" : "POST",
-        body: JSON.stringify({ nombre, codigo, estado, grupoFincaUuid: grupoFincaUuid || null }),
+        body: JSON.stringify({ nombre, codigo, estado, esExterna, grupoFincaUuid: grupoFincaUuid || null }),
       });
       onSaved();
     } catch (err) {
@@ -367,6 +363,22 @@ function FincaModal({ finca, onClose, onSaved }) {
           <label className="form-check-label small" htmlFor="fincaEstado">
             Activo
           </label>
+        </div>
+        <div className="form-check mb-3">
+          <input
+            type="checkbox"
+            className="form-check-input"
+            id="fincaExterna"
+            checked={esExterna}
+            onChange={(e) => setEsExterna(e.target.checked)}
+          />
+          <label className="form-check-label small" htmlFor="fincaExterna">
+            Finca externa
+          </label>
+          <div className="form-text">
+            No es propia — exporta cajas a través nuestro (aparece en Programación de Corte) pero no le hacemos
+            seguimiento de labores, racimos, precipitación, etc. Se oculta de esos selectores.
+          </div>
         </div>
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
         <div className="d-flex gap-2">
@@ -885,70 +897,7 @@ function NuevoLoteForm({ fincaUuid, onCreated }) {
   );
 }
 
-// ─── Modal: configurar enlace de banarica ───
-function ConfigModal({ onClose }) {
-  const [url, setUrl] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [ok, setOk] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    apiFetch("/configuraciones/banarica-url")
-      .then((data) => setUrl(data.url))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setOk("");
-    setSaving(true);
-    try {
-      await apiFetch("/configuraciones/banarica-url", { method: "PUT", body: JSON.stringify({ url }) });
-      setOk("Enlace guardado correctamente.");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ModalShell title="Conexión con banarica" onClose={onClose}>
-      <form onSubmit={handleSubmit}>
-        <div className="mb-3">
-          <label className="form-label small fw-medium">Enlace del API de banarica</label>
-          <input
-            type="url"
-            required
-            disabled={loading}
-            className="form-control rounded-3"
-            placeholder="https://api-logistica-banarica.vercel.app"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-          />
-          <p className="form-text small">
-            Se usará para consultar <code>/api/v1/almacenes/</code> al sincronizar.
-          </p>
-        </div>
-        {error && <div className="alert alert-danger py-2 small">{error}</div>}
-        {ok && <div className="alert alert-success py-2 small">{ok}</div>}
-        <div className="d-flex gap-2">
-          <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
-            <FiX /> Cancelar
-          </button>
-          <button type="submit" disabled={saving || loading} className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
-            <FiSave /> {saving ? "Guardando..." : "Guardar enlace"}
-          </button>
-        </div>
-      </form>
-    </ModalShell>
-  );
-}
-
-// ─── Modal: elegir almacenes de banarica a sincronizar ───
+// ─── Modal: elegir almacenes de Logística a sincronizar ───
 function SyncModal({ onClose, onSynced }) {
   const [items, setItems] = useState([]);
   const [selected, setSelected] = useState(new Set());
@@ -1002,7 +951,7 @@ function SyncModal({ onClose, onSynced }) {
   return (
     <ModalShell title="Elegir almacenes a sincronizar" onClose={onClose} size="lg">
       <p className="small text-secondary">
-        Selecciona qué almacenes activos de banarica quieres crear/actualizar como fincas.
+        Selecciona qué almacenes activos de Logística quieres crear/actualizar como fincas.
       </p>
 
       <div className="d-flex gap-3 mb-2 small">
@@ -1016,7 +965,7 @@ function SyncModal({ onClose, onSynced }) {
 
       <div className="border rounded-3 mb-3" style={{ maxHeight: "18rem", overflowY: "auto" }}>
         {loading && <p className="text-center text-secondary small py-4 mb-0">Cargando almacenes...</p>}
-        {!loading && items.length === 0 && <p className="text-center text-secondary small py-4 mb-0">No hay almacenes activos en banarica.</p>}
+        {!loading && items.length === 0 && <p className="text-center text-secondary small py-4 mb-0">No hay almacenes activos en Logística.</p>}
         {!loading &&
           items.map((item) => (
             <label

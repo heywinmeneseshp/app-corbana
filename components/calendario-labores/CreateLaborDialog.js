@@ -14,10 +14,6 @@ const FRECUENCIAS = [
   { value: "ANUAL", label: "Anual" },
 ];
 
-function nombreCompleto(u) {
-  return `${u.nombre} ${u.apellido}`.trim();
-}
-
 // Diálogo de creación de una programación (labor puntual o recurrente, con
 // 1 o varios lotes). Misma lógica que el resto del módulo: POST /labor-series.
 export default function CreateLaborDialog({
@@ -25,7 +21,6 @@ export default function CreateLaborDialog({
   fincaInicialUuid,
   labores,
   categorias,
-  usuarios,
   fechaInicial,
   loteInicialUuid,
   horaInicial,
@@ -43,7 +38,7 @@ export default function CreateLaborDialog({
   const [fechaInicio, setFechaInicio] = useState(fechaInicial);
   const [hora, setHora] = useState(horaInicial || "");
   const [duracionMinutos, setDuracionMinutos] = useState("");
-  const [responsableUuid, setResponsableUuid] = useState("");
+  const [numeroColaboradores, setNumeroColaboradores] = useState("");
   const [observaciones, setObservaciones] = useState("");
 
   const [esRecurrente, setEsRecurrente] = useState(false);
@@ -115,7 +110,7 @@ export default function CreateLaborDialog({
       else body.loteUuids = loteUuidsSeleccion;
       if (hora) body.hora = hora;
       if (duracionMinutos !== "") body.duracionMinutos = Number(duracionMinutos);
-      if (responsableUuid) body.responsableUuid = responsableUuid;
+      if (numeroColaboradores !== "") body.numeroColaboradores = Number(numeroColaboradores);
       if (observaciones) body.observaciones = observaciones;
       if (esRecurrente) {
         body.frecuencia = frecuencia;
@@ -204,19 +199,17 @@ export default function CreateLaborDialog({
           </div>
         </div>
 
-        {usuarios.length > 0 && (
-          <div className="mb-3">
-            <label className="form-label small fw-medium">Responsable</label>
-            <select className="form-select rounded-3" value={responsableUuid} onChange={(e) => setResponsableUuid(e.target.value)}>
-              <option value="">Sin asignar</option>
-              {usuarios.map((u) => (
-                <option key={u.uuid} value={u.uuid}>
-                  {nombreCompleto(u)}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div className="mb-3">
+          <label className="form-label small fw-medium">Número de colaboradores</label>
+          <input
+            type="number"
+            min={1}
+            className="form-control rounded-3"
+            value={numeroColaboradores}
+            onChange={(e) => setNumeroColaboradores(e.target.value)}
+            placeholder="Cuántos colaboradores hacen falta"
+          />
+        </div>
 
         <div className="mb-3">
           <label className="form-label small fw-medium">Observaciones</label>

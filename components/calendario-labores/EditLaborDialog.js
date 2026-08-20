@@ -7,18 +7,14 @@ import { hasPermission } from "@/lib/auth";
 import ModalShell from "@/components/ModalShell";
 import { esAdministrador, estaBloqueada } from "@/lib/laborEstados";
 
-function nombreCompleto(u) {
-  return `${u.nombre} ${u.apellido}`.trim();
-}
-
 // Diálogo de edición/eliminación de una ocurrencia, con el mismo
 // comportamiento de Google Calendar: alcance ESTA / ESTA_Y_SIGUIENTES /
 // TODA_LA_SERIE cuando la programación es recurrente.
-export default function EditLaborDialog({ ocurrencia, usuarios, onClose, onChanged }) {
+export default function EditLaborDialog({ ocurrencia, onClose, onChanged }) {
   const [fecha, setFecha] = useState(ocurrencia.fecha);
   const [hora, setHora] = useState(ocurrencia.hora ? ocurrencia.hora.slice(0, 5) : "");
   const [duracionMinutos, setDuracionMinutos] = useState(ocurrencia.duracionMinutos ?? "");
-  const [responsableUuid, setResponsableUuid] = useState(ocurrencia.responsable?.uuid || "");
+  const [numeroColaboradores, setNumeroColaboradores] = useState(ocurrencia.numeroColaboradores ?? "");
   const [observaciones, setObservaciones] = useState(ocurrencia.observaciones || "");
   const [estado, setEstado] = useState(ocurrencia.estado);
   const [alcance, setAlcance] = useState("ESTA");
@@ -41,7 +37,7 @@ export default function EditLaborDialog({ ocurrencia, usuarios, onClose, onChang
         alcance,
         hora: hora || null,
         duracionMinutos: duracionMinutos === "" ? null : Number(duracionMinutos),
-        responsableUuid: responsableUuid || null,
+        numeroColaboradores: numeroColaboradores === "" ? null : Number(numeroColaboradores),
         observaciones: observaciones || null,
       };
       if (alcance !== "TODA_LA_SERIE") body.fecha = fecha;
@@ -173,24 +169,17 @@ export default function EditLaborDialog({ ocurrencia, usuarios, onClose, onChang
           </div>
         )}
 
-        {usuarios.length > 0 && (
-          <div className="mb-3">
-            <label className="form-label small fw-medium">Responsable</label>
-            <select
-              className="form-select rounded-3"
-              value={responsableUuid}
-              disabled={!puedeEditar}
-              onChange={(e) => setResponsableUuid(e.target.value)}
-            >
-              <option value="">Sin asignar</option>
-              {usuarios.map((u) => (
-                <option key={u.uuid} value={u.uuid}>
-                  {nombreCompleto(u)}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div className="mb-3">
+          <label className="form-label small fw-medium">Número de colaboradores</label>
+          <input
+            type="number"
+            min={1}
+            className="form-control rounded-3"
+            value={numeroColaboradores}
+            disabled={!puedeEditar}
+            onChange={(e) => setNumeroColaboradores(e.target.value)}
+          />
+        </div>
 
         <div className="mb-3">
           <label className="form-label small fw-medium">Observaciones</label>

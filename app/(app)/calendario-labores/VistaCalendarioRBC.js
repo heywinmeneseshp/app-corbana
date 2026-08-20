@@ -39,10 +39,6 @@ function fechaCorta(date) {
   return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
 }
 
-function nombreCompleto(u) {
-  return `${u?.nombre || ""} ${u?.apellido || ""}`.trim();
-}
-
 function fechaISO(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -157,7 +153,7 @@ function TooltipLabor({ x, y, evento }) {
             Hora: {horaHHmm(evento.start)} - {horaHHmm(evento.end)}
           </div>
         )}
-        {oc?.responsable && <div>Responsable: {nombreCompleto(oc.responsable)}</div>}
+        {oc?.numeroColaboradores != null && <div>Colaboradores: {oc.numeroColaboradores}</div>}
         <div>Estado: {ESTADOS[oc?.estado] || oc?.estado}</div>
         {oc?.observaciones && <div style={{ whiteSpace: "pre-wrap" }}>Obs: {oc.observaciones}</div>}
       </div>

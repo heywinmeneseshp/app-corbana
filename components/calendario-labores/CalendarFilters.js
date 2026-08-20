@@ -10,10 +10,6 @@ const ESTADOS = [
   { value: "CANCELADA", label: "Canceladas" },
 ];
 
-function nombreCompleto(u) {
-  return `${u.nombre} ${u.apellido}`.trim();
-}
-
 function toggleEnArreglo(arreglo, uuid) {
   return arreglo.includes(uuid) ? arreglo.filter((u) => u !== uuid) : [...arreglo, uuid];
 }
@@ -47,7 +43,6 @@ export const FILTROS_VACIOS = {
   loteUuids: [],
   categoriaUuids: [],
   laborUuids: [],
-  responsableUuids: [],
   estado: "TODAS",
 };
 
@@ -56,12 +51,11 @@ export function contarFiltrosActivos(filtros) {
     filtros.loteUuids.length +
     filtros.categoriaUuids.length +
     filtros.laborUuids.length +
-    filtros.responsableUuids.length +
     (filtros.estado !== "TODAS" ? 1 : 0)
   );
 }
 
-export default function CalendarFilters({ lotes, categorias, labores, usuarios, filtros, onChange, onClose }) {
+export default function CalendarFilters({ lotes, categorias, labores, filtros, onChange, onClose }) {
   return (
     <ModalShell title="Filtros" onClose={onClose}>
       <Checklist
@@ -82,16 +76,6 @@ export default function CalendarFilters({ lotes, categorias, labores, usuarios, 
         seleccionados={filtros.laborUuids}
         onToggle={(uuid) => onChange({ ...filtros, laborUuids: toggleEnArreglo(filtros.laborUuids, uuid) })}
       />
-      {usuarios.length > 0 && (
-        <Checklist
-          titulo="Responsable"
-          items={usuarios}
-          seleccionados={filtros.responsableUuids}
-          getLabel={nombreCompleto}
-          onToggle={(uuid) => onChange({ ...filtros, responsableUuids: toggleEnArreglo(filtros.responsableUuids, uuid) })}
-        />
-      )}
-
       <div className="mb-3">
         <label className="form-label small fw-medium d-block">Estado</label>
         <div className="d-flex flex-column gap-1">

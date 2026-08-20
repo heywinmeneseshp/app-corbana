@@ -6,10 +6,6 @@ const ESTADO_LABEL = {
   CANCELADA: "Cancelada",
 };
 
-function nombreCompleto(u) {
-  return `${u.nombre} ${u.apellido}`.trim();
-}
-
 // Tooltip propio (sin librería nueva): posicionado "fixed" con las
 // coordenadas que le pasa LaborItem al hacer hover, así escapa cualquier
 // contenedor con overflow (la tabla con scroll horizontal).
@@ -41,8 +37,8 @@ export default function LaborTooltip({ ocurrencia, position }) {
         </div>
       )}
       <div className="d-flex justify-content-between">
-        <span className="text-white-50">Responsable</span>
-        <span>{ocurrencia.responsable ? nombreCompleto(ocurrencia.responsable) : "Sin asignar"}</span>
+        <span className="text-white-50">Colaboradores</span>
+        <span>{ocurrencia.numeroColaboradores ?? "—"}</span>
       </div>
       <div className="d-flex justify-content-between">
         <span className="text-white-50">Estado</span>

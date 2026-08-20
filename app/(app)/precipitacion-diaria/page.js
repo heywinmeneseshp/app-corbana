@@ -71,7 +71,7 @@ export default function PrecipitacionDiariaPage() {
         await Promise.all([
           apiFetch("/precipitacion-diaria/config"),
           apiFetch(`/precipitacion-diaria?${paramsRegistros.toString()}`),
-          apiFetch("/fincas?limit=100"),
+          apiFetch("/fincas?limit=100&soloOperativas=true"),
           apiFetch("/roles?limit=100"),
           apiFetch("/semanas?limit=100"),
           apiFetch("/precipitacion-diaria/inconsistencias"),
@@ -107,7 +107,7 @@ export default function PrecipitacionDiariaPage() {
     // que la búsqueda volvería vacía y borraría la selección ya hecha.
     if (fincas.some((f) => labelFinca(f) === fincaTexto)) return;
     const t = setTimeout(() => {
-      apiFetch(`/fincas?limit=100${fincaTexto ? `&search=${encodeURIComponent(fincaTexto)}` : ""}`)
+      apiFetch(`/fincas?limit=100&soloOperativas=true${fincaTexto ? `&search=${encodeURIComponent(fincaTexto)}` : ""}`)
         .then((data) => setFincas(data.items))
         .catch(() => {});
     }, 300);
