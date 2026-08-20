@@ -20,6 +20,7 @@ export default function PrecipitacionDiariaPage() {
   const [creando, setCreando] = useState(false);
 
   const [mostrarConfig, setMostrarConfig] = useState(false);
+  const [mostrarInconsistencias, setMostrarInconsistencias] = useState(false);
 
   const [inconsistencias, setInconsistencias] = useState([]);
   const [resolviendo, setResolviendo] = useState(null); // uuid en proceso
@@ -394,17 +395,29 @@ export default function PrecipitacionDiariaPage() {
 
             <div className="card border-0 shadow-sm rounded-4 mb-4">
               <div className="card-body p-4">
-                <h2 className="h6 fw-semibold mb-3 d-flex align-items-center gap-2">
-                  <FiAlertTriangle className="text-warning" /> Inconsistencias con Clima
-                </h2>
-                <p className="text-secondary small">
-                  Precipitación Diaria y Clima son dos registros independientes — acá se comparan por finca y fecha.
-                  Cuando no coinciden, elige cuál valor es el correcto; eso va a sobreescribir el otro.
-                </p>
-                {inconsistencias.length === 0 ? (
-                  <p className="text-secondary small mb-0">No hay inconsistencias pendientes.</p>
-                ) : (
-                  <div className="table-responsive">
+                <button
+                  type="button"
+                  onClick={() => setMostrarInconsistencias((v) => !v)}
+                  className="btn btn-link p-0 text-decoration-none text-reset w-100 d-flex align-items-center justify-content-between"
+                >
+                  <h2 className="h6 fw-semibold mb-0 d-flex align-items-center gap-2">
+                    <FiAlertTriangle className="text-warning" /> Inconsistencias con Clima
+                    {inconsistencias.length > 0 && (
+                      <span className="badge bg-warning-subtle text-warning-emphasis">{inconsistencias.length}</span>
+                    )}
+                  </h2>
+                  {mostrarInconsistencias ? <FiChevronDown /> : <FiChevronRight />}
+                </button>
+                {mostrarInconsistencias && (
+                  <div className="mt-3">
+                    <p className="text-secondary small">
+                      Precipitación Diaria y Clima son dos registros independientes — acá se comparan por finca y fecha.
+                      Cuando no coinciden, elige cuál valor es el correcto; eso va a sobreescribir el otro.
+                    </p>
+                    {inconsistencias.length === 0 ? (
+                      <p className="text-secondary small mb-0">No hay inconsistencias pendientes.</p>
+                    ) : (
+                      <div className="table-responsive">
                     <table className="table table-sm align-middle mb-0">
                       <thead>
                         <tr className="text-secondary small">
@@ -463,6 +476,8 @@ export default function PrecipitacionDiariaPage() {
                       </tbody>
                     </table>
                   </div>
+                )}
+                </div>
                 )}
               </div>
             </div>
