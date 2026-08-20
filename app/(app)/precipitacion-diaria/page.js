@@ -23,6 +23,7 @@ export default function PrecipitacionDiariaPage() {
 
   const [inconsistencias, setInconsistencias] = useState([]);
   const [resolviendo, setResolviendo] = useState(null); // uuid en proceso
+  const [resueltos, setResueltos] = useState(new Set()); // uuids ya resueltos en esta sesión (fila sigue visible, sin botones)
 
   // Filtros de "Últimos registros" (Finca + Semana + Usuario). Rol no aplica
   // acá — la lista de registros no guarda por qué rol se capturó, así que
@@ -30,6 +31,10 @@ export default function PrecipitacionDiariaPage() {
   const [filtroFincaUuid, setFiltroFincaUuid] = useState("");
   const [filtroSemanaUuid, setFiltroSemanaUuid] = useState("");
   const [filtroUsuarioId, setFiltroUsuarioId] = useState("");
+  const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
+  const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
+  const [paginaRegistros, setPaginaRegistros] = useState(1);
+  const [totalPaginasRegistros, setTotalPaginasRegistros] = useState(1);
 
   const semanasFiltro = useMemo(() => {
     const hoy = new Date();
@@ -52,25 +57,37 @@ export default function PrecipitacionDiariaPage() {
   const rolSeleccionado = roles.find((r) => labelRol(r) === rolTexto);
   const semanaSeleccionada = semanas.find((s) => labelSemana(s) === semanaTexto);
 
+  // Arma los query params de "Últimos registros" — un solo lugar para
+  // cargarTodo() y para el refresco liviano tras resolver una inconsistencia.
+  // Las fechas explícitas ganan sobre el rango de la semana elegida si
+  // ambas están puestas.
+  const paramsDeRegistros = (pagina) => {
+    const params = new URLSearchParams({ limit: "20", page: String(pagina) });
+    if (filtroFincaUuid) params.set("fincaUuid", filtroFincaUuid);
+    if (filtroUsuarioId) params.set("usuarioId", filtroUsuarioId);
+    if (filtroFechaDesde) {
+      params.set("fechaDesde", filtroFechaDesde);
+    } else if (filtroSemanaUuid) {
+      const s = semanas.find((s) => s.uuid === filtroSemanaUuid);
+      if (s) params.set("fechaDesde", s.fechaInicio);
+    }
+    if (filtroFechaHasta) {
+      params.set("fechaHasta", filtroFechaHasta);
+    } else if (filtroSemanaUuid) {
+      const s = semanas.find((s) => s.uuid === filtroSemanaUuid);
+      if (s) params.set("fechaHasta", s.fechaFin);
+    }
+    return params;
+  };
+
   const cargarTodo = async () => {
     setLoading(true);
     setError("");
     try {
-      const paramsRegistros = new URLSearchParams({ limit: "20" });
-      if (filtroFincaUuid) paramsRegistros.set("fincaUuid", filtroFincaUuid);
-      if (filtroUsuarioId) paramsRegistros.set("usuarioId", filtroUsuarioId);
-      if (filtroSemanaUuid) {
-        const s = semanas.find((s) => s.uuid === filtroSemanaUuid);
-        if (s) {
-          paramsRegistros.set("fechaDesde", s.fechaInicio);
-          paramsRegistros.set("fechaHasta", s.fechaFin);
-        }
-      }
-
       const [configData, registrosData, fincasData, rolesData, semanasData, inconsistenciasData, usuariosData] =
         await Promise.all([
           apiFetch("/precipitacion-diaria/config"),
-          apiFetch(`/precipitacion-diaria?${paramsRegistros.toString()}`),
+          apiFetch(`/precipitacion-diaria?${paramsDeRegistros(paginaRegistros).toString()}`),
           apiFetch("/fincas?limit=100&soloOperativas=true"),
           apiFetch("/roles?limit=100"),
           apiFetch("/semanas?limit=100"),
@@ -79,6 +96,7 @@ export default function PrecipitacionDiariaPage() {
         ]);
       setConfigs(configData);
       setRegistros(registrosData.items);
+      setTotalPaginasRegistros(Math.max(1, Math.ceil(registrosData.meta.total / registrosData.meta.limit)));
       setFincas(fincasData.items);
       setRoles(rolesData.items);
       setSemanas(semanasData.items);
@@ -94,7 +112,14 @@ export default function PrecipitacionDiariaPage() {
   useEffect(() => {
     cargarTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroFincaUuid, filtroSemanaUuid, filtroUsuarioId]);
+  }, [filtroFincaUuid, filtroSemanaUuid, filtroUsuarioId, filtroFechaDesde, filtroFechaHasta, paginaRegistros]);
+
+  // Cambiar cualquier filtro vuelve a la página 1 — el efecto de arriba ya
+  // se dispara por el cambio del filtro en sí, este solo corrige la página.
+  const cambiarFiltro = (setter) => (valor) => {
+    setPaginaRegistros(1);
+    setter(valor);
+  };
 
   // Búsqueda con debounce contra /fincas?search= y /roles?search= — repuebla
   // las opciones del <datalist> mientras se escribe (semanas no tiene
@@ -126,6 +151,44 @@ export default function PrecipitacionDiariaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rolTexto]);
 
+  const handleResolver = async (uuid, fuente) => {
+    setResolviendo(uuid);
+    setError("");
+    try {
+      await apiFetch(`/precipitacion-diaria/inconsistencias/${uuid}`, {
+        method: "PUT",
+        body: JSON.stringify({ fuente }),
+      });
+      // No se vuelve a pedir /inconsistencias: esa lista ya filtra en el
+      // backend por coincide_clima = 0, así que un refetch haría
+      // desaparecer la fila al instante. En vez de eso, se actualiza el
+      // valor localmente para que el usuario VEA el cambio reflejado (mm de
+      // clima igualado) — la fila se va a ir sola recién cuando se recargue
+      // la página de nuevo, no en este mismo momento.
+      setInconsistencias((prev) =>
+        prev.map((i) => {
+          if (i.uuid !== uuid) return i;
+          if (fuente === "clima") {
+            return { ...i, precipitacionDiaria: { mm: i.clima?.mm ?? i.precipitacionDiaria.mm } };
+          }
+          return { ...i, clima: { uuid: i.clima?.uuid, mm: i.precipitacionDiaria.mm } };
+        }),
+      );
+      setResueltos((prev) => new Set(prev).add(uuid));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResolviendo(null);
+    }
+  };
+
+  // Solo cambia la lista de configuraciones — refresca únicamente eso, sin
+  // volver a pedir fincas/roles/semanas/usuarios/registros/inconsistencias.
+  const recargarConfigs = async () => {
+    const configData = await apiFetch("/precipitacion-diaria/config");
+    setConfigs(configData);
+  };
+
   const handleCrear = async (e) => {
     e.preventDefault();
     setError("");
@@ -146,7 +209,7 @@ export default function PrecipitacionDiariaPage() {
       setFincaTexto("");
       setRolTexto("");
       setSemanaTexto("");
-      await cargarTodo();
+      await recargarConfigs();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -160,25 +223,9 @@ export default function PrecipitacionDiariaPage() {
         method: "PUT",
         body: JSON.stringify({ activo: !activo }),
       });
-      await cargarTodo();
+      await recargarConfigs();
     } catch (err) {
       setError(err.message);
-    }
-  };
-
-  const handleResolver = async (uuid, fuente) => {
-    setResolviendo(uuid);
-    setError("");
-    try {
-      await apiFetch(`/precipitacion-diaria/inconsistencias/${uuid}`, {
-        method: "PUT",
-        body: JSON.stringify({ fuente }),
-      });
-      await cargarTodo();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setResolviendo(null);
     }
   };
 
@@ -186,7 +233,7 @@ export default function PrecipitacionDiariaPage() {
     if (!confirm("¿Eliminar esta configuración?")) return;
     try {
       await apiFetch(`/precipitacion-diaria/config/${uuid}`, { method: "DELETE" });
-      await cargarTodo();
+      await recargarConfigs();
     } catch (err) {
       setError(err.message);
     }
@@ -384,7 +431,11 @@ export default function PrecipitacionDiariaPage() {
                               )}
                             </td>
                             <td className="text-end">
-                              {hasPermission("precipitacion_diaria.configurar") && (
+                              {resueltos.has(i.uuid) ? (
+                                <span className="badge bg-success-subtle text-success-emphasis d-inline-flex align-items-center gap-1">
+                                  <FiCheck /> Resuelto
+                                </span>
+                              ) : hasPermission("precipitacion_diaria.sincronizar_precipitaciones") && (
                                 <div className="d-flex gap-1 justify-content-end">
                                   <button
                                     type="button"
@@ -420,12 +471,12 @@ export default function PrecipitacionDiariaPage() {
               <div className="card-body p-4">
                 <h2 className="h6 fw-semibold mb-3">Últimos registros</h2>
                 <div className="row g-2 align-items-end mb-3">
-                  <div className="col-md-3">
+                  <div className="col-md-2">
                     <label className="form-label small fw-medium mb-1">Finca</label>
                     <select
                       className="form-select form-select-sm rounded-3"
                       value={filtroFincaUuid}
-                      onChange={(e) => setFiltroFincaUuid(e.target.value)}
+                      onChange={(e) => cambiarFiltro(setFiltroFincaUuid)(e.target.value)}
                     >
                       <option value="">Todas</option>
                       {fincas.map((f) => (
@@ -435,21 +486,39 @@ export default function PrecipitacionDiariaPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-md-3">
+                  <div className="col-md-2">
                     <label className="form-label small fw-medium mb-1">Semana</label>
                     <SemanaAutocomplete
                       semanas={semanasFiltro}
                       value={filtroSemanaUuid}
-                      onChange={setFiltroSemanaUuid}
+                      onChange={cambiarFiltro(setFiltroSemanaUuid)}
                       width="100%"
                     />
                   </div>
-                  <div className="col-md-3">
+                  <div className="col-md-2">
+                    <label className="form-label small fw-medium mb-1">Desde</label>
+                    <input
+                      type="date"
+                      className="form-control form-control-sm rounded-3"
+                      value={filtroFechaDesde}
+                      onChange={(e) => cambiarFiltro(setFiltroFechaDesde)(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-2">
+                    <label className="form-label small fw-medium mb-1">Hasta</label>
+                    <input
+                      type="date"
+                      className="form-control form-control-sm rounded-3"
+                      value={filtroFechaHasta}
+                      onChange={(e) => cambiarFiltro(setFiltroFechaHasta)(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-2">
                     <label className="form-label small fw-medium mb-1">Usuario</label>
                     <select
                       className="form-select form-select-sm rounded-3"
                       value={filtroUsuarioId}
-                      onChange={(e) => setFiltroUsuarioId(e.target.value)}
+                      onChange={(e) => cambiarFiltro(setFiltroUsuarioId)(e.target.value)}
                     >
                       <option value="">Todos</option>
                       {usuarios.map((u) => (
@@ -459,15 +528,18 @@ export default function PrecipitacionDiariaPage() {
                       ))}
                     </select>
                   </div>
-                  {(filtroFincaUuid || filtroSemanaUuid || filtroUsuarioId) && (
+                  {(filtroFincaUuid || filtroSemanaUuid || filtroUsuarioId || filtroFechaDesde || filtroFechaHasta) && (
                     <div className="col-md-2">
                       <button
                         type="button"
                         className="btn btn-outline-secondary btn-sm rounded-3"
                         onClick={() => {
+                          setPaginaRegistros(1);
                           setFiltroFincaUuid("");
                           setFiltroSemanaUuid("");
                           setFiltroUsuarioId("");
+                          setFiltroFechaDesde("");
+                          setFiltroFechaHasta("");
                         }}
                       >
                         Limpiar filtros
@@ -499,6 +571,31 @@ export default function PrecipitacionDiariaPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+                {registros.length > 0 && (
+                  <div className="d-flex justify-content-between align-items-center mt-3">
+                    <span className="small text-secondary">
+                      Página {paginaRegistros} de {totalPaginasRegistros}
+                    </span>
+                    <div className="d-flex gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm rounded-3"
+                        disabled={paginaRegistros <= 1}
+                        onClick={() => setPaginaRegistros((p) => p - 1)}
+                      >
+                        Anterior
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm rounded-3"
+                        disabled={paginaRegistros >= totalPaginasRegistros}
+                        onClick={() => setPaginaRegistros((p) => p + 1)}
+                      >
+                        Siguiente
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

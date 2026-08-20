@@ -117,7 +117,7 @@ const NAV = [
     ],
   },
   { type: "link", key: "programacionCorte", label: "Programación de Corte", icon: GiScissors, permKey: "programacionCorte", href: "/programacion-corte" },
-  { type: "link", key: "reportes", label: "Reportes", icon: FiBarChart2, permKey: null, href: "/reportes" },
+  { type: "link", key: "reportes", label: "Reportes", icon: FiBarChart2, permKey: "reportes", href: "/reportes" },
   {
     type: "section",
     key: "configuracion",
@@ -221,6 +221,7 @@ export default function Sidebar() {
       produccionSemanal: hasPermission("menu.produccion_semanal"),
       pronostico: hasPermission("menu.pronostico"),
       programacionCorte: hasPermission("menu.programacion_corte"),
+      reportes: hasPermission("menu.reportes"),
     });
   }, []);
 
@@ -261,7 +262,11 @@ export default function Sidebar() {
   // estaba plegado.
   const query = normalizar(busqueda.trim());
   const resultados = useMemo(() => {
-    if (!query) return secciones;
+    // Sin texto de búsqueda igual hay que filtrar por `.visible` — antes se
+    // devolvía `secciones` tal cual, sin sacar las entradas sin permiso, y
+    // el menú terminaba mostrando TODO (el filtro por permiso solo se
+    // aplicaba de rebote cuando había una búsqueda activa).
+    if (!query) return secciones.filter((entry) => entry.visible);
     return secciones
       .map((entry) => {
         if (entry.type === "link") {

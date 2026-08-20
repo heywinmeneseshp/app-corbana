@@ -18,7 +18,7 @@ export default function PreviewRolBanner() {
 
   const salir = () => {
     stopPreviewRol();
-    window.location.assign("/");
+    window.location.assign("/maestros/roles");
   };
 
   return (
