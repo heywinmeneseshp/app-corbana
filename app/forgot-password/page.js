@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import CorbanaLogo from "@/components/CorbanaLogo";
+import { useMarca } from "@/lib/marca";
+import AppLogo from "@/components/AppLogo";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api/v1";
 
 export default function ForgotPasswordPage() {
+  const { nombreApp } = useMarca();
   const [usuarioOrEmail, setUsuarioOrEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -40,8 +42,8 @@ export default function ForgotPasswordPage() {
     <div className="d-flex min-vh-100 align-items-center justify-content-center bg-white px-4">
       <div className="w-100" style={{ maxWidth: "24rem" }}>
         <div className="d-flex align-items-center gap-2 mb-4 text-brand">
-          <CorbanaLogo size={26} />
-          <span className="fs-5 fw-semibold">Corbana</span>
+          <AppLogo size={26} />
+          <span className="fs-5 fw-semibold">{nombreApp}</span>
         </div>
 
         {sent ? (

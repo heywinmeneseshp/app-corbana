@@ -1,4 +1,4 @@
-export default function ModalShell({ title, onClose, children, size }) {
+export default function ModalShell({ title, onClose, children, size, width }) {
   return (
     <div
       className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
@@ -7,7 +7,7 @@ export default function ModalShell({ title, onClose, children, size }) {
     >
       <div
         className="bg-white rounded-4 shadow w-100 d-flex flex-column"
-        style={{ maxWidth: size === "xl" ? "64rem" : size === "lg" ? "36rem" : "28rem", maxHeight: "85vh" }}
+        style={{ maxWidth: width || (size === "xl" ? "64rem" : size === "lg" ? "36rem" : "28rem"), maxHeight: "85vh" }}
       >
         <div className="d-flex align-items-center justify-content-between p-4 pb-0">
           <h3 className="h5 fw-bold mb-0">{title}</h3>

@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { saveSession } from "@/lib/auth";
-import CorbanaLogo from "@/components/CorbanaLogo";
+import { useMarca } from "@/lib/marca";
+import AppLogo from "@/components/AppLogo";
 import styles from "./login.module.css";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api/v1";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { nombreApp } = useMarca();
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -60,14 +62,14 @@ export default function LoginPage() {
       {/* Panel izquierdo: marca / features (oculto en mobile) */}
       <div className={`d-none d-lg-flex col-lg-6 position-relative text-white flex-column justify-content-between p-5 ${styles.brandBg}`}>
         <div className="d-flex align-items-center gap-2">
-          <CorbanaLogo size={28} />
-          <span className="fs-4 fw-semibold">Corbana</span>
+          <AppLogo size={28} color="#fff" />
+          <span className="fs-4 fw-semibold">{nombreApp}</span>
         </div>
 
         <div style={{ maxWidth: "28rem" }}>
-          <h1 className="display-5 fw-bold mb-3">Bienvenido a Corbana</h1>
+          <h1 className="display-5 fw-bold mb-3">Bienvenido a {nombreApp}</h1>
           <p className="mb-5" style={{ color: "rgba(240,253,244,0.9)" }}>
-            Inicia sesión para gestionar y optimizar tu producción agrícola y logística con Corbana.
+            Inicia sesión para gestionar y optimizar tu producción agrícola y logística con {nombreApp}.
           </p>
 
           <div className="d-flex flex-column gap-4">
@@ -105,7 +107,7 @@ export default function LoginPage() {
         </div>
 
         <p className="small mb-0" style={{ color: "rgba(240,253,244,0.6)" }}>
-          © 2026 Corbana. Todos los derechos reservados.
+          © 2026 {nombreApp}. Todos los derechos reservados.
         </p>
       </div>
 
@@ -124,8 +126,8 @@ export default function LoginPage() {
         <div className="flex-grow-1 d-flex align-items-center justify-content-center px-4 px-sm-5">
           <div className="w-100" style={{ maxWidth: "24rem" }}>
             <div className="d-lg-none d-flex align-items-center gap-2 mb-4 text-brand">
-              <CorbanaLogo size={26} />
-              <span className="fs-5 fw-semibold">Corbana</span>
+              <AppLogo size={26} />
+              <span className="fs-5 fw-semibold">{nombreApp}</span>
             </div>
 
             {checkingSetup ? (
@@ -225,6 +227,7 @@ export default function LoginPage() {
 }
 
 function SetupForm({ onDone }) {
+  const { nombreApp } = useMarca();
   const [form, setForm] = useState({ usuario: "", nombre: "", apellido: "", email: "", password: "", confirmar: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -273,7 +276,7 @@ function SetupForm({ onDone }) {
     <>
       <h2 className="fw-bold mb-2">Configuración inicial</h2>
       <p className="text-secondary small mb-4">
-        Todavía no hay ningún usuario. Creá la cuenta del primer administrador para empezar a usar Corbana.
+        Todavía no hay ningún usuario. Creá la cuenta del primer administrador para empezar a usar {nombreApp}.
       </p>
 
       <form onSubmit={handleSubmit}>

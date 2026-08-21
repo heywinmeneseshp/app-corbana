@@ -383,6 +383,7 @@ function UsuarioModal({ usuario, onClose, onSaved }) {
   const [usuarioField, setUsuarioField] = useState(usuario?.usuario || "");
   const [email, setEmail] = useState(usuario?.email || "");
   const [password, setPassword] = useState("");
+  const [cargo, setCargo] = useState(usuario?.cargo || "");
   const [estado, setEstado] = useState(usuario ? usuario.estado : true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -398,6 +399,7 @@ function UsuarioModal({ usuario, onClose, onSaved }) {
         usuario: usuarioField,
         email,
         estado,
+        cargo: cargo || null,
         ...(password ? { password } : {}),
       };
       await apiFetch(usuario ? `/users/${usuario.uuid}` : "/users", {
@@ -458,6 +460,19 @@ function UsuarioModal({ usuario, onClose, onSaved }) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
+        </div>
+        <div className="mb-2">
+          <label className="form-label small fw-medium">Cargo</label>
+          <input
+            type="text"
+            className="form-control rounded-3"
+            placeholder="Ej: Ingeniero Agrónomo"
+            value={cargo}
+            onChange={(e) => setCargo(e.target.value)}
+          />
+          <p className="form-text small text-secondary mb-0">
+            Se usa para las firmas de documentos (ej. visitas de Sanidad Vegetal), en vez del rol del sistema.
+          </p>
         </div>
         <div className="mb-3">
           <label className="form-label small fw-medium">

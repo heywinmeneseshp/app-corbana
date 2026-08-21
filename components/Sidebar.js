@@ -33,11 +33,13 @@ import {
   FiSmartphone,
   FiDatabase,
   FiBox,
+  FiImage,
 } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
-import CorbanaLogo from "@/components/CorbanaLogo";
+import { useMarca } from "@/lib/marca";
+import AppLogo from "@/components/AppLogo";
 
 // Estructura del menú como datos, no JSX repetido — permite ordenar los
 // submenús alfabéticamente y filtrarlos por el buscador con la misma lógica
@@ -131,6 +133,7 @@ const NAV = [
       { key: "configCargue", label: "Cargue Masivo", icon: FiUploadCloud, permKey: "configuracion", href: "/configuracion/cargue" },
       { key: "configBackup", label: "Base de Datos", icon: FiDatabase, permKey: "configuracion", href: "/configuracion/backup" },
       { key: "configConversion", label: "Tasa de Conversión", icon: FiPackage, permKey: "configuracion", href: "/configuracion/conversion" },
+      { key: "configMarca", label: "Marca de la App", icon: FiImage, permKey: "configuracion", href: "/configuracion/marca" },
     ],
   },
 ];
@@ -148,6 +151,7 @@ const normalizar = (s) =>
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { nombreApp } = useMarca();
   const [openSections, setOpenSections] = useState(() => {
     const inicial = {};
     for (const entry of NAV) {
@@ -293,8 +297,8 @@ export default function Sidebar() {
     >
       <div className={`d-flex align-items-center text-white py-4 ${collapsed ? "justify-content-center px-2" : "justify-content-between px-4"}`}>
         <div className="d-flex align-items-center gap-2">
-          <CorbanaLogo size={24} />
-          {!collapsed && <span className="fs-5 fw-semibold">Corbana</span>}
+          <AppLogo size={24} color="#fff" />
+          {!collapsed && <span className="fs-5 fw-semibold">{nombreApp}</span>}
         </div>
         {!collapsed && (
           <button
