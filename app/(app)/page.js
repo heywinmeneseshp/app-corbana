@@ -218,7 +218,7 @@ export default function InicioPage() {
     );
   }
 
-  const { ultimaSemana, cajasProducidas, racimosCortados, ratio, cohortes } = data;
+  const { ultimaSemana, cajasProducidas, cajasExternas, racimosCortados, ratio, cohortes } = data;
 
   return (
     <div className="p-4 p-md-5">
@@ -305,7 +305,7 @@ export default function InicioPage() {
                 const filas = allFincas.map((f) => {
                   const activa = fincaDataMap.get(f.id);
                   const checked = fincasParam === "" || selectedSet.has(f.id);
-                  return { ...f, cajas: activa?.cajas ?? 0, recusados: activa?.recusados ?? 0, procesados: activa?.procesados ?? 0, ratio: activa?.ratio, checked };
+                  return { ...f, cajas: activa?.cajas ?? 0, recusados: activa?.recusados ?? 0, procesados: activa?.procesados ?? 0, ratio: activa?.ratio, esExterna: !!f.esExterna, checked };
                 });
                 return (
                   <div>
@@ -332,7 +332,7 @@ export default function InicioPage() {
                       <span className="text-end" style={{ width: "5rem" }}>Ratio</span>
                     </div>
                     {filas.map((f) => {
-                      const ratioColor = f.ratio >= 1 ? "#047857" : "#b45309";
+                      const ratioColor = f.esExterna ? "#94a3b8" : f.ratio >= 1 ? "#047857" : "#b45309";
                       return (
                         <div
                           key={f.id}
@@ -351,11 +351,22 @@ export default function InicioPage() {
                             />
                           </span>
                           <span className="fw-medium" style={{ width: "3rem" }}>{f.codigo}</span>
-                          <span className="text-secondary text-truncate" style={{ flex: 1, minWidth: "9rem", fontSize: "0.7rem" }}>{f.nombre}</span>
+                          <span className="text-secondary text-truncate d-flex align-items-center gap-1" style={{ flex: 1, minWidth: "9rem", fontSize: "0.7rem" }}>
+                            {f.nombre}
+                            {f.esExterna && (
+                              <span
+                                className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis"
+                                style={{ fontSize: "0.55rem", fontWeight: 600 }}
+                                title="Finca externa: tiene cajas propias pero no seguimiento de racimos — no entra en el ratio ni en los gráficos"
+                              >
+                                Externa
+                              </span>
+                            )}
+                          </span>
                           <span className="fw-medium text-end" style={{ width: "6rem" }}>{f.cajas > 0 ? f.cajas.toLocaleString("es") : "—"}</span>
                           <span className="fw-medium text-end" style={{ width: "6rem", color: f.recusados > 0 ? "#ea580c" : undefined }}>{f.recusados > 0 ? f.recusados.toLocaleString("es") : "—"}</span>
                           <span className="fw-medium text-end" style={{ width: "6rem", color: f.procesados > 0 ? "#2563eb" : undefined }}>{f.procesados > 0 ? f.procesados.toLocaleString("es") : "—"}</span>
-                          <span className="fw-bold text-end" style={{ width: "5rem", color: ratioColor }}>{f.ratio ?? "—"}</span>
+                          <span className="fw-bold text-end" style={{ width: "5rem", color: ratioColor }}>{f.esExterna ? "—" : (f.ratio ?? "—")}</span>
                         </div>
                       );
                     })}
@@ -378,6 +389,11 @@ export default function InicioPage() {
           <div className="card border-0 shadow-sm rounded-4 p-3 text-center">
             <p className="small text-secondary mb-1">Cajas Producidas</p>
             <p className="fw-bold h4 mb-0 text-brand">{cajasProducidas.toLocaleString("es")}</p>
+            {cajasExternas > 0 && (
+              <p className="small text-secondary mb-0 mt-1" title="Cajas de fincas externas (sin seguimiento de racimos) — no se incluyen acá ni en el ratio ni en los gráficos">
+                + {cajasExternas.toLocaleString("es")} de fincas externas (no incluidas)
+              </p>
+            )}
           </div>
         </div>
         <div className="col-md-3">
