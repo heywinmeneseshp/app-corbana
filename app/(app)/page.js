@@ -388,12 +388,18 @@ export default function InicioPage() {
         <div className="col-md-3">
           <div className="card border-0 shadow-sm rounded-4 p-3 text-center">
             <p className="small text-secondary mb-1">Cajas Producidas</p>
-            <p className="fw-bold h4 mb-0 text-brand">{cajasProducidas.toLocaleString("es")}</p>
-            {cajasExternas > 0 && (
-              <p className="small text-secondary mb-0 mt-1" title="Cajas de fincas externas (sin seguimiento de racimos) — no se incluyen acá ni en el ratio ni en los gráficos">
-                + {cajasExternas.toLocaleString("es")} de fincas externas (no incluidas)
-              </p>
-            )}
+            <div className="d-flex align-items-baseline justify-content-center gap-2 flex-wrap">
+              <p className="fw-bold h4 mb-0 text-brand">{cajasProducidas.toLocaleString("es")}</p>
+              {cajasExternas > 0 && (
+                <span
+                  className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis fw-medium"
+                  style={{ fontSize: "0.65rem" }}
+                  title="Cajas de fincas externas (sin seguimiento de racimos) — no se incluyen acá ni en el ratio ni en los gráficos"
+                >
+                  +{cajasExternas.toLocaleString("es")} externas
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="col-md-3">
