@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { FiEdit2 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
-import { hasPermission } from "@/lib/auth";
+import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
@@ -123,7 +123,7 @@ export default function EstadiosSigatokaPage() {
                       <td className="small text-secondary">{Number(e.valorL5)}</td>
                       <td>
                         <div className="d-flex justify-content-end gap-2 flex-nowrap">
-                          {hasPermission("estadio_sigatoka.editar") && (
+                          {esAdministrador() && (
                             <button type="button" className="btn btn-sm btn-outline-warning" title="Editar" onClick={() => openEdit(e)}>
                               <FiEdit2 />
                             </button>
