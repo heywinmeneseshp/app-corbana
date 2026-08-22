@@ -99,10 +99,21 @@ export default function PrecipitacionDiariaPage() {
           apiFetch("/precipitacion-diaria/config"),
           apiFetch(`/precipitacion-diaria?${paramsDeRegistros(paginaRegistros).toString()}`),
           apiFetch("/fincas?limit=100&soloOperativas=true"),
-          apiFetch("/roles?limit=100"),
-          apiFetch("/semanas?limit=100"),
+          // roles.ver es un permiso de administración aparte de los de
+          // Precipitación Diaria — sin permiso, el picker de rol (solo usado
+          // dentro del modal "Configurar", ya detrás de
+          // precipitacion_diaria.configurar) queda vacío en vez de tumbar
+          // toda la pantalla.
+          apiFetch("/roles?limit=100").catch(() => ({ items: [] })),
+          // Mismo caso: semana.ver es de Maestros, no de Precipitación
+          // Diaria — sin permiso, el filtro "Semana" queda vacío en vez de
+          // tumbar la pantalla (las fechas Desde/Hasta siguen funcionando).
+          apiFetch("/semanas?limit=100").catch(() => ({ items: [] })),
           apiFetch(`/precipitacion-diaria/inconsistencias?${paramsDeFiltros().toString()}`),
-          apiFetch("/users?limit=100"),
+          // Endpoint propio (no /users): solo nombres de quienes ya
+          // registraron acá, sin exponer email/roles/fincas de todo el
+          // sistema a quien solo tiene precipitacion_diaria.ver.
+          apiFetch("/precipitacion-diaria/usuarios"),
         ]);
       setConfigs(configData);
       setRegistros(registrosData.items);
@@ -111,7 +122,7 @@ export default function PrecipitacionDiariaPage() {
       setRoles(rolesData.items);
       setSemanas(semanasData.items);
       setInconsistencias(inconsistenciasData);
-      setUsuarios(usuariosData.items);
+      setUsuarios(usuariosData);
     } catch (err) {
       setError(err.message);
     } finally {

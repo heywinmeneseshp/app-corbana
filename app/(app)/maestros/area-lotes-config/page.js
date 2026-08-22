@@ -30,7 +30,11 @@ export default function AreaLotesConfigPage() {
       const [configData, fincasData, rolesData] = await Promise.all([
         apiFetch("/lote-area-config?limit=50"),
         apiFetch("/fincas?limit=100"),
-        apiFetch("/roles?limit=100"),
+        // roles.ver es un permiso aparte de area_lote.ver/configurar — sin
+        // él, el picker de rol del formulario "Nueva configuración" queda
+        // vacío en vez de tumbar toda la pantalla (ver mismo caso en
+        // Precipitación Diaria).
+        apiFetch("/roles?limit=100").catch(() => ({ items: [] })),
       ]);
       setConfigs(configData.items);
       setFincas(fincasData.items);

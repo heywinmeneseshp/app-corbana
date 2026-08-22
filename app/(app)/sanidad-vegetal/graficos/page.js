@@ -132,11 +132,12 @@ function SumaBrutaGraficos() {
 
 // El permiso null en Clima es intencional: la lista de clima (GET /clima) ya
 // es visible para cualquier usuario autenticado, sin permiso puntual — el
-// gráfico sigue el mismo criterio.
+// gráfico sigue el mismo criterio. Ver cualquiera de las 3 evaluaciones
+// exige el mismo permiso genérico (evaluacion.ver), ya no uno por tipo.
 const TIPOS = [
-  { key: "Índice de infección", label: "Índice de Infección", permiso: "infeccion.ver" },
-  { key: "Conteo de Hojas", label: "Conteo de Hojas", permiso: "conteo_hojas.ver" },
-  { key: "Suma Bruta", label: "Suma Bruta", permiso: "suma_bruta.ver" },
+  { key: "Índice de infección", label: "Índice de Infección", permiso: "evaluacion.ver" },
+  { key: "Conteo de Hojas", label: "Conteo de Hojas", permiso: "evaluacion.ver" },
+  { key: "Suma Bruta", label: "Suma Bruta", permiso: "evaluacion.ver" },
   { key: "Clima", label: "Clima", permiso: null },
 ];
 
@@ -150,8 +151,8 @@ export default function SanidadGraficosPage() {
 
   // El gate de página ahora es el submenú de navegación
   // (menu.sanidad_vegetal.graficos), no un permiso granular de Sanidad
-  // Vegetal — así alguien con acceso al submenú pero sin infeccion.ver/
-  // conteo_hojas.ver/suma_bruta.ver igual puede entrar y ver (solo) Clima.
+  // Vegetal — así alguien con acceso al submenú pero sin evaluacion.ver
+  // igual puede entrar y ver (solo) Clima.
   return (
     <RequirePermission code="menu.sanidad_vegetal.graficos">
       <div className="p-4 p-md-5">

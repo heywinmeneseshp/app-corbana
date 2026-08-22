@@ -8,10 +8,12 @@ import RequirePermission from "@/components/RequirePermission";
 import ReporteEvaluacion from "@/components/reportes/ReporteEvaluacion";
 import IndicadoresEvaluaciones from "@/components/reportes/IndicadoresEvaluaciones";
 
+// Ver cualquiera de las 3 evaluaciones exige el mismo permiso genérico
+// (evaluacion.ver) — ya no uno propio por tipo.
 const TIPOS = [
-  { key: "Índice de infección", label: "Índice de Infección", permiso: "infeccion.ver" },
-  { key: "Conteo de Hojas", label: "Conteo de Hojas", permiso: "conteo_hojas.ver" },
-  { key: "Suma Bruta", label: "Suma Bruta", permiso: "suma_bruta.ver" },
+  { key: "Índice de infección", label: "Índice de Infección" },
+  { key: "Conteo de Hojas", label: "Conteo de Hojas" },
+  { key: "Suma Bruta", label: "Suma Bruta" },
 ];
 
 const TAB_INDICADORES = "indicadores";
@@ -27,7 +29,7 @@ export default function SanidadEvaluacionesPage() {
   }, []);
 
   const tipoActual = tiposEvaluacion.find((t) => t.nombre === tab);
-  const tabsVisibles = TIPOS.filter((t) => !t.permiso || hasPermission(t.permiso));
+  const tabsVisibles = hasPermission("evaluacion.ver") ? TIPOS : [];
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.evaluaciones">

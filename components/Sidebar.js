@@ -181,7 +181,7 @@ export default function Sidebar() {
       // Menú (nivel 1 — muestra/oculta la sección completa) y submenú
       // (nivel 2 — cada link puntual, ya con la sección visible). Capa
       // separada de los permisos granulares de acción (finca.ver,
-      // infeccion.crear, etc.), que siguen controlando el backend y los
+      // evaluacion.crear, etc.), que siguen controlando el backend y los
       // botones puntuales dentro de cada pantalla — ver
       // permissions.constants.js.
       maestrosMenu: hasPermission("menu.maestros"),

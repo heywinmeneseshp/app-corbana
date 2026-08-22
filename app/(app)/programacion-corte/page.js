@@ -159,6 +159,7 @@ export default function ProgramacionCortePage() {
                   <th>Finca</th>
                   <th>Semana</th>
                   <th>Producto</th>
+                  <th>Proceso</th>
                   <th className="text-end">Cajas programadas</th>
                   <th className="text-end">Acciones</th>
                 </tr>
@@ -166,14 +167,14 @@ export default function ProgramacionCortePage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={6} className="text-center text-secondary py-4">
+                    <td colSpan={7} className="text-center text-secondary py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center text-secondary py-4">
+                    <td colSpan={7} className="text-center text-secondary py-4">
                       No hay registros para estos filtros.
                     </td>
                   </tr>
@@ -185,6 +186,7 @@ export default function ProgramacionCortePage() {
                       <td>{r.finca?.codigo} — {r.finca?.nombre}</td>
                       <td>{r.semana?.codigo}</td>
                       <td>{r.producto?.nombre || "—"}</td>
+                      <td>{r.procesoEmpaque || "—"}</td>
                       <td className="text-end fw-medium">{r.cajasProgramadas?.toLocaleString("es")}</td>
                       <td className="text-end">
                         {hasPermission("programacion_corte.eliminar") && (
