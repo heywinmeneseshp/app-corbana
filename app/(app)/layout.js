@@ -12,7 +12,7 @@ export default function AppLayout({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!localStorage.getItem("corbana_access_token")) {
+    if (!localStorage.getItem("corbana_user")) {
       router.replace("/login");
       return;
     }
