@@ -37,16 +37,14 @@ ENV HOSTNAME=0.0.0.0
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Solo lo necesario para `npm run start`
+# Standalone: solo lo necesario (no todo node_modules)
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
 
 EXPOSE 3001
 
-# `next start` respeta PORT y HOSTNAME. Si en Hostinger defines PORT, usa ese;
-# si no, cae por defecto a 3001 (definido arriba).
-CMD ["npm", "run", "start"]
+# Standalone server.js respeta PORT y HOSTNAME
+CMD ["node", "server.js"]

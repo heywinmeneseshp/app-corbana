@@ -1,4 +1,5 @@
 import "./globals.css";
+import QueryProvider from "@/components/QueryProvider";
 
 export const metadata = {
   title: "Corbana",
@@ -8,7 +9,9 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }
