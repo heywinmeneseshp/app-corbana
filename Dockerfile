@@ -31,7 +31,7 @@ FROM base AS runner
 RUN apk add --no-cache libc6-compat
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV PORT=3000
+ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 
 RUN addgroup --system --gid 1001 nodejs && \
@@ -45,8 +45,8 @@ COPY --from=builder /app/package.json ./package.json
 
 USER nextjs
 
-EXPOSE 3000
+EXPOSE 3001
 
-# Hostinger y el requisito del proyecto exigen `npm run start` (usa `next start`
-# que respeta PORT y HOSTNAME)
+# `next start` respeta PORT y HOSTNAME. Si en Hostinger defines PORT, usa ese;
+# si no, cae por defecto a 3001 (definido arriba).
 CMD ["npm", "run", "start"]
