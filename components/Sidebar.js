@@ -122,6 +122,21 @@ const NAV = [
   { type: "link", key: "reportes", label: "Reportes", icon: FiBarChart2, permKey: "reportes", href: "/reportes" },
   {
     type: "section",
+    key: "inventarios",
+    label: "Inventarios",
+    icon: FiBox,
+    permKey: "inventariosMenu",
+    pathPrefix: "/inventarios",
+    items: [
+      { key: "inventariosDashboard", label: "Dashboard", icon: FiBarChart2, permKey: "inventariosDashboard", href: "/inventarios" },
+      { key: "inventariosProductos", label: "Productos", icon: FiPackage, permKey: "inventariosProductos", href: "/inventarios/productos" },
+      { key: "inventariosCategorias", label: "Categorías", icon: FiFolder, permKey: "inventariosCategorias", href: "/inventarios/categorias" },
+      { key: "inventariosUnidades", label: "Unidades", icon: FiSettings, permKey: "inventariosUnidades", href: "/inventarios/unidades" },
+      { key: "inventariosAlmacenes", label: "Almacenes", icon: FiDatabase, permKey: "inventariosAlmacenes", href: "/inventarios/almacenes" },
+    ],
+  },
+  {
+    type: "section",
     key: "configuracion",
     label: "Configuración",
     icon: FiSettings,
@@ -226,6 +241,13 @@ export default function Sidebar() {
       pronostico: hasPermission("menu.pronostico"),
       programacionCorte: hasPermission("menu.programacion_corte"),
       reportes: hasPermission("menu.reportes"),
+
+      inventariosMenu: hasPermission("menu.inventarios"),
+      inventariosDashboard: hasPermission("menu.inventarios.dashboard"),
+      inventariosProductos: hasPermission("menu.inventarios.productos"),
+      inventariosCategorias: hasPermission("menu.inventarios.categorias"),
+      inventariosUnidades: hasPermission("menu.inventarios.unidades"),
+      inventariosAlmacenes: hasPermission("menu.inventarios.almacenes"),
     });
   }, []);
 
