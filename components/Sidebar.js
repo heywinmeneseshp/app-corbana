@@ -137,6 +137,13 @@ const NAV = [
       { key: "inventariosMovimientos", label: "Movimientos", icon: FiShare2, permKey: "inventariosMovimientos", href: "/inventarios/movimientos" },
       { key: "inventariosExistencias", label: "Existencias", icon: FiBox, permKey: "inventariosMovimientos", href: "/inventarios/existencias" },
       { key: "inventariosKardex", label: "Kardex", icon: FiList, permKey: "inventariosMovimientos", href: "/inventarios/kardex" },
+      { key: "inventariosMezclas", label: "Mezclas", icon: FiLayers, permKey: "inventariosMezclas", href: "/inventarios/mezclas" },
+      { key: "inventariosElaboraciones", label: "Elaboraciones", icon: FiActivity, permKey: "inventariosElaboraciones", href: "/inventarios/elaboraciones" },
+      { key: "inventariosProformas", label: "Proformas", icon: FiClipboard, permKey: "inventariosProformas", href: "/inventarios/proformas" },
+      { key: "inventariosEquipos", label: "Equipos", icon: GiFarmTractor, permKey: "inventariosEquipos", href: "/inventarios/equipos" },
+      { key: "inventariosPlanes", label: "Planes Mantenimiento", icon: FiSettings, permKey: "inventariosPlanes", href: "/inventarios/planes-mantenimiento" },
+      { key: "inventariosProgramaciones", label: "Programaciones", icon: FiCalendar, permKey: "inventariosProgramaciones", href: "/inventarios/programaciones-mantenimiento" },
+      { key: "inventariosOrdenes", label: "Órdenes Mantenimiento", icon: FiList, permKey: "inventariosOrdenes", href: "/inventarios/ordenes-mantenimiento" },
     ],
   },
   {
@@ -254,6 +261,13 @@ export default function Sidebar() {
       inventariosAlmacenes: hasPermission("menu.inventarios.almacenes"),
       inventariosMotivos: hasPermission("menu.inventarios.motivos"),
       inventariosMovimientos: hasPermission("menu.inventarios.movimientos"),
+      inventariosMezclas: hasPermission("menu.inventarios.mezclas"),
+      inventariosElaboraciones: hasPermission("menu.inventarios.elaboraciones"),
+      inventariosProformas: hasPermission("menu.inventarios.proformas"),
+      inventariosEquipos: hasPermission("menu.inventarios.equipos"),
+      inventariosPlanes: hasPermission("menu.inventarios.planes"),
+      inventariosProgramaciones: hasPermission("menu.inventarios.programaciones"),
+      inventariosOrdenes: hasPermission("menu.inventarios.ordenes"),
     });
   }, []);
 
