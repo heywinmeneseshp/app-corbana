@@ -133,6 +133,10 @@ const NAV = [
       { key: "inventariosCategorias", label: "Categorías", icon: FiFolder, permKey: "inventariosCategorias", href: "/inventarios/categorias" },
       { key: "inventariosUnidades", label: "Unidades", icon: FiSettings, permKey: "inventariosUnidades", href: "/inventarios/unidades" },
       { key: "inventariosAlmacenes", label: "Almacenes", icon: FiDatabase, permKey: "inventariosAlmacenes", href: "/inventarios/almacenes" },
+      { key: "inventariosMotivos", label: "Motivos", icon: FiClipboard, permKey: "inventariosMotivos", href: "/inventarios/motivos" },
+      { key: "inventariosMovimientos", label: "Movimientos", icon: FiShare2, permKey: "inventariosMovimientos", href: "/inventarios/movimientos" },
+      { key: "inventariosExistencias", label: "Existencias", icon: FiBox, permKey: "inventariosMovimientos", href: "/inventarios/existencias" },
+      { key: "inventariosKardex", label: "Kardex", icon: FiList, permKey: "inventariosMovimientos", href: "/inventarios/kardex" },
     ],
   },
   {
@@ -248,6 +252,8 @@ export default function Sidebar() {
       inventariosCategorias: hasPermission("menu.inventarios.categorias"),
       inventariosUnidades: hasPermission("menu.inventarios.unidades"),
       inventariosAlmacenes: hasPermission("menu.inventarios.almacenes"),
+      inventariosMotivos: hasPermission("menu.inventarios.motivos"),
+      inventariosMovimientos: hasPermission("menu.inventarios.movimientos"),
     });
   }, []);
 
