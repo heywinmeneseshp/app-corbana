@@ -34,8 +34,8 @@ export default function KardexPage() {
   async function loadCombos() {
     try {
       const [p, a] = await Promise.all([
-        apiFetch("/inventarios/productos?limit=200&estado=true"),
-        apiFetch("/inventarios/almacenes?limit=200&estado=true"),
+        apiFetch("/inventarios/productos?limit=100&estado=true"),
+        apiFetch("/inventarios/almacenes?limit=100&estado=true"),
       ]);
       setProductos(p.items || []);
       setAlmacenes(a.items || []);

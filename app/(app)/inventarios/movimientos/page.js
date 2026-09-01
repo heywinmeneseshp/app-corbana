@@ -95,10 +95,10 @@ export default function MovimientosPage() {
   async function loadCombos() {
     try {
       const [a, p, m, u] = await Promise.all([
-        apiFetch("/inventarios/almacenes?limit=200&estado=true"),
-        apiFetch("/inventarios/productos?limit=200&estado=true"),
-        apiFetch("/inventarios/motivos?limit=200&estado=true"),
-        apiFetch("/inventarios/unidades?limit=200&estado=true"),
+        apiFetch("/inventarios/almacenes?limit=100&estado=true"),
+        apiFetch("/inventarios/productos?limit=100&estado=true"),
+        apiFetch("/inventarios/motivos?limit=100&estado=true"),
+        apiFetch("/inventarios/unidades?limit=100&estado=true"),
       ]);
       setAlmacenes(a.items || []);
       setProductos(p.items || []);

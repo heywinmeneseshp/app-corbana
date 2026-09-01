@@ -71,7 +71,7 @@ export default function EquiposInventarioPage() {
   async function loadCombos() {
     try {
       const [a, u] = await Promise.all([
-        apiFetch("/inventarios/almacenes?limit=200&estado=true"),
+        apiFetch("/inventarios/almacenes?limit=100&estado=true"),
         apiFetch("/users?limit=100"),
       ]);
       setAlmacenes(a.items || []);
@@ -498,7 +498,7 @@ function RepuestosModal({ equipo, onClose, onChanged }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    apiFetch("/inventarios/productos?limit=200&estado=true&tipo=REPUESTO")
+    apiFetch("/inventarios/productos?limit=100&estado=true&tipo=REPUESTO")
       .then((data) => setRepuestos(data.items || []))
       .catch((err) => setError(err.message));
   }, []);

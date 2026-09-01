@@ -30,8 +30,8 @@ export default function ExistenciasPage() {
   async function loadCombos() {
     try {
       const [a, p] = await Promise.all([
-        apiFetch("/inventarios/almacenes?limit=200&estado=true"),
-        apiFetch("/inventarios/productos?limit=200&estado=true"),
+        apiFetch("/inventarios/almacenes?limit=100&estado=true"),
+        apiFetch("/inventarios/productos?limit=100&estado=true"),
       ]);
       setAlmacenes(a.items || []);
       setProductos(p.items || []);

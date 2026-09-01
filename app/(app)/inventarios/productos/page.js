@@ -57,8 +57,8 @@ export default function ProductosInventarioPage() {
   async function loadCombos() {
     try {
       const [cat, uni] = await Promise.all([
-        apiFetch("/inventarios/categorias?limit=200&estado=true"),
-        apiFetch("/inventarios/unidades?limit=200&estado=true"),
+        apiFetch("/inventarios/categorias?limit=100&estado=true"),
+        apiFetch("/inventarios/unidades?limit=100&estado=true"),
       ]);
       setCategorias(cat.items || []);
       setUnidades(uni.items || []);
