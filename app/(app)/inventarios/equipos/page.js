@@ -7,7 +7,6 @@ import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
-const TIPOS = ["TRACTOR", "VEHICULO", "MAQUINARIA", "EQUIPO", "BOMBA", "OTRO"];
 const ESTADOS = ["OPERATIVO", "MANTENIMIENTO", "FUERA_SERVICIO", "INACTIVO", "DE_BAJA"];
 
 const ESTADO_BADGE = {
@@ -23,7 +22,7 @@ function emptyForm() {
     codigo: "",
     nombre: "",
     descripcion: "",
-    tipo: "OTRO",
+    tipoUuid: "",
     marca: "",
     modelo: "",
     serie: "",
@@ -42,6 +41,7 @@ export default function EquiposInventarioPage() {
   const [items, setItems] = useState([]);
   const [almacenes, setAlmacenes] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+  const [tipos, setTipos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -51,6 +51,8 @@ export default function EquiposInventarioPage() {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+
+  const [tipoModalOpen, setTipoModalOpen] = useState(false);
 
   const [repuestosEquipo, setRepuestosEquipo] = useState(null);
 
@@ -70,12 +72,26 @@ export default function EquiposInventarioPage() {
 
   async function loadCombos() {
     try {
-      const [a, u] = await Promise.all([
+      const [a, u, t] = await Promise.all([
         apiFetch("/inventarios/almacenes?limit=100&estado=true"),
         apiFetch("/users?limit=100"),
+        apiFetch("/inventarios/equipos-tipos?limit=100&estado=true"),
       ]);
       setAlmacenes(a.items || []);
       setUsuarios(u.items || []);
+      setTipos(t.items || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // Se llama sola después de crear un tipo nuevo desde el modal — recarga
+  // el combo y lo deja ya seleccionado en el formulario de equipo.
+  async function loadTipos(seleccionarUuid) {
+    try {
+      const t = await apiFetch("/inventarios/equipos-tipos?limit=100&estado=true");
+      setTipos(t.items || []);
+      if (seleccionarUuid) setForm((f) => ({ ...f, tipoUuid: seleccionarUuid }));
     } catch (err) {
       setError(err.message);
     }
@@ -100,7 +116,7 @@ export default function EquiposInventarioPage() {
       codigo: equipo.codigo,
       nombre: equipo.nombre,
       descripcion: equipo.descripcion || "",
-      tipo: equipo.tipo,
+      tipoUuid: equipo.tipo?.uuid || "",
       marca: equipo.marca || "",
       modelo: equipo.modelo || "",
       serie: equipo.serie || "",
@@ -236,7 +252,7 @@ export default function EquiposInventarioPage() {
                     <tr key={eq.uuid}>
                       <td className="fw-medium">{eq.codigo}</td>
                       <td>{eq.nombre}</td>
-                      <td className="small text-secondary">{eq.tipo}</td>
+                      <td className="small text-secondary">{eq.tipo?.nombre || "—"}</td>
                       <td className="small text-secondary">{[eq.marca, eq.modelo].filter(Boolean).join(" / ") || "—"}</td>
                       <td className="small text-secondary">{eq.ubicacion?.nombre || "—"}</td>
                       <td className="small">{Number(eq.horometro || 0).toFixed(2)}</td>
@@ -315,13 +331,25 @@ export default function EquiposInventarioPage() {
               <div className="row g-3 mb-3">
                 <div className="col-4">
                   <label className="form-label small fw-medium">Tipo</label>
-                  <select className="form-select rounded-3" value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}>
-                    {TIPOS.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
+                  <select
+                    className="form-select rounded-3"
+                    value={form.tipoUuid}
+                    onChange={(e) => setForm((f) => ({ ...f, tipoUuid: e.target.value }))}
+                  >
+                    <option value="">Otro (por defecto)</option>
+                    {tipos.map((t) => (
+                      <option key={t.uuid} value={t.uuid}>
+                        {t.nombre}
                       </option>
                     ))}
                   </select>
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm p-0 mt-1"
+                    onClick={() => setTipoModalOpen(true)}
+                  >
+                    + Crear tipo
+                  </button>
                 </div>
                 <div className="col-4">
                   <label className="form-label small fw-medium">Marca</label>
@@ -482,8 +510,73 @@ export default function EquiposInventarioPage() {
             onChanged={() => openRepuestos({ uuid: repuestosEquipo.uuid, nombre: repuestosEquipo.nombre })}
           />
         )}
+
+        {tipoModalOpen && (
+          <TipoModal
+            onClose={() => setTipoModalOpen(false)}
+            onCreated={(nuevoUuid) => {
+              setTipoModalOpen(false);
+              loadTipos(nuevoUuid);
+            }}
+          />
+        )}
       </div>
     </RequirePermission>
+  );
+}
+
+// Creación rápida de un tipo de equipo — antes era un ENUM fijo en código,
+// ahora es un catálogo editable (equipo_tipos) y se puede agregar uno sin
+// salir del formulario de Equipo.
+function TipoModal({ onClose, onCreated }) {
+  const [nombre, setNombre] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      const creado = await apiFetch("/inventarios/equipos-tipos", { method: "POST", body: JSON.stringify({ nombre }) });
+      onCreated(creado.uuid);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Nuevo tipo de equipo" onClose={onClose}>
+      <form onSubmit={handleSave}>
+        <div className="mb-3">
+          <label className="form-label small fw-medium">
+            Nombre <span className="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            className="form-control rounded-3"
+            required
+            autoFocus
+            maxLength={100}
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+          />
+        </div>
+
+        {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+        <div className="d-flex justify-content-end gap-2">
+          <button type="button" className="btn btn-outline-secondary rounded-3" onClick={onClose}>
+            Cancelar
+          </button>
+          <button type="submit" className="btn btn-brand rounded-3" disabled={saving || !nombre.trim()}>
+            {saving ? "Guardando..." : "Guardar"}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
   );
 }
 
