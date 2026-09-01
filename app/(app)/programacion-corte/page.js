@@ -333,6 +333,16 @@ function SyncModal({ semanas, onClose, onSynced }) {
               </ul>
             </div>
           )}
+          {resultado.advertencias?.length > 0 && (
+            <div className="alert alert-warning py-2 small">
+              <p className="mb-1 fw-medium">Atención — hay productos sin peso neto configurado:</p>
+              <ul className="mb-0 ps-3">
+                {resultado.advertencias.map((a) => (
+                  <li key={a}>{a}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="d-flex justify-content-end">
             <button type="button" className="btn btn-brand rounded-3" onClick={onClose}>
               Cerrar

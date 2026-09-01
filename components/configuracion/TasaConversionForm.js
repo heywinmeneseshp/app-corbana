@@ -58,14 +58,14 @@ export default function TasaConversionForm() {
                   min={0.01}
                   step="0.01"
                   className="form-control rounded-3"
-                  placeholder="18.16"
+                  placeholder="18.6"
                   value={peso}
                   onChange={(e) => setPeso(e.target.value)}
                 />
               </div>
             </div>
             <p className="form-text small mb-3">
-              &quot;Cajas de 20kg&quot; es solo el nombre de la unidad — el peso neto real de referencia para
+              &quot;Cajas de 18kg&quot; es solo el nombre de la unidad — el peso neto real de referencia para
               convertir cajas de Programación de Corte a esta unidad es este valor, no 20. Fórmula: cajas 20kg =
               (cajas × peso neto del producto) ÷ este valor.
             </p>
