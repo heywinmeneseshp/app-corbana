@@ -93,7 +93,7 @@ export default function UnidadesInventarioPage() {
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
             <h1 className="fw-bold h3 mb-1">Unidades de Medida</h1>
-            <p className="text-secondary mb-0">Unidades usadas en productos y movimientos, con sus conversiones.</p>
+            <p className="text-secondary mb-0">Unidades usadas en artículos y movimientos, con sus conversiones.</p>
           </div>
           {hasPermission("inventario.unidades.crear") && (
             <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>

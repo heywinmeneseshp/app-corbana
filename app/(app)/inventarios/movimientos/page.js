@@ -34,7 +34,7 @@ function emptyForm() {
     tipo: "ENTRADA",
     fecha: new Date().toISOString().slice(0, 10),
     almacenUuid: "",
-    productoUuid: "",
+    articuloUuid: "",
     cantidad: "",
     unidadUuid: "",
     costoUnitario: "0",
@@ -51,7 +51,7 @@ function emptyTransferForm() {
     fecha: new Date().toISOString().slice(0, 10),
     almacenOrigenUuid: "",
     almacenDestinoUuid: "",
-    productoUuid: "",
+    articuloUuid: "",
     cantidad: "",
     unidadUuid: "",
     costoUnitario: "0",
@@ -62,13 +62,13 @@ function emptyTransferForm() {
 export default function MovimientosPage() {
   const [items, setItems] = useState([]);
   const [almacenes, setAlmacenes] = useState([]);
-  const [productos, setProductos] = useState([]);
+  const [articulos, setArticulos] = useState([]);
   const [motivos, setMotivos] = useState([]);
   const [unidades, setUnidades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [filtros, setFiltros] = useState({ almacenUuid: "", productoUuid: "", tipo: "", fechaDesde: "", fechaHasta: "", documento: "" });
+  const [filtros, setFiltros] = useState({ almacenUuid: "", articuloUuid: "", tipo: "", fechaDesde: "", fechaHasta: "", documento: "" });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
@@ -96,12 +96,12 @@ export default function MovimientosPage() {
     try {
       const [a, p, m, u] = await Promise.all([
         apiFetch("/inventarios/almacenes?limit=100&estado=true"),
-        apiFetch("/inventarios/productos?limit=100&estado=true"),
+        apiFetch("/inventarios/articulos?limit=100&estado=true"),
         apiFetch("/inventarios/motivos?limit=100&estado=true"),
         apiFetch("/inventarios/unidades?limit=100&estado=true"),
       ]);
       setAlmacenes(a.items || []);
-      setProductos(p.items || []);
+      setArticulos(p.items || []);
       setMotivos(m.items || []);
       setUnidades(u.items || []);
     } catch (err) {
@@ -127,9 +127,9 @@ export default function MovimientosPage() {
     setTransferModalOpen(true);
   }
 
-  function handleProductoChange(uuid, setter) {
-    const prod = productos.find((p) => p.uuid === uuid);
-    setter((f) => ({ ...f, productoUuid: uuid, unidadUuid: prod?.unidadMedida?.uuid || f.unidadUuid }));
+  function handleArticuloChange(uuid, setter) {
+    const prod = articulos.find((p) => p.uuid === uuid);
+    setter((f) => ({ ...f, articuloUuid: uuid, unidadUuid: prod?.unidadMedida?.uuid || f.unidadUuid }));
   }
 
   async function handleSave(e) {
@@ -219,14 +219,14 @@ export default function MovimientosPage() {
               </select>
             </div>
             <div className="col-auto">
-              <label className="form-label small fw-medium mb-1">Producto</label>
+              <label className="form-label small fw-medium mb-1">Artículo</label>
               <select
                 className="form-select form-select-sm rounded-3"
-                value={filtros.productoUuid}
-                onChange={(e) => setFiltros((f) => ({ ...f, productoUuid: e.target.value }))}
+                value={filtros.articuloUuid}
+                onChange={(e) => setFiltros((f) => ({ ...f, articuloUuid: e.target.value }))}
               >
                 <option value="">Todos</option>
-                {productos.map((p) => (
+                {articulos.map((p) => (
                   <option key={p.uuid} value={p.uuid}>
                     {p.nombre}
                   </option>
@@ -294,7 +294,7 @@ export default function MovimientosPage() {
                   <th>Documento</th>
                   <th>Tipo</th>
                   <th>Almacén</th>
-                  <th>Producto</th>
+                  <th>Artículo</th>
                   <th>Cantidad</th>
                   <th>Costo unit.</th>
                   <th>Costo total</th>
@@ -326,7 +326,7 @@ export default function MovimientosPage() {
                         <span className={`badge rounded-pill text-bg-${badgeFor(m.tipo)}`}>{labelFor(m.tipo)}</span>
                       </td>
                       <td className="small text-secondary">{m.almacen?.nombre || "—"}</td>
-                      <td className="small text-secondary">{m.producto?.nombre || "—"}</td>
+                      <td className="small text-secondary">{m.articulo?.nombre || "—"}</td>
                       <td className="small">
                         {Number(m.cantidad).toFixed(2)} {m.unidad?.simbolo || ""}
                       </td>
@@ -408,16 +408,16 @@ export default function MovimientosPage() {
                 </div>
                 <div className="col-6">
                   <label className="form-label small fw-medium">
-                    Producto <span className="text-danger">*</span>
+                    Artículo <span className="text-danger">*</span>
                   </label>
                   <select
                     className="form-select rounded-3"
                     required
-                    value={form.productoUuid}
-                    onChange={(e) => handleProductoChange(e.target.value, setForm)}
+                    value={form.articuloUuid}
+                    onChange={(e) => handleArticuloChange(e.target.value, setForm)}
                   >
                     <option value="">Seleccionar...</option>
-                    {productos.map((p) => (
+                    {articulos.map((p) => (
                       <option key={p.uuid} value={p.uuid}>
                         {p.nombre}
                       </option>
@@ -448,7 +448,7 @@ export default function MovimientosPage() {
                     value={form.unidadUuid}
                     onChange={(e) => setForm((f) => ({ ...f, unidadUuid: e.target.value }))}
                   >
-                    <option value="">Base del producto</option>
+                    <option value="">Base del artículo</option>
                     {unidades.map((u) => (
                       <option key={u.uuid} value={u.uuid}>
                         {u.simbolo}
@@ -606,16 +606,16 @@ export default function MovimientosPage() {
 
               <div className="mb-3">
                 <label className="form-label small fw-medium">
-                  Producto <span className="text-danger">*</span>
+                  Artículo <span className="text-danger">*</span>
                 </label>
                 <select
                   className="form-select rounded-3"
                   required
-                  value={transferForm.productoUuid}
-                  onChange={(e) => handleProductoChange(e.target.value, setTransferForm)}
+                  value={transferForm.articuloUuid}
+                  onChange={(e) => handleArticuloChange(e.target.value, setTransferForm)}
                 >
                   <option value="">Seleccionar...</option>
-                  {productos.map((p) => (
+                  {articulos.map((p) => (
                     <option key={p.uuid} value={p.uuid}>
                       {p.nombre}
                     </option>
@@ -645,7 +645,7 @@ export default function MovimientosPage() {
                     value={transferForm.unidadUuid}
                     onChange={(e) => setTransferForm((f) => ({ ...f, unidadUuid: e.target.value }))}
                   >
-                    <option value="">Base del producto</option>
+                    <option value="">Base del artículo</option>
                     {unidades.map((u) => (
                       <option key={u.uuid} value={u.uuid}>
                         {u.simbolo}

@@ -487,18 +487,18 @@ export default function EquiposInventarioPage() {
   );
 }
 
-// Repuestos compatibles de un equipo (M2M contra productos tipo REPUESTO) —
+// Repuestos compatibles de un equipo (M2M contra artículos tipo REPUESTO) —
 // se maneja aparte porque el listado principal no trae `componentes`, solo
 // el detalle por uuid (ver equipo.repository.js DETAIL_INCLUDE).
 function RepuestosModal({ equipo, onClose, onChanged }) {
   const [repuestos, setRepuestos] = useState([]);
-  const [productoUuid, setProductoUuid] = useState("");
+  const [articuloUuid, setArticuloUuid] = useState("");
   const [notas, setNotas] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    apiFetch("/inventarios/productos?limit=100&estado=true&tipo=REPUESTO")
+    apiFetch("/inventarios/articulos?limit=100&estado=true&tipo=REPUESTO")
       .then((data) => setRepuestos(data.items || []))
       .catch((err) => setError(err.message));
   }, []);
@@ -510,9 +510,9 @@ function RepuestosModal({ equipo, onClose, onChanged }) {
     try {
       await apiFetch(`/inventarios/equipos/${equipo.uuid}/componentes`, {
         method: "POST",
-        body: JSON.stringify({ productoUuid, notas: notas || null }),
+        body: JSON.stringify({ articuloUuid, notas: notas || null }),
       });
-      setProductoUuid("");
+      setArticuloUuid("");
       setNotas("");
       onChanged();
     } catch (err) {
@@ -522,10 +522,10 @@ function RepuestosModal({ equipo, onClose, onChanged }) {
     }
   }
 
-  async function handleRemove(producto) {
-    if (!confirm(`¿Quitar "${producto.nombre}" de los repuestos compatibles?`)) return;
+  async function handleRemove(articulo) {
+    if (!confirm(`¿Quitar "${articulo.nombre}" de los repuestos compatibles?`)) return;
     try {
-      await apiFetch(`/inventarios/equipos/${equipo.uuid}/componentes/${producto.uuid}`, { method: "DELETE" });
+      await apiFetch(`/inventarios/equipos/${equipo.uuid}/componentes/${articulo.uuid}`, { method: "DELETE" });
       onChanged();
     } catch (err) {
       setError(err.message);
@@ -542,8 +542,8 @@ function RepuestosModal({ equipo, onClose, onChanged }) {
           <select
             className="form-select form-select-sm rounded-3"
             required
-            value={productoUuid}
-            onChange={(e) => setProductoUuid(e.target.value)}
+            value={articuloUuid}
+            onChange={(e) => setArticuloUuid(e.target.value)}
           >
             <option value="">Seleccionar...</option>
             {repuestos.map((p) => (
@@ -564,7 +564,7 @@ function RepuestosModal({ equipo, onClose, onChanged }) {
           />
         </div>
         <div className="col-auto">
-          <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving || !productoUuid}>
+          <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving || !articuloUuid}>
             {saving ? "Agregando..." : "Agregar"}
           </button>
         </div>
@@ -597,13 +597,13 @@ function RepuestosModal({ equipo, onClose, onChanged }) {
             )}
             {!equipo.loading &&
               equipo.componentes.map((c) => (
-                <tr key={c.producto?.uuid}>
-                  <td className="small">{c.producto?.nombre}</td>
-                  <td className="small text-secondary">{c.producto?.codigo || "—"}</td>
+                <tr key={c.articulo?.uuid}>
+                  <td className="small">{c.articulo?.nombre}</td>
+                  <td className="small text-secondary">{c.articulo?.codigo || "—"}</td>
                   <td className="small text-secondary">{c.notas || "—"}</td>
                   <td>
                     <div className="d-flex justify-content-end">
-                      <button type="button" className="btn btn-sm btn-outline-danger" title="Quitar" onClick={() => handleRemove(c.producto)}>
+                      <button type="button" className="btn btn-sm btn-outline-danger" title="Quitar" onClick={() => handleRemove(c.articulo)}>
                         <FiTrash2 />
                       </button>
                     </div>

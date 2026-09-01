@@ -6,15 +6,15 @@ import RequirePermission from "@/components/RequirePermission";
 
 export default function KardexPage() {
   const [items, setItems] = useState([]);
-  const [productos, setProductos] = useState([]);
+  const [articulos, setArticulos] = useState([]);
   const [almacenes, setAlmacenes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [filtros, setFiltros] = useState({ productoUuid: "", almacenUuid: "", fechaDesde: "", fechaHasta: "" });
+  const [filtros, setFiltros] = useState({ articuloUuid: "", almacenUuid: "", fechaDesde: "", fechaHasta: "" });
 
   async function load() {
-    if (!filtros.productoUuid) {
-      setError("Seleccioná un producto para ver su kárdex.");
+    if (!filtros.articuloUuid) {
+      setError("Seleccioná un artículo para ver su kárdex.");
       return;
     }
     setLoading(true);
@@ -34,10 +34,10 @@ export default function KardexPage() {
   async function loadCombos() {
     try {
       const [p, a] = await Promise.all([
-        apiFetch("/inventarios/productos?limit=100&estado=true"),
+        apiFetch("/inventarios/articulos?limit=100&estado=true"),
         apiFetch("/inventarios/almacenes?limit=100&estado=true"),
       ]);
-      setProductos(p.items || []);
+      setArticulos(p.items || []);
       setAlmacenes(a.items || []);
     } catch (err) {
       setError(err.message);
@@ -53,22 +53,22 @@ export default function KardexPage() {
       <div className="p-4 p-md-5">
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1">Kárdex</h1>
-          <p className="text-secondary mb-0">Historial de movimientos de un producto con saldo acumulado.</p>
+          <p className="text-secondary mb-0">Historial de movimientos de un artículo con saldo acumulado.</p>
         </div>
 
         <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
           <div className="row g-2 align-items-end">
             <div className="col-auto">
               <label className="form-label small fw-medium mb-1">
-                Producto <span className="text-danger">*</span>
+                Artículo <span className="text-danger">*</span>
               </label>
               <select
                 className="form-select form-select-sm rounded-3"
-                value={filtros.productoUuid}
-                onChange={(e) => setFiltros((f) => ({ ...f, productoUuid: e.target.value }))}
+                value={filtros.articuloUuid}
+                onChange={(e) => setFiltros((f) => ({ ...f, articuloUuid: e.target.value }))}
               >
                 <option value="">Seleccionar...</option>
-                {productos.map((p) => (
+                {articulos.map((p) => (
                   <option key={p.uuid} value={p.uuid}>
                     {p.nombre}
                   </option>
@@ -148,7 +148,7 @@ export default function KardexPage() {
                 {!loading && items.length === 0 && (
                   <tr>
                     <td colSpan={12} className="text-center text-secondary py-4">
-                      {filtros.productoUuid ? "Sin movimientos para los filtros seleccionados." : "Seleccioná un producto para ver su kárdex."}
+                      {filtros.articuloUuid ? "Sin movimientos para los filtros seleccionados." : "Seleccioná un artículo para ver su kárdex."}
                     </td>
                   </tr>
                 )}

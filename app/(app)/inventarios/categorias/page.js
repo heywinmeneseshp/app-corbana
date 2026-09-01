@@ -98,8 +98,8 @@ export default function CategoriasInventarioPage() {
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">Categorías de Producto</h1>
-            <p className="text-secondary mb-0">Agrupan insumos, repuestos y productos elaborados del inventario.</p>
+            <h1 className="fw-bold h3 mb-1">Categorías de Artículo</h1>
+            <p className="text-secondary mb-0">Agrupan insumos, repuestos y artículos elaborados del inventario.</p>
           </div>
           {hasPermission("inventario.categorias.crear") && (
             <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>

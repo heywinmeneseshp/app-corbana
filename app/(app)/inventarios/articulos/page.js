@@ -23,7 +23,7 @@ function emptyForm() {
   };
 }
 
-export default function ProductosInventarioPage() {
+export default function ArticulosInventarioPage() {
   const [items, setItems] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [unidades, setUnidades] = useState([]);
@@ -42,7 +42,7 @@ export default function ProductosInventarioPage() {
     setError("");
     try {
       const qs = new URLSearchParams({ limit: "100", ...(search ? { search } : {}) });
-      const { items: rows } = await apiFetch(`/inventarios/productos?${qs}`);
+      const { items: rows } = await apiFetch(`/inventarios/articulos?${qs}`);
       setItems(rows);
     } catch (err) {
       setError(err.message);
@@ -77,20 +77,20 @@ export default function ProductosInventarioPage() {
     setModalOpen(true);
   }
 
-  function openEdit(producto) {
-    setEditing(producto);
+  function openEdit(articulo) {
+    setEditing(articulo);
     setForm({
-      codigo: producto.codigo || "",
-      nombre: producto.nombre,
-      descripcion: producto.descripcion || "",
-      categoriaUuid: producto.categoria?.uuid || "",
-      unidadMedidaUuid: producto.unidadMedida?.uuid || "",
-      costoCompra: String(producto.costoCompra ?? 0),
-      precioVenta: String(producto.precioVenta ?? 0),
-      manejaInventario: producto.manejaInventario,
-      stockMinimo: String(producto.stockMinimo ?? 0),
-      stockMaximo: producto.stockMaximo != null ? String(producto.stockMaximo) : "",
-      estado: producto.estado,
+      codigo: articulo.codigo || "",
+      nombre: articulo.nombre,
+      descripcion: articulo.descripcion || "",
+      categoriaUuid: articulo.categoria?.uuid || "",
+      unidadMedidaUuid: articulo.unidadMedida?.uuid || "",
+      costoCompra: String(articulo.costoCompra ?? 0),
+      precioVenta: String(articulo.precioVenta ?? 0),
+      manejaInventario: articulo.manejaInventario,
+      stockMinimo: String(articulo.stockMinimo ?? 0),
+      stockMaximo: articulo.stockMaximo != null ? String(articulo.stockMaximo) : "",
+      estado: articulo.estado,
     });
     setFormError("");
     setModalOpen(true);
@@ -113,9 +113,9 @@ export default function ProductosInventarioPage() {
         stockMaximo: form.stockMaximo === "" ? null : Number(form.stockMaximo),
       };
       if (editing) {
-        await apiFetch(`/inventarios/productos/${editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
+        await apiFetch(`/inventarios/articulos/${editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       } else {
-        await apiFetch("/inventarios/productos", { method: "POST", body: JSON.stringify(body) });
+        await apiFetch("/inventarios/articulos", { method: "POST", body: JSON.stringify(body) });
       }
       setModalOpen(false);
       load();
@@ -126,10 +126,10 @@ export default function ProductosInventarioPage() {
     }
   }
 
-  async function handleDelete(producto) {
-    if (!confirm(`¿Eliminar el producto "${producto.nombre}"?`)) return;
+  async function handleDelete(articulo) {
+    if (!confirm(`¿Eliminar el artículo "${articulo.nombre}"?`)) return;
     try {
-      await apiFetch(`/inventarios/productos/${producto.uuid}`, { method: "DELETE" });
+      await apiFetch(`/inventarios/articulos/${articulo.uuid}`, { method: "DELETE" });
       load();
     } catch (err) {
       setError(err.message);
@@ -137,16 +137,16 @@ export default function ProductosInventarioPage() {
   }
 
   return (
-    <RequirePermission code="menu.inventarios.productos">
+    <RequirePermission code="menu.inventarios.articulos">
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">Productos de Inventario</h1>
-            <p className="text-secondary mb-0">Insumos, repuestos y productos elaborados que maneja el inventario.</p>
+            <h1 className="fw-bold h3 mb-1">Artículos de Inventario</h1>
+            <p className="text-secondary mb-0">Insumos, repuestos y artículos elaborados que maneja el inventario.</p>
           </div>
-          {hasPermission("inventario.productos.crear") && (
+          {hasPermission("inventario.articulos.crear") && (
             <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
-              <FiPlus /> Nuevo producto
+              <FiPlus /> Nuevo artículo
             </button>
           )}
         </div>
@@ -192,7 +192,7 @@ export default function ProductosInventarioPage() {
                 {!loading && items.length === 0 && (
                   <tr>
                     <td colSpan={9} className="text-center text-secondary py-4">
-                      No hay productos registrados todavía.
+                      No hay artículos registrados todavía.
                     </td>
                   </tr>
                 )}
@@ -217,12 +217,12 @@ export default function ProductosInventarioPage() {
                       </td>
                       <td>
                         <div className="d-flex justify-content-end gap-2 flex-nowrap">
-                          {hasPermission("inventario.productos.editar") && (
+                          {hasPermission("inventario.articulos.editar") && (
                             <button type="button" className="btn btn-sm btn-outline-warning" title="Editar" onClick={() => openEdit(p)}>
                               <FiEdit2 />
                             </button>
                           )}
-                          {hasPermission("inventario.productos.eliminar") && (
+                          {hasPermission("inventario.articulos.eliminar") && (
                             <button type="button" className="btn btn-sm btn-outline-danger" title="Eliminar" onClick={() => handleDelete(p)}>
                               <FiTrash2 />
                             </button>
@@ -237,7 +237,7 @@ export default function ProductosInventarioPage() {
         </div>
 
         {modalOpen && (
-          <ModalShell title={editing ? "Editar producto" : "Nuevo producto"} onClose={() => setModalOpen(false)}>
+          <ModalShell title={editing ? "Editar artículo" : "Nuevo artículo"} onClose={() => setModalOpen(false)}>
             <form onSubmit={handleSave}>
               <div className="row g-3 mb-3">
                 <div className="col-4">
@@ -291,7 +291,7 @@ export default function ProductosInventarioPage() {
                       </option>
                     ))}
                   </select>
-                  <p className="form-text small mb-0">El tipo del producto es siempre el de su categoría.</p>
+                  <p className="form-text small mb-0">El tipo del artículo es siempre el de su categoría.</p>
                 </div>
                 <div className="col-6">
                   <label className="form-label small fw-medium">Unidad de medida</label>
@@ -364,11 +364,11 @@ export default function ProductosInventarioPage() {
                 <input
                   type="checkbox"
                   className="form-check-input"
-                  id="producto-maneja-inv"
+                  id="articulo-maneja-inv"
                   checked={form.manejaInventario}
                   onChange={(e) => setForm((f) => ({ ...f, manejaInventario: e.target.checked }))}
                 />
-                <label className="form-check-label small" htmlFor="producto-maneja-inv">
+                <label className="form-check-label small" htmlFor="articulo-maneja-inv">
                   Maneja inventario (afecta existencias/kárdex)
                 </label>
               </div>
@@ -376,11 +376,11 @@ export default function ProductosInventarioPage() {
                 <input
                   type="checkbox"
                   className="form-check-input"
-                  id="producto-inv-estado"
+                  id="articulo-inv-estado"
                   checked={form.estado}
                   onChange={(e) => setForm((f) => ({ ...f, estado: e.target.checked }))}
                 />
-                <label className="form-check-label small" htmlFor="producto-inv-estado">
+                <label className="form-check-label small" htmlFor="articulo-inv-estado">
                   Activo
                 </label>
               </div>
