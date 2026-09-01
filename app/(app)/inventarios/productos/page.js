@@ -7,14 +7,11 @@ import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
-const TIPOS = ["INSUMO", "REPUESTO", "ELABORADO", "GENERAL"];
-
 function emptyForm() {
   return {
     codigo: "",
     nombre: "",
     descripcion: "",
-    tipo: "GENERAL",
     categoriaUuid: "",
     unidadMedidaUuid: "",
     costoCompra: "0",
@@ -86,7 +83,6 @@ export default function ProductosInventarioPage() {
       codigo: producto.codigo || "",
       nombre: producto.nombre,
       descripcion: producto.descripcion || "",
-      tipo: producto.tipo,
       categoriaUuid: producto.categoria?.uuid || "",
       unidadMedidaUuid: producto.unidadMedida?.uuid || "",
       costoCompra: String(producto.costoCompra ?? 0),
@@ -176,8 +172,8 @@ export default function ProductosInventarioPage() {
                 <tr>
                   <th>Código</th>
                   <th>Nombre</th>
-                  <th>Tipo</th>
                   <th>Categoría</th>
+                  <th>Tipo</th>
                   <th>Unidad</th>
                   <th>Costo</th>
                   <th>Precio</th>
@@ -205,8 +201,8 @@ export default function ProductosInventarioPage() {
                     <tr key={p.uuid}>
                       <td className="small text-secondary">{p.codigo || "—"}</td>
                       <td className="fw-medium">{p.nombre}</td>
-                      <td className="small text-secondary">{p.tipo}</td>
                       <td className="small text-secondary">{p.categoria?.nombre || "—"}</td>
+                      <td className="small text-secondary">{p.categoria?.tipo || "—"}</td>
                       <td className="small text-secondary">{p.unidadMedida?.simbolo || "—"}</td>
                       <td className="small">{Number(p.costoCompra || 0).toFixed(2)}</td>
                       <td className="small">{Number(p.precioVenta || 0).toFixed(2)}</td>
@@ -281,21 +277,7 @@ export default function ProductosInventarioPage() {
               </div>
 
               <div className="row g-3 mb-3">
-                <div className="col-4">
-                  <label className="form-label small fw-medium">Tipo</label>
-                  <select
-                    className="form-select rounded-3"
-                    value={form.tipo}
-                    onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}
-                  >
-                    {TIPOS.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-4">
+                <div className="col-6">
                   <label className="form-label small fw-medium">Categoría</label>
                   <select
                     className="form-select rounded-3"
@@ -305,12 +287,13 @@ export default function ProductosInventarioPage() {
                     <option value="">Sin categoría</option>
                     {categorias.map((c) => (
                       <option key={c.uuid} value={c.uuid}>
-                        {c.nombre}
+                        {c.nombre} ({c.tipo})
                       </option>
                     ))}
                   </select>
+                  <p className="form-text small mb-0">El tipo del producto es siempre el de su categoría.</p>
                 </div>
-                <div className="col-4">
+                <div className="col-6">
                   <label className="form-label small fw-medium">Unidad de medida</label>
                   <select
                     className="form-select rounded-3"
