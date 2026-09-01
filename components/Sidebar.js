@@ -34,6 +34,7 @@ import {
   FiDatabase,
   FiBox,
   FiImage,
+  FiTruck,
 } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
@@ -141,6 +142,7 @@ const NAV = [
       { key: "inventariosElaboraciones", label: "Elaboraciones", icon: FiActivity, permKey: "inventariosElaboraciones", href: "/inventarios/elaboraciones" },
       { key: "inventariosProformas", label: "Proformas", icon: FiClipboard, permKey: "inventariosProformas", href: "/inventarios/proformas" },
       { key: "inventariosEquipos", label: "Equipos", icon: GiFarmTractor, permKey: "inventariosEquipos", href: "/inventarios/equipos" },
+      { key: "inventariosProveedores", label: "Proveedores", icon: FiTruck, permKey: "inventariosProveedores", href: "/inventarios/proveedores" },
       { key: "inventariosPlanes", label: "Planes Mantenimiento", icon: FiSettings, permKey: "inventariosPlanes", href: "/inventarios/planes-mantenimiento" },
       { key: "inventariosProgramaciones", label: "Programaciones", icon: FiCalendar, permKey: "inventariosProgramaciones", href: "/inventarios/programaciones-mantenimiento" },
       { key: "inventariosOrdenes", label: "Órdenes Mantenimiento", icon: FiList, permKey: "inventariosOrdenes", href: "/inventarios/ordenes-mantenimiento" },
@@ -265,6 +267,7 @@ export default function Sidebar() {
       inventariosElaboraciones: hasPermission("menu.inventarios.elaboraciones"),
       inventariosProformas: hasPermission("menu.inventarios.proformas"),
       inventariosEquipos: hasPermission("menu.inventarios.equipos"),
+      inventariosProveedores: hasPermission("menu.inventarios.proveedores"),
       inventariosPlanes: hasPermission("menu.inventarios.planes"),
       inventariosProgramaciones: hasPermission("menu.inventarios.programaciones"),
       inventariosOrdenes: hasPermission("menu.inventarios.ordenes"),
