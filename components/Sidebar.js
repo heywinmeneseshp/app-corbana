@@ -35,6 +35,7 @@ import {
   FiBox,
   FiImage,
   FiTruck,
+  FiTarget,
 } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
@@ -104,6 +105,7 @@ const NAV = [
   },
   { type: "link", key: "precipitacionDiaria", label: "Precipitación Diaria", icon: FiCloudRain, permKey: "precipitacionDiaria", href: "/precipitacion-diaria" },
   { type: "link", key: "produccionSemanal", label: "Producción Semanal", icon: FiPackage, permKey: "produccionSemanal", href: "/produccion-semanal" },
+  { type: "link", key: "estimaciones", label: "Estimaciones de Fincas", icon: FiTarget, permKey: "estimaciones", href: "/estimaciones" },
   { type: "link", key: "pronostico", label: "Pronóstico de Cajas", icon: FiActivity, permKey: "pronostico", href: "/pronostico" },
   {
     type: "section",
@@ -251,6 +253,7 @@ export default function Sidebar() {
 
       precipitacionDiaria: hasPermission("menu.precipitacion_diaria"),
       produccionSemanal: hasPermission("menu.produccion_semanal"),
+      estimaciones: hasPermission("menu.estimaciones"),
       pronostico: hasPermission("menu.pronostico"),
       programacionCorte: hasPermission("menu.programacion_corte"),
       reportes: hasPermission("menu.reportes"),
