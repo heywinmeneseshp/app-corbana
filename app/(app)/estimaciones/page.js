@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FiTarget, FiSave, FiEye, FiList, FiAlertTriangle, FiUploadCloud, FiDownload } from "react-icons/fi";
+import { FiTarget, FiSave, FiEye, FiList, FiAlertTriangle, FiUploadCloud, FiDownload, FiBarChart2 } from "react-icons/fi";
 import * as XLSX from "xlsx";
 import { apiFetch, apiUploadConProgreso } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
@@ -34,6 +34,11 @@ export default function EstimacionesPage() {
   const [escaleraLoading, setEscaleraLoading] = useState(false);
   const [filtroEscaleraFincaUuid, setFiltroEscaleraFincaUuid] = useState("");
   const [semanaActualEscalera, setSemanaActualEscalera] = useState(null);
+
+  // Comparativo estimado vs. real
+  const [comparativoItems, setComparativoItems] = useState([]);
+  const [comparativoLoading, setComparativoLoading] = useState(false);
+  const [filtroComparativoFincaUuid, setFiltroComparativoFincaUuid] = useState("");
 
   // Carga masiva histórica
   const [bulkFile, setBulkFile] = useState(null);
@@ -93,12 +98,33 @@ export default function EstimacionesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const cargarComparativo = useCallback(async () => {
+    setComparativoLoading(true);
+    setMsgError("");
+    try {
+      const qs = filtroComparativoFincaUuid ? `?fincaUuid=${filtroComparativoFincaUuid}` : "";
+      const res = await apiFetch(`/estimaciones/comparativo${qs}`);
+      setComparativoItems(res.items || []);
+    } catch (err) {
+      setMsgError(err.message);
+    } finally {
+      setComparativoLoading(false);
+    }
+  }, [filtroComparativoFincaUuid]);
+
   useEffect(() => {
     if (vista === "ver") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       cargarEscalera();
     }
   }, [vista, cargarEscalera]);
+
+  useEffect(() => {
+    if (vista === "comparativo") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      cargarComparativo();
+    }
+  }, [vista, cargarComparativo]);
 
   const escaleraWrapRef = useRef(null);
   useEffect(() => {
@@ -264,6 +290,15 @@ export default function EstimacionesPage() {
               onClick={() => setVista("ver")}
             >
               <FiEye className="me-1" /> Ver estimaciones
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              type="button"
+              className={`nav-link rounded-3 ${vista === "comparativo" ? "active" : ""}`}
+              onClick={() => setVista("comparativo")}
+            >
+              <FiBarChart2 className="me-1" /> Comparativo vs. real
             </button>
           </li>
         </ul>
@@ -596,6 +631,89 @@ export default function EstimacionesPage() {
                 Cada fila es la <strong>semana de registro</strong> (cuándo se cargó la estimación) y cada columna la <strong>semana objetivo</strong>. El valor es la suma de cajas (20&nbsp;kg eq.) estimada. La diagonal marca el registro de la misma semana.
               </div>
             )}
+          </div>
+        )}
+
+        {vista === "comparativo" && (
+          <div>
+            {fincas.length > 0 && (
+              <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+                <div className="row g-2 align-items-end">
+                  <div className="col-12 col-md-5 col-lg-4">
+                    <label className="form-label small fw-medium">Finca</label>
+                    <select
+                      className="form-select rounded-3"
+                      value={filtroComparativoFincaUuid}
+                      onChange={(e) => setFiltroComparativoFincaUuid(e.target.value)}
+                    >
+                      <option value="">Todas</option>
+                      {fincas.map((f) => (
+                        <option key={f.uuid} value={f.uuid}>
+                          {f.codigo} — {f.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-auto">
+                    <button type="button" className="btn btn-outline-secondary rounded-3 btn-sm" onClick={cargarComparativo} disabled={comparativoLoading}>
+                      {comparativoLoading ? "Cargando..." : "Actualizar"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <p className="small text-secondary mb-3">
+              Compara, para cada finca y semana ya transcurrida, cuánto se estimó (última revisión cargada) contra cuánto se produjo realmente (Producción Semanal). Las semanas futuras no aparecen — todavía no tienen producción real que comparar.
+            </p>
+
+            <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+              <div className="table-responsive">
+                <table className="table table-sm table-hover align-middle mb-0 small">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Finca</th>
+                      <th>Semana</th>
+                      <th className="text-end">Estimado</th>
+                      <th className="text-end">Real</th>
+                      <th className="text-end">Diferencia</th>
+                      <th className="text-end">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparativoLoading && (
+                      <tr>
+                        <td colSpan={6} className="text-center text-secondary py-4">
+                          Cargando...
+                        </td>
+                      </tr>
+                    )}
+                    {!comparativoLoading && comparativoItems.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="text-center text-secondary py-4">
+                          No hay semanas con estimación y producción real para comparar todavía.
+                        </td>
+                      </tr>
+                    )}
+                    {!comparativoLoading &&
+                      comparativoItems.map((it, idx) => (
+                        <tr key={`${it.finca.uuid}-${it.semana.uuid}-${idx}`}>
+                          <td className="fw-medium">{it.finca.codigo} — {it.finca.nombre}</td>
+                          <td className="small text-secondary">{it.semana.codigo}</td>
+                          <td className="text-end">{it.estimado.toLocaleString("es")}</td>
+                          <td className="text-end">{it.real.toLocaleString("es")}</td>
+                          <td className={`text-end fw-medium ${it.diferencia > 0 ? "text-success" : it.diferencia < 0 ? "text-danger" : ""}`}>
+                            {it.diferencia > 0 ? "+" : ""}{it.diferencia.toLocaleString("es")}
+                          </td>
+                          <td className={`text-end fw-medium ${it.porcentaje > 0 ? "text-success" : it.porcentaje < 0 ? "text-danger" : ""}`}>
+                            {it.porcentaje === null ? "—" : `${it.porcentaje > 0 ? "+" : ""}${it.porcentaje}%`}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
