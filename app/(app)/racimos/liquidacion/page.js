@@ -10,11 +10,18 @@ export default function LiquidacionRacimosPage() {
   const [fincas, setFincas] = useState([]);
   const [fincaUuid, setFincaUuid] = useState("");
   const [resumen, setResumen] = useState(null);
+  const [semanas, setSemanas] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [accionando, setAccionando] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const [semanaDesdeMasivoUuid, setSemanaDesdeMasivoUuid] = useState("");
+  const [semanaHastaMasivoUuid, setSemanaHastaMasivoUuid] = useState("");
+  const [liquidandoMasivo, setLiquidandoMasivo] = useState(false);
+  const [resultadoMasivo, setResultadoMasivo] = useState(null);
+  const [errorMasivo, setErrorMasivo] = useState("");
 
   const esAdmin = esAdministrador();
 
@@ -23,6 +30,11 @@ export default function LiquidacionRacimosPage() {
       .then((res) => setFincas(res.items || []))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+    if (esAdministrador()) {
+      apiFetch("/semanas?limit=100")
+        .then((res) => setSemanas(res.items || []))
+        .catch(() => {});
+    }
   }, []);
 
   const cargarSemanas = useCallback(() => {
@@ -78,6 +90,34 @@ export default function LiquidacionRacimosPage() {
     }
   }
 
+  async function liquidarMasivo() {
+    const semanaDesde = semanas.find((s) => s.uuid === semanaDesdeMasivoUuid);
+    const semanaHasta = semanas.find((s) => s.uuid === semanaHastaMasivoUuid);
+    if (
+      !confirm(
+        `¿Liquidar TODAS las semanas entre ${semanaDesde?.codigo} y ${semanaHasta?.codigo} para TODAS las fincas operativas? ` +
+          "Esto bloqueará el registro/edición de movimientos de racimos de esas semanas para todo el mundo, salvo un Administrador.",
+      )
+    ) {
+      return;
+    }
+    setLiquidandoMasivo(true);
+    setErrorMasivo("");
+    setResultadoMasivo(null);
+    try {
+      const res = await apiFetch("/estimaciones/liquidar-semana-masivo", {
+        method: "POST",
+        body: JSON.stringify({ semanaDesdeUuid: semanaDesdeMasivoUuid, semanaHastaUuid: semanaHastaMasivoUuid }),
+      });
+      setResultadoMasivo(res);
+      cargarSemanas();
+    } catch (err) {
+      setErrorMasivo(err.message);
+    } finally {
+      setLiquidandoMasivo(false);
+    }
+  }
+
   return (
     <RequirePermission code="menu.racimos.liquidacion">
       <div className="p-4 p-md-5">
@@ -94,6 +134,71 @@ export default function LiquidacionRacimosPage() {
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
         {success && <div className="alert alert-success py-2 small">{success}</div>}
+
+        {esAdmin && (
+          <div className="card border-0 shadow-sm rounded-4 p-3 mb-3" style={{ borderLeft: "4px solid #dc2626" }}>
+            <h2 className="h6 fw-bold mb-1" style={{ color: "#dc2626" }}>
+              Liquidación masiva — todas las fincas
+            </h2>
+            <p className="text-secondary small mb-3">
+              Liquida de una sola vez todas las semanas de un rango, para todas las fincas operativas. Útil para
+              ponerse al día con semanas atrasadas sin liquidar de a una. Solo Administrador.
+            </p>
+
+            {errorMasivo && <div className="alert alert-danger py-2 small">{errorMasivo}</div>}
+            {resultadoMasivo && (
+              <div className="alert alert-success py-2 small">
+                Listo: {resultadoMasivo.fincas} finca(s) × {resultadoMasivo.semanas} semana(s) ={" "}
+                {resultadoMasivo.combinacionesTotales} combinaciones — {resultadoMasivo.creadas} nueva(s),{" "}
+                {resultadoMasivo.reabiertas} reabierta(s) que estaban borradas, {resultadoMasivo.yaLiquidadas} ya
+                estaban liquidadas.
+              </div>
+            )}
+
+            <div className="row g-2 align-items-end">
+              <div className="col-12 col-md-4">
+                <label className="form-label small fw-medium">Semana desde</label>
+                <select
+                  className="form-select rounded-3"
+                  value={semanaDesdeMasivoUuid}
+                  onChange={(e) => setSemanaDesdeMasivoUuid(e.target.value)}
+                >
+                  <option value="">Selecciona...</option>
+                  {semanas.map((s) => (
+                    <option key={s.uuid} value={s.uuid}>
+                      {s.codigo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label small fw-medium">Semana hasta</label>
+                <select
+                  className="form-select rounded-3"
+                  value={semanaHastaMasivoUuid}
+                  onChange={(e) => setSemanaHastaMasivoUuid(e.target.value)}
+                >
+                  <option value="">Selecciona...</option>
+                  {semanas.map((s) => (
+                    <option key={s.uuid} value={s.uuid}>
+                      {s.codigo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-12 col-md-4">
+                <button
+                  type="button"
+                  className="btn btn-danger rounded-3 w-100"
+                  disabled={!semanaDesdeMasivoUuid || !semanaHastaMasivoUuid || liquidandoMasivo}
+                  onClick={liquidarMasivo}
+                >
+                  {liquidandoMasivo ? "Liquidando..." : "Liquidar rango para todas las fincas"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
           <div className="row g-2 align-items-end">
