@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // filtran las semanas por código, y se puede confirmar tanto haciendo clic
 // en una sugerencia como escribiendo el código exacto y saliendo del campo
 // (blur o Enter) — no exige usar el mouse para elegir.
-export default function SemanaAutocomplete({ semanas, value, onChange, placeholder = "Todas", width = "7rem" }) {
+export default function SemanaAutocomplete({ semanas, value, onChange, placeholder = "Todas", width = "7rem", limit = 20 }) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -29,10 +29,10 @@ export default function SemanaAutocomplete({ semanas, value, onChange, placehold
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const filtered = useMemo(() => {
-    if (!text) return semanas.slice(0, 20);
+    if (!text) return semanas.slice(0, limit);
     const q = text.toLowerCase();
-    return semanas.filter((s) => s.codigo.toLowerCase().includes(q)).slice(0, 20);
-  }, [semanas, text]);
+    return semanas.filter((s) => s.codigo.toLowerCase().includes(q)).slice(0, limit);
+  }, [semanas, text, limit]);
 
   useEffect(() => {
     function handleClick(e) {

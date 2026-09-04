@@ -5,6 +5,7 @@ import { FiCheckCircle, FiLock, FiUnlock } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
+import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 
 export default function LiquidacionRacimosPage() {
   const [fincas, setFincas] = useState([]);
@@ -17,7 +18,6 @@ export default function LiquidacionRacimosPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const [semanaDesdeMasivoUuid, setSemanaDesdeMasivoUuid] = useState("");
   const [semanaHastaMasivoUuid, setSemanaHastaMasivoUuid] = useState("");
   const [liquidandoMasivo, setLiquidandoMasivo] = useState(false);
   const [resultadoMasivo, setResultadoMasivo] = useState(null);
@@ -31,9 +31,25 @@ export default function LiquidacionRacimosPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
     if (esAdministrador()) {
-      apiFetch("/semanas?limit=100")
-        .then((res) => setSemanas(res.items || []))
-        .catch(() => {});
+      // Trae TODAS las semanas registradas (paginando de a 100, el máximo
+      // del backend) — el autocompletar de abajo (SemanaAutocomplete) es el
+      // que evita mostrarlas todas de una, filtrando por lo que se escribe
+      // y mostrando como máximo 50 sugerencias a la vez.
+      (async () => {
+        try {
+          let page = 1;
+          let todas = [];
+          while (true) {
+            const res = await apiFetch(`/semanas?limit=100&page=${page}`);
+            todas = todas.concat(res.items || []);
+            if (page >= (res.meta?.totalPages || 1)) break;
+            page += 1;
+          }
+          setSemanas(todas);
+        } catch {
+          // sin bloquear el resto de la pantalla si esto falla
+        }
+      })();
     }
   }, []);
 
@@ -91,11 +107,10 @@ export default function LiquidacionRacimosPage() {
   }
 
   async function liquidarMasivo() {
-    const semanaDesde = semanas.find((s) => s.uuid === semanaDesdeMasivoUuid);
     const semanaHasta = semanas.find((s) => s.uuid === semanaHastaMasivoUuid);
     if (
       !confirm(
-        `¿Liquidar TODAS las semanas entre ${semanaDesde?.codigo} y ${semanaHasta?.codigo} para TODAS las fincas operativas? ` +
+        `¿Liquidar TODAS las semanas pendientes hasta ${semanaHasta?.codigo} (inclusive) para TODAS las fincas operativas? ` +
           "Esto bloqueará el registro/edición de movimientos de racimos de esas semanas para todo el mundo, salvo un Administrador.",
       )
     ) {
@@ -107,7 +122,7 @@ export default function LiquidacionRacimosPage() {
     try {
       const res = await apiFetch("/estimaciones/liquidar-semana-masivo", {
         method: "POST",
-        body: JSON.stringify({ semanaDesdeUuid: semanaDesdeMasivoUuid, semanaHastaUuid: semanaHastaMasivoUuid }),
+        body: JSON.stringify({ semanaHastaUuid: semanaHastaMasivoUuid }),
       });
       setResultadoMasivo(res);
       cargarSemanas();
@@ -156,44 +171,25 @@ export default function LiquidacionRacimosPage() {
             )}
 
             <div className="row g-2 align-items-end">
-              <div className="col-12 col-md-4">
-                <label className="form-label small fw-medium">Semana desde</label>
-                <select
-                  className="form-select rounded-3"
-                  value={semanaDesdeMasivoUuid}
-                  onChange={(e) => setSemanaDesdeMasivoUuid(e.target.value)}
-                >
-                  <option value="">Selecciona...</option>
-                  {semanas.map((s) => (
-                    <option key={s.uuid} value={s.uuid}>
-                      {s.codigo}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-12 col-md-4">
+              <div className="col-12 col-md-6">
                 <label className="form-label small fw-medium">Semana hasta</label>
-                <select
-                  className="form-select rounded-3"
+                <SemanaAutocomplete
+                  semanas={semanas}
                   value={semanaHastaMasivoUuid}
-                  onChange={(e) => setSemanaHastaMasivoUuid(e.target.value)}
-                >
-                  <option value="">Selecciona...</option>
-                  {semanas.map((s) => (
-                    <option key={s.uuid} value={s.uuid}>
-                      {s.codigo}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSemanaHastaMasivoUuid}
+                  placeholder="Buscar semana (ej. S33-2026)..."
+                  width="100%"
+                  limit={50}
+                />
               </div>
-              <div className="col-12 col-md-4">
+              <div className="col-12 col-md-6">
                 <button
                   type="button"
                   className="btn btn-danger rounded-3 w-100"
-                  disabled={!semanaDesdeMasivoUuid || !semanaHastaMasivoUuid || liquidandoMasivo}
+                  disabled={!semanaHastaMasivoUuid || liquidandoMasivo}
                   onClick={liquidarMasivo}
                 >
-                  {liquidandoMasivo ? "Liquidando..." : "Liquidar rango para todas las fincas"}
+                  {liquidandoMasivo ? "Liquidando..." : "Liquidar pendientes hasta esta semana"}
                 </button>
               </div>
             </div>
