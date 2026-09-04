@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon } from "react-leaflet";
 import L from "leaflet";
 import { FiMapPin } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
+import { normalizarPerimetro } from "@/lib/kml";
 import ModalShell from "@/components/ModalShell";
 
 // Paleta de colores distintos para identificar cada tipo de evaluación en
@@ -73,6 +74,28 @@ function fechaCorta(iso) {
   }
 }
 
+function horaCorta(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+// Punto chico (modo ruta) — sin número: con muchas evaluaciones seguidas, un
+// círculo grande con número de 2 cifras por punto tapa el trazo y se
+// amontona. El orden queda igual disponible en el popup ("Orden #N").
+function crearIconoRuta() {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:7px;height:7px;border-radius:50%;background:#1e293b;border:1px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.5);"></div>`,
+    iconSize: [7, 7],
+    iconAnchor: [3, 3],
+    popupAnchor: [0, -3],
+  });
+}
+
 // Modal con mapa de dónde se tomaron las evaluaciones de una finca, con los
 // mismos filtros (semana/usuario/lote) que el panel de Indicadores — cada
 // evaluación tiene su geolocalización a través de la planta evaluada
@@ -89,6 +112,15 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
   // todos visibles.
   const [tiposOcultos, setTiposOcultos] = useState(new Set());
   const [verSinUbicacion, setVerSinUbicacion] = useState(false);
+  const [verRuta, setVerRuta] = useState(false);
+  const [perimetro, setPerimetro] = useState(null);
+
+  useEffect(() => {
+    if (!fincaUuid) return;
+    apiFetch(`/fincas/${fincaUuid}`)
+      .then((res) => setPerimetro(normalizarPerimetro(res.perimetro)))
+      .catch(() => setPerimetro(null));
+  }, [fincaUuid]);
 
   useEffect(() => {
     if (!fincaUuid) return;
@@ -134,11 +166,31 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
     const colores = [...new Set(Object.values(mapaColores))];
     return Object.fromEntries(colores.map((color) => [color, crearIconoColor(color)]));
   }, [mapaColores]);
+  const iconoRuta = useMemo(() => crearIconoRuta(), []);
 
   const visibles = useMemo(
     () => conUbicacion.filter((it) => !tiposOcultos.has(it.tipoEvaluacion?.nombre || "Sin tipo")),
     [conUbicacion, tiposOcultos],
   );
+
+  // Orden cronológico real de captura — usa `capturadoEn` (hora local en que
+  // el evaluador la guardó en el celular, aunque haya sincronizado después
+  // sin conexión) y solo cae a `createdAt` (hora de sincronización con el
+  // servidor) para evaluaciones viejas que no tienen `capturadoEn` guardado.
+  const visiblesOrdenados = useMemo(() => {
+    return [...visibles].sort((a, b) => {
+      const ta = new Date(a.capturadoEn || a.createdAt || a.fecha).getTime();
+      const tb = new Date(b.capturadoEn || b.createdAt || b.fecha).getTime();
+      return ta - tb;
+    });
+  }, [visibles]);
+
+  const rutaPosiciones = useMemo(
+    () => visiblesOrdenados.map((it) => [Number(it.planta.latitud), Number(it.planta.longitud)]),
+    [visiblesOrdenados],
+  );
+
+  const hayHoraReal = visibles.some((it) => it.capturadoEn || it.createdAt);
 
   function toggleTipo(nombre) {
     setTiposOcultos((prev) => {
@@ -207,20 +259,42 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
           )}
         </div>
         {!loading && !error && conUbicacion.length > 0 && (
-          <div className="btn-group btn-group-sm" role="group">
-            {Object.entries(CAPAS).map(([clave, def]) => (
-              <button
-                key={clave}
-                type="button"
-                className={`btn ${capa === clave ? "btn-brand" : "btn-outline-secondary"}`}
-                onClick={() => setCapa(clave)}
-              >
-                {def.nombre}
-              </button>
-            ))}
+          <div className="d-flex align-items-center gap-2">
+            <button
+              type="button"
+              className={`btn btn-sm ${verRuta ? "btn-brand" : "btn-outline-secondary"}`}
+              onClick={() => setVerRuta((v) => !v)}
+              disabled={visibles.length < 2}
+              title={
+                visibles.length < 2
+                  ? "Se necesitan al menos 2 evaluaciones visibles para trazar una ruta"
+                  : "Conecta los puntos en el orden en que se tomaron"
+              }
+            >
+              {verRuta ? "Ocultar ruta" : "Ver ruta"}
+            </button>
+            <div className="btn-group btn-group-sm" role="group">
+              {Object.entries(CAPAS).map(([clave, def]) => (
+                <button
+                  key={clave}
+                  type="button"
+                  className={`btn ${capa === clave ? "btn-brand" : "btn-outline-secondary"}`}
+                  onClick={() => setCapa(clave)}
+                >
+                  {def.nombre}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
+
+      {verRuta && !hayHoraReal && (
+        <div className="alert alert-warning py-2 small m-3 mb-0">
+          Ninguna de estas evaluaciones tiene hora de captura registrada — se está usando el orden de llegada
+          al servidor, que puede no reflejar el orden real en que se tomaron.
+        </div>
+      )}
 
       {verSinUbicacion && sinUbicacion.length > 0 && (
         <div className="px-3 py-2 border-bottom bg-white" style={{ maxHeight: "9rem", overflowY: "auto" }}>
@@ -252,33 +326,53 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
         <div className="flex-grow-1" style={{ minHeight: 0 }}>
           <MapContainer center={centro} zoom={16} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
             <TileLayer key={capa} attribution={CAPAS[capa].attribution} url={CAPAS[capa].url} maxZoom={CAPAS[capa].maxZoom} />
-            {visibles.map((it) => {
-                const nombreTipo = it.tipoEvaluacion?.nombre || "Sin tipo";
-                const color = colorDeTipo(nombreTipo, mapaColores);
-                return (
-                  <Marker
-                    key={it.uuid}
-                    position={[Number(it.planta.latitud), Number(it.planta.longitud)]}
-                    icon={iconosPorColor[color]}
-                  >
-                    <Popup>
-                      <div className="small">
-                        <div className="fw-bold">{it.planta?.codigo || "Planta"}</div>
-                        <div>{fechaCorta(it.fecha)}</div>
-                        {it.usuario && (
-                          <div className="text-secondary">
-                            {`${it.usuario.nombre || ""} ${it.usuario.apellido || ""}`.trim() || it.usuario.usuario}
-                          </div>
+            {perimetro && perimetro.length > 2 && (
+              <Polygon
+                positions={perimetro}
+                pathOptions={{ color: "#facc15", weight: 2, fillColor: "#facc15", fillOpacity: 0.08 }}
+              />
+            )}
+            {verRuta && (
+              <Polyline
+                positions={rutaPosiciones}
+                pathOptions={{ color: capa === "satelite" ? "#ffffff" : "#000000", weight: 2, opacity: 0.9, dashArray: "6 6" }}
+              />
+            )}
+            {(verRuta ? visiblesOrdenados : visibles).map((it, idx) => {
+              const nombreTipo = it.tipoEvaluacion?.nombre || "Sin tipo";
+              const color = colorDeTipo(nombreTipo, mapaColores);
+              const horaReal = it.capturadoEn || it.createdAt;
+              return (
+                <Marker
+                  key={it.uuid}
+                  position={[Number(it.planta.latitud), Number(it.planta.longitud)]}
+                  icon={verRuta ? iconoRuta : iconosPorColor[color]}
+                >
+                  <Popup>
+                    <div className="small">
+                      {verRuta && <div className="fw-bold">Orden #{idx + 1}</div>}
+                      <div className="fw-bold">{it.planta?.codigo || "Planta"}</div>
+                      <div>
+                        {fechaCorta(it.fecha)}
+                        {horaReal && <> — {horaCorta(horaReal)}</>}
+                        {!it.capturadoEn && it.createdAt && (
+                          <span className="text-secondary"> (hora de sincronización, no de captura)</span>
                         )}
-                        <div className="d-flex align-items-center gap-1 mt-1">
-                          <span className="rounded-circle d-inline-block" style={{ width: 8, height: 8, background: color }} />
-                          {nombreTipo}
-                        </div>
                       </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
+                      {it.usuario && (
+                        <div className="text-secondary">
+                          {`${it.usuario.nombre || ""} ${it.usuario.apellido || ""}`.trim() || it.usuario.usuario}
+                        </div>
+                      )}
+                      <div className="d-flex align-items-center gap-1 mt-1">
+                        <span className="rounded-circle d-inline-block" style={{ width: 8, height: 8, background: color }} />
+                        {nombreTipo}
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
           </MapContainer>
         </div>
       )}

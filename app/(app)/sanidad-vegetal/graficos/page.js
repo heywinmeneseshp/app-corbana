@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FiX } from "react-icons/fi";
 import { hasPermission } from "@/lib/auth";
+import { esAdministrador } from "@/lib/laborEstados";
 import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
+import ModalShell from "@/components/ModalShell";
 import PromedioPorSemanaChart from "@/components/reportes/PromedioPorSemanaChart";
 import PromedioPorEdadChart from "@/components/reportes/PromedioPorEdadChart";
 import PromedioInfeccionChart from "@/components/reportes/PromedioInfeccionChart";
@@ -12,10 +15,6 @@ import EvaluacionCompareModal from "@/components/reportes/EvaluacionCompareModal
 import ClimaChart from "@/components/reportes/ClimaChart";
 
 const LIMITES_SB_SEMANA = [{ valor: 1200, color: "#dc2626" }];
-const LIMITES_SB_HOJA = [
-  { valor: 450, color: "#f59e0b" },
-  { valor: 650, color: "#dc2626" },
-];
 const LINEAS_SB_SEMANA = [{ key: "promedio", label: "Promedio", color: "#16a34a" }];
 const LINEAS_SB_HOJA = [
   { key: "h3", label: "Suma Bruta Hoja 3", color: "#2563eb", filtro: (i) => i.hoja === 3 },
@@ -59,14 +58,24 @@ function SumaBrutaGraficos() {
   const [fincas, setFincas] = useState([]);
   const [fincaUuid, setFincaUuid] = useState("");
   const [modalAbierto, setModalAbierto] = useState(null); // null | "semana" | "hoja"
+  const [umbralesSbHoja, setUmbralesSbHoja] = useState({ advertencia: 450, alerta: 650 });
+  const [modalUmbrales, setModalUmbrales] = useState(false);
+  const esAdmin = esAdministrador();
 
   useEffect(() => {
     apiFetch("/fincas?limit=100")
       .then((data) => setFincas(data.items))
       .catch(() => {});
+    apiFetch("/evaluaciones/sb-hoja-umbrales")
+      .then(setUmbralesSbHoja)
+      .catch(() => {});
   }, []);
 
   const fincaNombre = fincas.find((f) => f.uuid === fincaUuid)?.nombre || "Todas las fincas";
+  const limitesSbHoja = [
+    { valor: umbralesSbHoja.advertencia, color: "#f59e0b" },
+    { valor: umbralesSbHoja.alerta, color: "#dc2626" },
+  ];
 
   return (
     <>
@@ -102,7 +111,9 @@ function SumaBrutaGraficos() {
         endpoint="/evaluaciones/suma-bruta-promedio-por-hoja"
         mensajeVacio="No hay evaluaciones de Suma Bruta para mostrar."
         fincaUuid={fincaUuid}
+        limites={umbralesSbHoja}
         onExpand={() => setModalAbierto("hoja")}
+        onConfigurar={esAdmin ? () => setModalUmbrales(true) : undefined}
         info={INFO_SB_HOJA}
       />
 
@@ -122,11 +133,99 @@ function SumaBrutaGraficos() {
         titulo="Promedio de Suma Bruta por Hoja"
         endpoint="/evaluaciones/suma-bruta-promedio-por-hoja"
         lineas={LINEAS_SB_HOJA}
-        limitesControl={LIMITES_SB_HOJA}
+        limitesControl={limitesSbHoja}
         fincaUuidBase={fincaUuid}
         fincaBaseLabel={fincaNombre}
       />
+
+      {modalUmbrales && (
+        <ModalUmbralesSbHoja
+          umbrales={umbralesSbHoja}
+          onClose={() => setModalUmbrales(false)}
+          onGuardado={(nuevos) => {
+            setUmbralesSbHoja(nuevos);
+            setModalUmbrales(false);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+// Config de las líneas de referencia del gráfico "Promedio de Suma Bruta
+// por Hoja" — la línea roja (alerta) además dispara la alerta por finca en
+// Sanidad Vegetal → Alertas cuando el promedio semanal la supera.
+function ModalUmbralesSbHoja({ umbrales, onClose, onGuardado }) {
+  const [advertencia, setAdvertencia] = useState(String(umbrales.advertencia));
+  const [alerta, setAlerta] = useState(String(umbrales.alerta));
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setGuardando(true);
+    try {
+      const nuevos = await apiFetch("/evaluaciones/sb-hoja-umbrales", {
+        method: "PUT",
+        body: JSON.stringify({ advertencia: Number(advertencia), alerta: Number(alerta) }),
+      });
+      onGuardado(nuevos);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Líneas de referencia — Suma Bruta por Hoja" onClose={onClose}>
+      <form onSubmit={handleSubmit}>
+        <p className="small text-secondary mb-3">
+          La línea roja (alerta) además genera una alerta por finca en Sanidad Vegetal → Alertas cuando el
+          promedio semanal de Suma Bruta Hoja 3 o Hoja 5 la supera.
+        </p>
+
+        <div className="mb-3">
+          <label className="form-label small fw-medium" style={{ color: "#f59e0b" }}>
+            Línea de advertencia (amarilla)
+          </label>
+          <input
+            type="number"
+            min={0}
+            className="form-control rounded-3"
+            required
+            value={advertencia}
+            onChange={(e) => setAdvertencia(e.target.value)}
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label small fw-medium" style={{ color: "#dc2626" }}>
+            Línea de alerta (roja)
+          </label>
+          <input
+            type="number"
+            min={0}
+            className="form-control rounded-3"
+            required
+            value={alerta}
+            onChange={(e) => setAlerta(e.target.value)}
+          />
+        </div>
+
+        {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+        <div className="d-flex justify-content-end gap-2">
+          <button type="button" className="btn btn-light rounded-3" onClick={onClose}>
+            <FiX className="me-1" /> Cancelar
+          </button>
+          <button type="submit" className="btn btn-brand rounded-3" disabled={guardando}>
+            {guardando ? "Guardando..." : "Guardar"}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
   );
 }
 

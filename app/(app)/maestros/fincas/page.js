@@ -5,17 +5,22 @@ import {
   FiPlus,
   FiRefreshCw,
   FiSearch,
-  FiEye,
+  FiGrid,
   FiEdit2,
   FiTrash2,
   FiSave,
   FiX,
   FiRotateCcw,
+  FiMap,
+  FiUpload,
+  FiDownload,
 } from "react-icons/fi";
+import { MapContainer, TileLayer, Polygon } from "react-leaflet";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 import RequirePermission from "@/components/RequirePermission";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
+import { parseKmlPolygon, descargarKml, normalizarPerimetro } from "@/lib/kml";
 
 export default function FincasPage() {
   const [fincas, setFincas] = useState([]);
@@ -27,6 +32,37 @@ export default function FincasPage() {
   const [fincaModal, setFincaModal] = useState(null); // null | {} | finca
   const [lotesModal, setLotesModal] = useState(null); // null | finca
   const [syncModal, setSyncModal] = useState(false);
+  const [perimetroModal, setPerimetroModal] = useState(null); // null | finca (a visualizar en el mapa)
+  const [importandoUuid, setImportandoUuid] = useState(""); // finca.uuid en curso de importar un .kml
+  const [perimetroError, setPerimetroError] = useState("");
+
+  async function handleImportarKml(finca, file) {
+    setPerimetroError("");
+    setImportandoUuid(finca.uuid);
+    try {
+      const texto = await file.text();
+      const puntos = parseKmlPolygon(texto);
+      await apiFetch(`/fincas/${finca.uuid}`, {
+        method: "PUT",
+        body: JSON.stringify({ perimetro: puntos }),
+      });
+      loadFincas();
+    } catch (err) {
+      setPerimetroError(`${finca.nombre}: ${err.message}`);
+    } finally {
+      setImportandoUuid("");
+    }
+  }
+
+  async function handleQuitarPerimetro(finca) {
+    if (!confirm(`¿Quitar el plot guardado de ${finca.nombre}?`)) return;
+    try {
+      await apiFetch(`/fincas/${finca.uuid}`, { method: "PUT", body: JSON.stringify({ perimetro: null }) });
+      loadFincas();
+    } catch (err) {
+      setPerimetroError(err.message);
+    }
+  }
 
   async function loadFincas() {
     setLoading(true);
@@ -88,16 +124,16 @@ export default function FincasPage() {
     <RequirePermission code="menu.maestros.fincas">
     <div className="p-4 p-md-5">
       <div className="mb-4">
-        <h1 className="fw-bold h3 mb-1">Fincas</h1>
-        <p className="text-secondary mb-0">Gestiona las fincas registradas en Corbana.</p>
+        <h1 className="fw-medium h4 mb-1">Fincas</h1>
+        <p className="text-secondary small mb-0">Gestiona las fincas registradas en Corbana.</p>
       </div>
 
       <div className="d-flex flex-column flex-sm-row gap-2 mb-3">
         <div className="flex-grow-1 position-relative">
-          <FiSearch className="position-absolute text-secondary" style={{ top: "0.65rem", left: "0.75rem" }} />
+          <FiSearch className="position-absolute text-secondary" size={15} style={{ top: "0.7rem", left: "0.85rem" }} />
           <input
             type="text"
-            className="form-control rounded-3 ps-5"
+            className="form-control rounded-3 ps-5 border-0 bg-light"
             placeholder="Buscar por nombre o código..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -105,42 +141,43 @@ export default function FincasPage() {
           />
         </div>
         {hasPermission("finca.crear") && (
-          <button type="button" className="btn btn-brand rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setFincaModal({})}>
-            <FiPlus /> Nueva Finca
+          <button type="button" className="btn btn-brand rounded-3 text-nowrap d-flex align-items-center gap-2 px-3" onClick={() => setFincaModal({})}>
+            <FiPlus size={15} /> Nueva Finca
           </button>
         )}
         {hasPermission("finca.crear") && (
           <button
             type="button"
-            className="btn btn-outline-secondary rounded-3 text-nowrap d-flex align-items-center gap-1"
+            className="btn btn-light rounded-3 text-nowrap d-flex align-items-center gap-2 px-3 text-secondary"
             onClick={() => setSyncModal(true)}
           >
-            <FiRefreshCw /> Sincronización con Logística
+            <FiRefreshCw size={15} /> Sincronización con Logística
           </button>
         )}
       </div>
 
-      {error && <div className="alert alert-danger py-2 small">{error}</div>}
+      {error && <div className="alert alert-danger py-2 small border-0 rounded-3">{error}</div>}
+      {perimetroError && <div className="alert alert-danger py-2 small border-0 rounded-3">{perimetroError}</div>}
 
       {selected.size > 0 && (
-        <div className="d-flex align-items-center justify-content-between rounded-3 px-3 py-2 mb-3" style={{ backgroundColor: "var(--brand-50)", border: "1px solid var(--brand-100)" }}>
-          <span className="small fw-medium" style={{ color: "var(--brand-900)" }}>
+        <div className="d-flex align-items-center justify-content-between rounded-3 px-3 py-2 mb-3" style={{ backgroundColor: "var(--brand-50)" }}>
+          <span className="small" style={{ color: "var(--brand-900)" }}>
             {selected.size} finca(s) seleccionada(s)
           </span>
           {hasPermission("finca.eliminar") && (
             <button type="button" className="btn btn-link btn-sm text-danger text-decoration-none d-flex align-items-center gap-1" onClick={handleBulkDelete}>
-              <FiTrash2 /> Eliminar seleccionadas
+              <FiTrash2 size={13} /> Eliminar seleccionadas
             </button>
           )}
         </div>
       )}
 
-      <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+      <div className="card border-0 rounded-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
         <div className="table-responsive">
           <table className="table table-hover mb-0 align-middle">
-            <thead className="table-light">
-              <tr>
-                <th style={{ width: "2.5rem" }}>
+            <thead>
+              <tr className="small text-secondary" style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <th className="fw-medium" style={{ width: "2.5rem" }}>
                   <input
                     type="checkbox"
                     className="form-check-input"
@@ -148,22 +185,23 @@ export default function FincasPage() {
                     onChange={toggleSelectAll}
                   />
                 </th>
-                <th>Finca</th>
-                <th>Estado</th>
-                <th className="text-end">Acciones</th>
+                <th className="fw-medium">Finca</th>
+                <th className="fw-medium text-center">Plot</th>
+                <th className="fw-medium text-center">Acciones</th>
+                <th className="fw-medium text-center">Estado</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={4} className="text-center text-secondary py-4">
+                  <td colSpan={5} className="text-center text-secondary py-4">
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && fincas.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-center text-secondary py-4">
+                  <td colSpan={5} className="text-center text-secondary py-4">
                     No hay fincas registradas todavía.
                   </td>
                 </tr>
@@ -183,52 +221,115 @@ export default function FincasPage() {
                       <p className="fw-medium mb-0 d-flex align-items-center gap-2">
                         {finca.nombre}
                         {finca.esExterna && (
-                          <span className="badge rounded-pill text-bg-secondary" title="No es propia — sin seguimiento de labores/racimos/lluvias">
-                            Externa
+                          <span className="small text-secondary" title="No es propia — sin seguimiento de labores/racimos/lluvias">
+                            · Externa
                           </span>
                         )}
                       </p>
                       <p className="small text-secondary mb-0">Código: {finca.codigo}</p>
                     </td>
-                    <td>
-                      {finca.estado ? (
-                        <span className="badge rounded-pill" style={{ backgroundColor: "#d1fae5", color: "#047857" }}>
-                          Activo
-                        </span>
-                      ) : (
-                        <span className="badge rounded-pill text-bg-secondary">Inactivo</span>
-                      )}
+                    <td className="text-center">
+                      <div className="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
+                        {normalizarPerimetro(finca.perimetro) && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-link p-1 d-inline-flex"
+                              style={{ color: "#2563eb" }}
+                              title="Ver en el mapa"
+                              onClick={() => setPerimetroModal(finca)}
+                            >
+                              <FiMap size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-link p-1 d-inline-flex"
+                              style={{ color: "#16a34a" }}
+                              title="Exportar .kml"
+                              onClick={() => descargarKml(normalizarPerimetro(finca.perimetro), finca.codigo || "perimetro")}
+                            >
+                              <FiDownload size={15} />
+                            </button>
+                          </>
+                        )}
+                        {hasPermission("finca.editar") && (
+                          <label
+                            className="d-inline-flex align-items-center justify-content-center p-1"
+                            style={{
+                              color: "#d97706",
+                              cursor: importandoUuid === finca.uuid ? "default" : "pointer",
+                              opacity: importandoUuid === finca.uuid ? 0.4 : 1,
+                            }}
+                            title="Importar .kml"
+                          >
+                            <FiUpload size={15} />
+                            <input
+                              type="file"
+                              accept=".kml"
+                              hidden
+                              disabled={importandoUuid === finca.uuid}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                e.target.value = "";
+                                if (file) handleImportarKml(finca, file);
+                              }}
+                            />
+                          </label>
+                        )}
+                        {normalizarPerimetro(finca.perimetro) && hasPermission("finca.editar") && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link p-1 d-inline-flex"
+                            style={{ color: "#dc2626" }}
+                            title="Quitar plot"
+                            onClick={() => handleQuitarPerimetro(finca)}
+                          >
+                            <FiX size={15} />
+                          </button>
+                        )}
+                      </div>
                     </td>
-                    <td>
-                      <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                    <td className="text-center">
+                      <div className="d-flex justify-content-center gap-1 flex-nowrap">
                         <button
                           type="button"
-                          className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap"
+                          className="btn btn-sm btn-link p-1 d-inline-flex align-items-center gap-1 text-secondary text-decoration-none text-nowrap"
+                          title="Ver / crear lotes de esta finca"
                           onClick={() => setLotesModal(finca)}
                         >
-                          <FiEye /> Ver lotes
+                          <FiGrid size={15} /> Lotes
                         </button>
                         {hasPermission("finca.editar") && (
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-warning"
+                            className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
                             title="Editar"
                             onClick={() => setFincaModal(finca)}
                           >
-                            <FiEdit2 />
+                            <FiEdit2 size={15} />
                           </button>
                         )}
                         {hasPermission("finca.eliminar") && (
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-danger"
+                            className="btn btn-sm btn-link p-1 d-inline-flex"
+                            style={{ color: "#dc2626" }}
                             title="Eliminar"
                             onClick={() => handleDeleteOne(finca.uuid)}
                           >
-                            <FiTrash2 />
+                            <FiTrash2 size={15} />
                           </button>
                         )}
                       </div>
+                    </td>
+                    <td className="text-center">
+                      <span className="d-inline-flex align-items-center gap-1 small text-secondary">
+                        <span
+                          className="rounded-circle d-inline-block"
+                          style={{ width: 6, height: 6, background: finca.estado ? "#16a34a" : "#cbd5e1" }}
+                        />
+                        {finca.estado ? "Activo" : "Inactivo"}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -251,6 +352,8 @@ export default function FincasPage() {
       {lotesModal && <LotesModal finca={lotesModal} onClose={() => setLotesModal(null)} />}
 
       {syncModal && <SyncModal onClose={() => setSyncModal(false)} onSynced={loadFincas} />}
+
+      {perimetroModal && <VerPerimetroModal finca={perimetroModal} onClose={() => setPerimetroModal(null)} />}
     </div>
     </RequirePermission>
   );
@@ -291,9 +394,10 @@ function FincaModal({ finca, onClose, onSaved }) {
     setError("");
     setSaving(true);
     try {
+      const payload = { nombre, codigo, estado, esExterna, grupoFincaUuid: grupoFincaUuid || null };
       await apiFetch(finca ? `/fincas/${finca.uuid}` : "/fincas", {
         method: finca ? "PUT" : "POST",
-        body: JSON.stringify({ nombre, codigo, estado, esExterna, grupoFincaUuid: grupoFincaUuid || null }),
+        body: JSON.stringify(payload),
       });
       onSaved();
     } catch (err) {
@@ -390,6 +494,39 @@ function FincaModal({ finca, onClose, onSaved }) {
           </button>
         </div>
       </form>
+    </ModalShell>
+  );
+}
+
+// ─── Modal: visualizar el perímetro guardado en el mapa ───
+function VerPerimetroModal({ finca, onClose }) {
+  const perimetro = normalizarPerimetro(finca.perimetro) || [];
+  const centro = perimetro.length
+    ? [
+        perimetro.reduce((acc, p) => acc + p[0], 0) / perimetro.length,
+        perimetro.reduce((acc, p) => acc + p[1], 0) / perimetro.length,
+      ]
+    : [0, 0];
+
+  return (
+    <ModalShell title={`Plot — ${finca.nombre}`} onClose={onClose} fullscreen>
+      <div className="flex-grow-1" style={{ minHeight: 0 }}>
+        {perimetro.length === 0 ? (
+          <div className="text-secondary small p-4 text-center">No se pudo leer el plot guardado.</div>
+        ) : (
+        <MapContainer center={centro} zoom={15} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+          <TileLayer
+            attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={19}
+          />
+          <Polygon
+            positions={perimetro}
+            pathOptions={{ color: "#facc15", weight: 2, fillColor: "#facc15", fillOpacity: 0.1 }}
+          />
+        </MapContainer>
+        )}
+      </div>
     </ModalShell>
   );
 }
@@ -499,7 +636,7 @@ function LotesModal({ finca, onClose }) {
 
   return (
     <ModalShell title={`Lotes de ${finca.nombre}`} onClose={onClose} size="lg">
-      {error && <div className="alert alert-danger py-2 small">{error}</div>}
+      {error && <div className="alert alert-danger py-2 small border-0 rounded-3">{error}</div>}
 
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="d-flex align-items-center gap-3">
@@ -513,7 +650,7 @@ function LotesModal({ finca, onClose }) {
                 checked={mostrarEliminados}
                 onChange={(e) => setMostrarEliminados(e.target.checked)}
               />
-              <label className="form-check-label small" htmlFor="mostrar-eliminados">
+              <label className="form-check-label small text-secondary" htmlFor="mostrar-eliminados">
                 Mostrar eliminados
               </label>
             </div>
@@ -523,20 +660,20 @@ function LotesModal({ finca, onClose }) {
           {!editMode && (
             <>
               {hasPermission("lote.editar") && (
-                <button type="button" className="btn btn-sm btn-outline-warning rounded-3 d-inline-flex align-items-center gap-1" onClick={enableEditMode}>
-                  <FiEdit2 /> Modo edición
+                <button type="button" className="btn btn-sm btn-light rounded-3 d-inline-flex align-items-center gap-1 text-secondary" onClick={enableEditMode}>
+                  <FiEdit2 size={14} /> Modo edición
                 </button>
               )}
               {hasPermission("lote.crear") && (
                 <button type="button" className="btn btn-sm btn-brand rounded-3 d-inline-flex align-items-center gap-1" onClick={() => setShowForm((v) => !v)}>
-                  {showForm ? <><FiX /> Cancelar</> : <><FiPlus /> Nuevo Lote</>}
+                  {showForm ? <><FiX size={14} /> Cancelar</> : <><FiPlus size={14} /> Nuevo Lote</>}
                 </button>
               )}
             </>
           )}
           {editMode && (
-            <button type="button" className="btn btn-sm btn-outline-secondary rounded-3 d-inline-flex align-items-center gap-1" onClick={cancelEditMode}>
-              <FiX /> Salir de edición
+            <button type="button" className="btn btn-sm btn-light rounded-3 d-inline-flex align-items-center gap-1 text-secondary" onClick={cancelEditMode}>
+              <FiX size={14} /> Salir de edición
             </button>
           )}
         </div>
@@ -554,12 +691,12 @@ function LotesModal({ finca, onClose }) {
 
       <div className="table-responsive">
         <table className="table table-sm table-hover align-middle mb-0">
-          <thead className="table-light">
-            <tr>
-              <th>Lote</th>
-              <th>Área Disponible</th>
-              <th>Área en Producción</th>
-              <th>Estado</th>
+          <thead>
+            <tr className="small text-secondary" style={{ borderBottom: "1px solid #f1f5f9" }}>
+              <th className="fw-medium">Lote</th>
+              <th className="fw-medium">Área Disponible</th>
+              <th className="fw-medium">Área en Producción</th>
+              <th className="fw-medium">Estado</th>
               <th></th>
             </tr>
           </thead>
@@ -631,38 +768,42 @@ function LotesModal({ finca, onClose }) {
                             )}
                           </td>
                           <td>
-                            {lote.deletedAt ? (
-                              <span className="badge rounded-pill text-bg-danger">Eliminado</span>
-                            ) : lote.estado ? (
-                              <span className="badge rounded-pill" style={{ backgroundColor: "#d1fae5", color: "#047857" }}>Activo</span>
-                            ) : (
-                              <span className="badge rounded-pill text-bg-secondary">Inactivo</span>
-                            )}
+                            <span className="d-inline-flex align-items-center gap-1 small text-secondary">
+                              <span
+                                className="rounded-circle d-inline-block"
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  background: lote.deletedAt ? "#dc2626" : lote.estado ? "#16a34a" : "#cbd5e1",
+                                }}
+                              />
+                              {lote.deletedAt ? "Eliminado" : lote.estado ? "Activo" : "Inactivo"}
+                            </span>
                           </td>
                           <td>
                             {lote.deletedAt ? (
                               esAdmin && (
                                 <div className="d-flex justify-content-end">
-                                  <button type="button" className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap" title="Restaurar lote" onClick={() => handleRestoreLote(lote)}>
-                                    <FiRotateCcw /> Restaurar
+                                  <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex align-items-center gap-1 text-decoration-none" style={{ color: "#16a34a" }} title="Restaurar lote" onClick={() => handleRestoreLote(lote)}>
+                                    <FiRotateCcw size={14} /> Restaurar
                                   </button>
                                 </div>
                               )
                             ) : (
-                            <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                            <div className="d-flex justify-content-end gap-1 flex-nowrap">
                               {hasPermission("lote.editar") && (
-                                <button type="button" className="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1 text-nowrap" onClick={() => toggle(lote.uuid, "editar")}>
-                                  {expanded?.uuid === lote.uuid && expanded.type === "editar" ? <><FiX /> Cancelar</> : <><FiEdit2 /> Editar</>}
+                                <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex" title={expanded?.uuid === lote.uuid && expanded.type === "editar" ? "Cancelar" : "Editar lote"} onClick={() => toggle(lote.uuid, "editar")}>
+                                  {expanded?.uuid === lote.uuid && expanded.type === "editar" ? <FiX size={15} className="text-secondary" /> : <FiEdit2 size={15} className="text-secondary" />}
                                 </button>
                               )}
                               {hasPermission("lote.editar") && (
-                                <button type="button" className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap" onClick={() => toggle(lote.uuid, "area")}>
-                                  {expanded?.uuid === lote.uuid && expanded.type === "area" ? <><FiX /> Cancelar</> : <><FiRefreshCw /> Área</>}
+                                <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex" style={{ color: "#16a34a" }} title={expanded?.uuid === lote.uuid && expanded.type === "area" ? "Cancelar" : "Registrar área en producción"} onClick={() => toggle(lote.uuid, "area")}>
+                                  {expanded?.uuid === lote.uuid && expanded.type === "area" ? <FiX size={15} /> : <FiRefreshCw size={15} />}
                                 </button>
                               )}
                               {esAdmin && (
-                                <button type="button" className="btn btn-sm btn-outline-danger" title="Eliminar lote" onClick={() => handleDeleteLote(lote)}>
-                                  <FiTrash2 />
+                                <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex" style={{ color: "#dc2626" }} title="Eliminar lote" onClick={() => handleDeleteLote(lote)}>
+                                  <FiTrash2 size={15} />
                                 </button>
                               )}
                             </div>

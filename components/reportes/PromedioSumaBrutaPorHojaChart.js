@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { FiMaximize2 } from "react-icons/fi";
+import { FiMaximize2, FiSettings } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { TooltipEdad } from "@/components/reportes/PromedioPorEdadChart";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
@@ -27,8 +27,12 @@ export default function PromedioSumaBrutaPorHojaChart({
   fincaUuid = "",
   anio = new Date().getFullYear(),
   onExpand,
+  onConfigurar,
+  limites,
   info,
 }) {
+  const umbralAdvertencia = limites?.advertencia ?? 450;
+  const umbralAlerta = limites?.alerta ?? 650;
   const [items, setItems] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -82,17 +86,30 @@ export default function PromedioSumaBrutaPorHojaChart({
           <h2 className="h6 fw-bold mb-0">{titulo}</h2>
           {info && <InfoTooltip texto={info} />}
         </span>
-        {onExpand && (
-          <button
-            type="button"
-            className="btn btn-sm p-0 border-0 text-secondary"
-            title="Comparar con otra finca u otro año"
-            onClick={onExpand}
-            style={{ fontSize: "0.9rem" }}
-          >
-            <FiMaximize2 />
-          </button>
-        )}
+        <div className="d-flex align-items-center gap-2">
+          {onConfigurar && (
+            <button
+              type="button"
+              className="btn btn-sm p-0 border-0 text-secondary"
+              title="Configurar líneas de referencia"
+              onClick={onConfigurar}
+              style={{ fontSize: "0.9rem" }}
+            >
+              <FiSettings />
+            </button>
+          )}
+          {onExpand && (
+            <button
+              type="button"
+              className="btn btn-sm p-0 border-0 text-secondary"
+              title="Comparar con otra finca u otro año"
+              onClick={onExpand}
+              style={{ fontSize: "0.9rem" }}
+            >
+              <FiMaximize2 />
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
@@ -117,18 +134,18 @@ export default function PromedioSumaBrutaPorHojaChart({
                   labelFormatter={(label) => `Semana ${label}`}
                 />
                 <ReferenceLine
-                  y={450}
+                  y={umbralAdvertencia}
                   stroke="#f59e0b"
                   strokeDasharray="5 4"
                   strokeWidth={1.5}
-                  label={{ value: "450", position: "right", fill: "#f59e0b", fontSize: 11, fontWeight: 600 }}
+                  label={{ value: String(umbralAdvertencia), position: "right", fill: "#f59e0b", fontSize: 11, fontWeight: 600 }}
                 />
                 <ReferenceLine
-                  y={650}
+                  y={umbralAlerta}
                   stroke="#dc2626"
                   strokeDasharray="5 4"
                   strokeWidth={1.5}
-                  label={{ value: "650", position: "right", fill: "#dc2626", fontSize: 11, fontWeight: 600 }}
+                  label={{ value: String(umbralAlerta), position: "right", fill: "#dc2626", fontSize: 11, fontWeight: 600 }}
                 />
                 {hojasPresentes.map((hoja) => (
                   <Line

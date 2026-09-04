@@ -19,6 +19,7 @@ const MENU_TREE = [
       { codigo: "menu.maestros.fincas", nombre: "Fincas", prefijos: ["finca.", "lote.", "planta.", "categoria_planta."] },
       { codigo: "menu.maestros.productos", nombre: "Productos", prefijos: ["producto."] },
       { codigo: "menu.maestros.grupos_finca", nombre: "Grupos de Finca", prefijos: ["grupo_finca."] },
+      { codigo: "menu.maestros.zonas", nombre: "Zonas", prefijos: ["zona."] },
       { codigo: "menu.maestros.area_lotes", nombre: "Área de Lotes", prefijos: ["area_lote."] },
       { codigo: "menu.maestros.usuarios", nombre: "Usuarios", prefijos: [] },
       { codigo: "menu.maestros.roles", nombre: "Roles", prefijos: ["roles.", "permisos."] },
@@ -66,6 +67,7 @@ const MENU_TREE = [
       { codigo: "menu.sanidad_vegetal.graficos", nombre: "Gráficos", prefijos: [] },
       { codigo: "menu.sanidad_vegetal.labores", nombre: "Evaluación de Labores", prefijos: ["labor_evaluacion."] },
       { codigo: "menu.sanidad_vegetal.alertas", nombre: "Alertas", prefijos: [] },
+      { codigo: "menu.sanidad_vegetal.objetivos", nombre: "Objetivos", prefijos: ["objetivo_evaluacion."] },
     ],
   },
 ];

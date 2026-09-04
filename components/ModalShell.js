@@ -1,4 +1,4 @@
-export default function ModalShell({ title, onClose, children, size, width, height, fullscreen }) {
+export default function ModalShell({ title, onClose, children, size, width, height, minHeight, fullscreen }) {
   const alto = fullscreen ? "100vh" : height || "85vh";
   return (
     <div
@@ -8,7 +8,12 @@ export default function ModalShell({ title, onClose, children, size, width, heig
     >
       <div
         className={`bg-white shadow w-100 d-flex flex-column ${fullscreen ? "" : "rounded-4"}`}
-        style={{ maxWidth: fullscreen ? "100vw" : width || (size === "xl" ? "64rem" : size === "lg" ? "36rem" : "28rem"), maxHeight: alto, height: fullscreen ? "100vh" : undefined }}
+        style={{
+          maxWidth: fullscreen ? "100vw" : width || (size === "xl" ? "64rem" : size === "lg" ? "36rem" : "28rem"),
+          maxHeight: alto,
+          minHeight: fullscreen ? undefined : minHeight,
+          height: fullscreen ? "100vh" : undefined,
+        }}
       >
         <div className={`d-flex align-items-center justify-content-between ${fullscreen ? "px-3 py-2 border-bottom" : "p-4 pb-0"}`}>
           <h3 className={`fw-bold mb-0 ${fullscreen ? "h6" : "h5"}`}>{title}</h3>

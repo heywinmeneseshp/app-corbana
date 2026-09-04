@@ -283,6 +283,19 @@ export default function ClimaCompareModal({
     return [...porPeriodo.values()];
   }, [baseData, comparaciones, metricaCampo, desde, hasta]);
 
+  // Con pocos puntos en el rango, recharts igual reparte solo ~5-6
+  // etiquetas por defecto en un eje numérico — se ve "pelado" (ej. "15
+  // ago"..."21 ago"..."27 ago" salteando la mayoría de los días con dato).
+  // Si el rango es corto, se listan explícitamente TODOS los períodos para
+  // que se vea la fecha/semana/mes de cada punto; con un rango largo se
+  // deja el auto-tick de recharts para no saturar el eje.
+  const MAX_TICKS_EXPLICITOS = 40;
+  const rango = hasta - desde;
+  const ticksXAxis =
+    rango >= 0 && rango <= MAX_TICKS_EXPLICITOS
+      ? Array.from({ length: rango + 1 }, (_, i) => desde + i)
+      : undefined;
+
   const nombreSerie = (dataKey) => {
     if (dataKey === "base") return `${fincaBaseLabel || "Selección actual"} · ${anioBase}`;
     const comp = comparaciones.find((c) => c.id === dataKey);
@@ -519,10 +532,14 @@ export default function ClimaCompareModal({
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis
                       dataKey="periodo"
-                      tick={{ fontSize: 12 }}
+                      tick={{ fontSize: 11 }}
                       domain={[desde, hasta]}
                       type="number"
                       allowDecimals={false}
+                      ticks={ticksXAxis}
+                      angle={ticksXAxis ? -40 : 0}
+                      textAnchor={ticksXAxis ? "end" : "middle"}
+                      height={ticksXAxis ? 50 : 30}
                       tickFormatter={(v) => (granularidad === "dia" ? fechaDeDiaDelAnio(v, anioBase) : v)}
                     />
                     <YAxis tick={{ fontSize: 12 }} width={50} unit={metricaUnidad || ""} />

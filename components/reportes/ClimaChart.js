@@ -9,10 +9,11 @@ import InfoTooltip from "@/components/reportes/InfoTooltip";
 
 const INFO_CLIMA = (
   <>
-    <p className="fw-semibold mb-1">Precipitación total (mm)</p>
+    <p className="fw-semibold mb-1">Precipitación promedio (mm)</p>
     <p className="mb-2">
-      Suma de la lluvia de cada día de la semana. Los días sin registro dentro del rango real de captura
-      de la finca cuentan como 0 mm (no se excluyen ni se inventan datos fuera de ese rango).
+      Cada finca acumula su propia lluvia de la semana (suma de sus 7 días — los días sin registro dentro
+      de su rango real de captura cuentan como 0 mm). El valor mostrado es el promedio de esos acumulados
+      entre las fincas del filtro (con una sola finca, es el acumulado de esa finca).
     </p>
     <p className="fw-semibold mb-1">Temperatura y humedad relativa</p>
     <p className="mb-0">Promedio simple de los días con dato real de esa semana (no se rellenan con 0).</p>
@@ -24,7 +25,7 @@ const INFO_CLIMA = (
 // elige una métrica a la vez (mismo patrón de pestañas que ya usa la página
 // de Sanidad Vegetal — Gráficos).
 const METRICAS = [
-  { key: "mm", label: "Precipitación total (mm)", campo: "totalMm", color: "#2563eb", unidad: "mm" },
+  { key: "mm", label: "Precipitación promedio (mm)", campo: "totalMm", color: "#2563eb", unidad: "mm" },
   { key: "temperatura", label: "Temperatura (°C)", campo: "promedioTemperatura", color: "#dc2626", unidad: "°C" },
   { key: "humedad", label: "Humedad relativa (%)", campo: "promedioHumedad", color: "#16a34a", unidad: "%" },
 ];
