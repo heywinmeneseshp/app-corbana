@@ -6,6 +6,7 @@ import { FiMaximize2 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
 import EvaluacionCompareModal from "@/components/reportes/EvaluacionCompareModal";
+import { usePrecipitacionOverlay, conPrecipitacion, PrecipitacionControls, PrecipitacionSerie } from "@/components/reportes/PrecipitacionOverlay";
 
 const COLOR_YLI = "#dc2626";
 const COLOR_YLS = "#2563eb";
@@ -81,6 +82,9 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
   }, [fincaUuid, endpoint]);
 
   const fincaNombre = fincas.find((f) => f.uuid === fincaUuid)?.nombre || "Todas las fincas";
+  const anioActual = new Date().getFullYear();
+  const precip = usePrecipitacionOverlay({ fincaUuid, anio: anioActual });
+  const itemsConPrecip = conPrecipitacion(items || [], precip.precipPorSemana);
 
   const tiene = (campo) => (items || []).some((i) => i[campo] != null);
 
@@ -106,6 +110,8 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
         </select>
       </div>
 
+      <PrecipitacionControls {...precip} />
+
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       {loading && <p className="text-secondary small py-4 text-center mb-0">Cargando promedios...</p>}
@@ -127,7 +133,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
               </div>
               <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={items} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <LineChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
@@ -145,6 +151,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
                     />
                     <Line type="monotone" dataKey="promedioYli" name="Promedio YLI" stroke={COLOR_YLI} strokeWidth={2} dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="promedioYls" name="Promedio YLS" stroke={COLOR_YLS} strokeWidth={2} dot={{ r: 3 }} />
+                    <PrecipitacionSerie activo={precip.activo} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -172,7 +179,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
               </div>
               <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={items} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <LineChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
@@ -182,6 +189,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
                       labelFormatter={(label) => `Semana ${label}`}
                     />
                     <Line type="monotone" dataKey="promedioHojasTotales" name="Promedio hojas" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
+                    <PrecipitacionSerie activo={precip.activo} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -199,13 +207,17 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
               </div>
               <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={items} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <LineChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals unit="%" />
                     <Tooltip
                       cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }}
-                      formatter={(value) => [`${Number(value).toFixed(2)}%`, "Promedio Índice de Infección"]}
+                      formatter={(value, name) =>
+                        name === "Precipitación (mm)"
+                          ? [`${Number(value).toLocaleString("es")} mm`, name]
+                          : [`${Number(value).toFixed(2)}%`, "Promedio Índice de Infección"]
+                      }
                       labelFormatter={(label) => `Semana ${label}`}
                     />
                     <ReferenceLine
@@ -224,6 +236,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
                       dot={{ r: 3 }}
                       connectNulls
                     />
+                    <PrecipitacionSerie activo={precip.activo} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

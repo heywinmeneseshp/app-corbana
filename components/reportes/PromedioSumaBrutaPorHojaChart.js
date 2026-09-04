@@ -6,6 +6,7 @@ import { FiMaximize2, FiSettings } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { TooltipEdad } from "@/components/reportes/PromedioPorEdadChart";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
+import { usePrecipitacionOverlay, conPrecipitacion, PrecipitacionControls, PrecipitacionSerie } from "@/components/reportes/PrecipitacionOverlay";
 
 // El gráfico solo muestra las hojas 3 y 5 (la hoja 4 se evalúa y pesa en el
 // total, pero no se grafica por separado acá).
@@ -79,6 +80,9 @@ export default function PromedioSumaBrutaPorHojaChart({
     .filter((h) => HOJAS.includes(h))
     .sort((a, b) => b - a);
 
+  const precip = usePrecipitacionOverlay({ fincaUuid, anio });
+  const filasConPrecip = conPrecipitacion(filas, precip.precipPorSemana);
+
   return (
     <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
       <div className="d-flex align-items-center justify-content-between mb-2">
@@ -112,6 +116,8 @@ export default function PromedioSumaBrutaPorHojaChart({
         </div>
       </div>
 
+      <PrecipitacionControls {...precip} />
+
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       {loading && <p className="text-secondary small py-4 text-center mb-0">Cargando promedios...</p>}
@@ -124,7 +130,7 @@ export default function PromedioSumaBrutaPorHojaChart({
         <>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={filas} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+              <LineChart data={filasConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
@@ -159,6 +165,7 @@ export default function PromedioSumaBrutaPorHojaChart({
                     connectNulls={false}
                   />
                 ))}
+                <PrecipitacionSerie activo={precip.activo} />
               </LineChart>
             </ResponsiveContainer>
           </div>

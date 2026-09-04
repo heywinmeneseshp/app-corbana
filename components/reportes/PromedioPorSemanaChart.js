@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { FiMaximize2 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
+import { usePrecipitacionOverlay, conPrecipitacion, PrecipitacionControls, PrecipitacionSerie } from "@/components/reportes/PrecipitacionOverlay";
 
 // Color de la cinta de embolse por semana (mismo ciclo de 8 colores que el
 // backend: src/utils/semanaColor.js). Se usa para pintar el punto de cada
@@ -67,6 +68,8 @@ export default function PromedioPorSemanaChart({
   }, [fincaUuid, anio, endpoint]);
 
   const itemsFiltrados = items || [];
+  const precip = usePrecipitacionOverlay({ fincaUuid, anio });
+  const itemsConPrecip = conPrecipitacion(itemsFiltrados, precip.precipPorSemana);
 
   return (
     <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
@@ -88,6 +91,8 @@ export default function PromedioPorSemanaChart({
         )}
       </div>
 
+      <PrecipitacionControls {...precip} />
+
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       {loading && <p className="text-secondary small py-4 text-center mb-0">Cargando promedios...</p>}
@@ -100,7 +105,7 @@ export default function PromedioPorSemanaChart({
         <>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={itemsFiltrados} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+              <LineChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
@@ -133,6 +138,7 @@ export default function PromedioPorSemanaChart({
                   }}
                   activeDot={{ r: 5 }}
                 />
+                <PrecipitacionSerie activo={precip.activo} />
               </LineChart>
             </ResponsiveContainer>
           </div>

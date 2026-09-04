@@ -6,6 +6,7 @@ import { FiMaximize2 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
 import EvaluacionCompareModal from "@/components/reportes/EvaluacionCompareModal";
+import { usePrecipitacionOverlay, conPrecipitacion, PrecipitacionControls, PrecipitacionSerie } from "@/components/reportes/PrecipitacionOverlay";
 // Paleta de colores para las líneas de edad — se cicla si hay más edades
 // presentes en los datos que colores (no hay un tope fijo de edades: se
 // grafican TODAS las que aparezcan evaluadas, no solo un rango prefijado).
@@ -102,6 +103,9 @@ export default function PromedioPorEdadChart({ titulo, endpoint, mensajeVacio })
   const edadesPresentes = [...new Set((items || []).map((i) => i.edad))].sort((a, b) => a - b);
 
   const fincaNombre = fincas.find((f) => f.uuid === fincaUuid)?.nombre || "Todas las fincas";
+  const anioActual = new Date().getFullYear();
+  const precip = usePrecipitacionOverlay({ fincaUuid, anio: anioActual });
+  const filasConPrecip = conPrecipitacion(filas, precip.precipPorSemana);
 
   return (
     <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
@@ -139,6 +143,8 @@ export default function PromedioPorEdadChart({ titulo, endpoint, mensajeVacio })
         </div>
       </div>
 
+      <PrecipitacionControls {...precip} />
+
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       {loading && <p className="text-secondary small py-4 text-center mb-0">Cargando promedios...</p>}
@@ -151,7 +157,7 @@ export default function PromedioPorEdadChart({ titulo, endpoint, mensajeVacio })
         <>
           <div style={{ height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={filas} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+              <LineChart data={filasConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
@@ -168,6 +174,7 @@ export default function PromedioPorEdadChart({ titulo, endpoint, mensajeVacio })
                     connectNulls={false}
                   />
                 ))}
+                <PrecipitacionSerie activo={precip.activo} />
               </LineChart>
             </ResponsiveContainer>
           </div>
