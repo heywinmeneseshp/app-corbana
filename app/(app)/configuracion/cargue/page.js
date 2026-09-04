@@ -153,12 +153,14 @@ export default function CargueMasivoPage() {
           />
         )}
 
-        {hasPermission("estimacion.crear") && (
+        {(hasPermission("estimacion.crear") || hasPermission("estimacion.editar_distribucion")) && (
           <BulkUploadCard
             title="Cargue masivo de Estimaciones de Fincas (histórico semana a semana)"
             description="Formato ancho: Codigo finca | Semana registro (ej. S36-2026) | Semana 1 … Semana 8 (cajas de 20 kg estimadas para las 8 semanas siguientes). Ejemplo: 525 | S36-2026 | 1500 | 1250 | 1300 | 1300 | 1200 | 1250 | 1200 | 1400. Si ya existe un registro para la misma semana, finca y usuario que carga, se omite (podés sobrescribirlo después). Se respeta el acceso por finca del usuario. Máximo 15,000 filas por archivo."
             endpoint="/estimaciones/bulk-upload"
-            overwriteEndpoint={hasPermission("estimacion.actualizar_masivo") ? "/estimaciones/bulk-update" : null}
+            overwriteEndpoint={
+              hasPermission("estimacion.crear") || hasPermission("estimacion.editar_distribucion") ? "/estimaciones/bulk-update" : null
+            }
             templateHeaders={["Codigo finca", "Semana registro", "Semana 1", "Semana 2", "Semana 3", "Semana 4", "Semana 5", "Semana 6", "Semana 7", "Semana 8"]}
             templateExampleRow={["525", "S36-2026", "1500", "1250", "1300", "1300", "1200", "1250", "1200", "1400"]}
             templateFilename="plantilla_estimaciones.xlsx"

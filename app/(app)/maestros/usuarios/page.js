@@ -6,7 +6,6 @@ import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 import TagPicker from "@/components/TagPicker";
 import RequirePermission from "@/components/RequirePermission";
-import { hasPermission } from "@/lib/auth";
 
 export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState([]);
@@ -118,11 +117,9 @@ export default function UsuariosPage() {
             onKeyDown={(e) => e.key === "Enter" && loadUsuarios()}
           />
         </div>
-        {hasPermission("usuarios.crear") && (
-          <button type="button" className="btn btn-brand rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setUsuarioModal({})}>
-            <FiPlus /> Nuevo Usuario
-          </button>
-        )}
+        <button type="button" className="btn btn-brand rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setUsuarioModal({})}>
+          <FiPlus /> Nuevo Usuario
+        </button>
       </div>
 
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
@@ -219,34 +216,28 @@ export default function UsuariosPage() {
                     </td>
                     <td>
                       <div className="d-flex justify-content-end gap-2 flex-nowrap">
-                        {hasPermission("usuarios.editar") && (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-warning"
-                            title="Editar"
-                            onClick={() => setUsuarioModal(usuario)}
-                          >
-                            <FiEdit2 />
-                          </button>
-                        )}
-                        {hasPermission("usuarios.asignar_rol") && (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap"
-                            onClick={() => setRolesModal(usuario)}
-                          >
-                            <FiShield /> Roles
-                          </button>
-                        )}
-                        {hasPermission("usuarios.asignar_finca") && (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 text-nowrap"
-                            onClick={() => setFincasModal(usuario)}
-                          >
-                            <FiMapPin /> Fincas
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-warning"
+                          title="Editar"
+                          onClick={() => setUsuarioModal(usuario)}
+                        >
+                          <FiEdit2 />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap"
+                          onClick={() => setRolesModal(usuario)}
+                        >
+                          <FiShield /> Roles
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 text-nowrap"
+                          onClick={() => setFincasModal(usuario)}
+                        >
+                          <FiMapPin /> Fincas
+                        </button>
                         <button
                           type="button"
                           className={`btn btn-sm border-0 ${usuario.estado ? "text-secondary" : "text-success"}`}

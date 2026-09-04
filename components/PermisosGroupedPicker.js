@@ -20,7 +20,7 @@ const MENU_TREE = [
       { codigo: "menu.maestros.productos", nombre: "Productos", prefijos: ["producto."] },
       { codigo: "menu.maestros.grupos_finca", nombre: "Grupos de Finca", prefijos: ["grupo_finca."] },
       { codigo: "menu.maestros.area_lotes", nombre: "Área de Lotes", prefijos: ["area_lote."] },
-      { codigo: "menu.maestros.usuarios", nombre: "Usuarios", prefijos: ["usuarios."] },
+      { codigo: "menu.maestros.usuarios", nombre: "Usuarios", prefijos: [] },
       { codigo: "menu.maestros.roles", nombre: "Roles", prefijos: ["roles.", "permisos."] },
       { codigo: "menu.maestros.semanas", nombre: "Semanas", prefijos: ["semana."] },
       { codigo: "menu.maestros.calendario", nombre: "Calendario", prefijos: [] },

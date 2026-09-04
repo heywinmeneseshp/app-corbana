@@ -230,6 +230,18 @@ export default function RegistrarCortePage() {
         }),
       });
 
+      if (resultado.requiereLiquidarSemana) {
+        const s = resultado.requiereLiquidarSemana;
+        if (confirm(`Para continuar debes liquidar la semana ${s.codigo}. ¿Deseas liquidarla ahora?`)) {
+          await apiFetch("/estimaciones/liquidar-semana", {
+            method: "POST",
+            body: JSON.stringify({ fincaUuid, semanaUuid: s.uuid }),
+          });
+          await handleSubmit(forzarSaldoNegativo);
+        }
+        return;
+      }
+
       if (resultado.requiereConfirmacion) {
         const mensaje = resultado.advertencias.map((a) => a.mensaje).join("\n");
         if (confirm(`${mensaje}\n\n¿Registrar de todas formas?`)) {

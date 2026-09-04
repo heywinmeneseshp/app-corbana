@@ -119,7 +119,7 @@ export default function RegistrarEmbolsePage() {
     setSuccess("");
     setSaving(true);
     try {
-      await apiFetch("/racimo-movimientos/lote", {
+      const resultado = await apiFetch("/racimo-movimientos/lote", {
         method: "POST",
         body: JSON.stringify({
           fincaUuid,
@@ -133,6 +133,19 @@ export default function RegistrarEmbolsePage() {
           })),
         }),
       });
+
+      if (resultado.requiereLiquidarSemana) {
+        const s = resultado.requiereLiquidarSemana;
+        if (confirm(`Para continuar debes liquidar la semana ${s.codigo}. ¿Deseas liquidarla ahora?`)) {
+          await apiFetch("/estimaciones/liquidar-semana", {
+            method: "POST",
+            body: JSON.stringify({ fincaUuid, semanaUuid: s.uuid }),
+          });
+          await handleSubmit();
+        }
+        return;
+      }
+
       setSuccess(`${rows.length} embolse(s) registrado(s) correctamente (${totalRacimos} racimos).`);
       setRows([emptyRow()]);
     } catch (err) {

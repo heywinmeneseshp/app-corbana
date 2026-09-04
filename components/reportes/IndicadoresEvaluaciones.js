@@ -14,10 +14,12 @@ import {
   FiBarChart2,
   FiFilter,
   FiPackage,
+  FiMapPin,
 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 import { COLORES_CINTA } from "@/components/reportes/PromedioPorSemanaChart";
+import MapaEvaluacionesModal from "@/components/reportes/MapaEvaluacionesModal";
 
 const TIPOS_COLUMNA = ["Índice de infección", "Conteo de Hojas", "Suma Bruta"];
 const LABELS = {
@@ -108,6 +110,7 @@ export default function IndicadoresEvaluaciones() {
   const [error, setError] = useState("");
   const [ruta, setRuta] = useState([]);
   const [edadModal, setEdadModal] = useState(null);
+  const [mapaFinca, setMapaFinca] = useState(null);
 
   useEffect(() => {
     Promise.all([apiFetch("/fincas?limit=100"), apiFetch(`/semanas?anio=${anio}&limit=100`)])
@@ -467,6 +470,7 @@ export default function IndicadoresEvaluaciones() {
                           setRuta([fila.finca]);
                         }}
                         onToggleLote={() => setLoteUuid(loteUuid === fila.uuid ? "" : fila.uuid)}
+                        onVerMapa={() => setMapaFinca({ uuid: fila.uuid, nombre: fila.finca })}
                       />
                     ))}
                   </tbody>
@@ -526,6 +530,18 @@ export default function IndicadoresEvaluaciones() {
 
       {edadModal && (
         <ModalEdad edad={edadModal} onClose={() => setEdadModal(null)} />
+      )}
+
+      {mapaFinca && (
+        <MapaEvaluacionesModal
+          fincaUuid={mapaFinca.uuid}
+          fincaNombre={mapaFinca.nombre}
+          semanaUuid={semanaUuid}
+          semanaCodigo={semanaNombre}
+          usuarioUuid={usuarioUuid}
+          loteUuid={loteUuid}
+          onClose={() => setMapaFinca(null)}
+        />
       )}
     </div>
   );
@@ -628,7 +644,7 @@ function ModalEdad({ edad, onClose }) {
   );
 }
 
-function FilaNivel({ fila, tipoNivel, tipos, activa, onOpen, onToggleLote }) {
+function FilaNivel({ fila, tipoNivel, tipos, activa, onOpen, onToggleLote, onVerMapa }) {
   const nombre = fila.finca || fila.lote;
   const primero = (
     <td className="fw-semibold" style={{ color: "#0f172a" }}>
@@ -697,12 +713,26 @@ function FilaNivel({ fila, tipoNivel, tipos, activa, onOpen, onToggleLote }) {
       {columnas}
       {total}
       <td className="text-end">
-        <span
-          className="rounded-circle d-inline-flex align-items-center justify-content-center"
-          style={{ width: 26, height: 26, background: "#f1f5f9", color: "#64748b" }}
-        >
-          <FiChevronRight size={15} />
-        </span>
+        <div className="d-inline-flex align-items-center gap-1">
+          <button
+            type="button"
+            className="btn btn-sm rounded-circle d-inline-flex align-items-center justify-content-center p-0 border-0"
+            style={{ width: 26, height: 26, background: "#eff6ff", color: "#1d4ed8" }}
+            title="Ver ubicación de las evaluaciones en el mapa"
+            onClick={(e) => {
+              e.stopPropagation();
+              onVerMapa();
+            }}
+          >
+            <FiMapPin size={13} />
+          </button>
+          <span
+            className="rounded-circle d-inline-flex align-items-center justify-content-center"
+            style={{ width: 26, height: 26, background: "#f1f5f9", color: "#64748b" }}
+          >
+            <FiChevronRight size={15} />
+          </span>
+        </div>
       </td>
     </tr>
   );

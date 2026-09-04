@@ -1,4 +1,5 @@
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 import QueryProvider from "@/components/QueryProvider";
 
 export const metadata = {

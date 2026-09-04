@@ -88,6 +88,7 @@ const NAV = [
       { key: "racimoMovimientoCrear3", label: "Registrar Corte", icon: GiScissors, permKey: "racimoMovimientoCrear", href: "/racimos/corte" },
       { key: "racimoSaldosLotesCintas", label: "Saldos × Lotes y Cintas", icon: FiBarChart2, permKey: "racimoSaldosLotesCintas", href: "/racimos/saldos-lotes-cintas" },
       { key: "racimoReporteEmbolses", label: "Reporte de Embolses", icon: FiTrendingUp, permKey: "racimoReporteEmbolses", href: "/racimos/reporte-embolses" },
+      { key: "racimoLiquidacion", label: "Liquidación", icon: FiCheckSquare, permKey: "racimoLiquidacion", href: "/racimos/liquidacion" },
     ],
   },
   {
@@ -240,6 +241,7 @@ export default function Sidebar() {
       racimoMovimientoCrear: hasPermission("menu.racimos.registrar"),
       racimoSaldosLotesCintas: hasPermission("menu.racimos.saldos_lotes_cintas"),
       racimoReporteEmbolses: hasPermission("menu.racimos.reporte_embolses"),
+      racimoLiquidacion: hasPermission("menu.racimos.liquidacion"),
 
       laboresMenu: hasPermission("menu.labores"),
       calendarioLabores: hasPermission("menu.labores.calendario"),
