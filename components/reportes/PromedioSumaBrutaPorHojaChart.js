@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { FiMaximize2, FiSettings } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { TooltipEdad } from "@/components/reportes/PromedioPorEdadChart";
@@ -130,7 +130,7 @@ export default function PromedioSumaBrutaPorHojaChart({
         <>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={filasConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+              <ComposedChart data={filasConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
@@ -166,7 +166,7 @@ export default function PromedioSumaBrutaPorHojaChart({
                   />
                 ))}
                 <PrecipitacionSerie activo={precip.activo} />
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="d-flex flex-wrap justify-content-center gap-3 mt-2 small">

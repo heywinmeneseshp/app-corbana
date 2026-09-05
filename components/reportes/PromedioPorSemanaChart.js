@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { FiMaximize2 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
@@ -105,7 +105,7 @@ export default function PromedioPorSemanaChart({
         <>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+              <ComposedChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
@@ -139,7 +139,7 @@ export default function PromedioPorSemanaChart({
                   activeDot={{ r: 5 }}
                 />
                 <PrecipitacionSerie activo={precip.activo} />
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
           <p className="text-secondary small mb-0 mt-1">Cada punto representa una semana, pintado con el color de su cinta de embolse.</p>

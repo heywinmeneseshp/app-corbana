@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { YAxis, Line } from "recharts";
+import { YAxis, Bar } from "recharts";
 import { FiCloudRain } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 
@@ -114,14 +114,16 @@ export function PrecipitacionControls({ activo, setActivo, desfase, setDesfase, 
   );
 }
 
-// Línea + eje secundario de precipitación, listos para insertar dentro de
-// cualquier <LineChart> de este módulo (junto al resto de <YAxis>/<Line>).
+// Barras + eje secundario de precipitación, listas para insertar dentro de
+// cualquier <ComposedChart> de este módulo (junto al resto de <YAxis>/
+// <Line>) — con <LineChart> normal Recharts no deja mezclar un <Bar>, por
+// eso las 4 gráficas que usan esto pasaron de <LineChart> a <ComposedChart>.
 export function PrecipitacionSerie({ activo }) {
   if (!activo) return null;
   return (
     <>
       <YAxisPrecip />
-      <LinePrecip />
+      <BarPrecip />
     </>
   );
 }
@@ -130,20 +132,8 @@ function YAxisPrecip() {
   return <YAxis yAxisId="precip" orientation="right" tick={{ fontSize: 10 }} width={40} allowDecimals unit=" mm" />;
 }
 
-function LinePrecip() {
-  return (
-    <Line
-      yAxisId="precip"
-      type="monotone"
-      dataKey="precipMm"
-      name="Precipitación (mm)"
-      stroke="#0ea5e9"
-      strokeWidth={1.5}
-      strokeDasharray="4 3"
-      dot={false}
-      connectNulls
-    />
-  );
+function BarPrecip() {
+  return <Bar yAxisId="precip" dataKey="precipMm" name="Precipitación (mm)" fill="#0ea5e9" fillOpacity={0.45} radius={[3, 3, 0, 0]} barSize={14} />;
 }
 
 export default usePrecipitacionOverlay;

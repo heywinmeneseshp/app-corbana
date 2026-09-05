@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { FiMaximize2 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
@@ -133,7 +133,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
               </div>
               <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <ComposedChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
@@ -152,7 +152,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
                     <Line type="monotone" dataKey="promedioYli" name="Promedio YLI" stroke={COLOR_YLI} strokeWidth={2} dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="promedioYls" name="Promedio YLS" stroke={COLOR_YLS} strokeWidth={2} dot={{ r: 3 }} />
                     <PrecipitacionSerie activo={precip.activo} />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
               <div className="d-flex flex-wrap justify-content-center gap-3 mt-1 small">
@@ -179,7 +179,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
               </div>
               <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <ComposedChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
@@ -190,7 +190,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
                     />
                     <Line type="monotone" dataKey="promedioHojasTotales" name="Promedio hojas" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
                     <PrecipitacionSerie activo={precip.activo} />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -207,7 +207,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
               </div>
               <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <ComposedChart data={itemsConPrecip} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="semanaCodigo" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals unit="%" />
@@ -237,7 +237,7 @@ export default function PromedioInfeccionChart({ titulo, endpoint = "/evaluacion
                       connectNulls
                     />
                     <PrecipitacionSerie activo={precip.activo} />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </div>
