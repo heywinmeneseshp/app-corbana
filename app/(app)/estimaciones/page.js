@@ -340,12 +340,23 @@ export default function EstimacionesPage() {
   // arrastra el saldo restante de una semana a la siguiente. proximasSemanas
   // ya incluye la semana ya mostrada arriba (índice 0) — acá se muestran
   // las demás.
+  //
+  // Además de envejecer las 5 cintas iniciales, cada semana futura incorpora
+  // la cinta NUEVA que recién cumple edad 8 esa semana (`nuevasCintasPorSemana`,
+  // ya viene del backend con su saldo real, no estimado — el embolse que la
+  // originó ya pasó) — sin esto, la tabla se iba vaciando semana a semana en
+  // vez de mantener siempre 5 cintas activas (edad 8 a 12).
   const proyeccionSemanas = useMemo(() => {
     if (!resumenFinca || !resumenFinca.proximasSemanas?.length) return [];
     const cohortes = resumenFinca.estimadoPorCinta.map((e) => ({ semanaEmbolse: e.semanaEmbolse, edad: e.edad, saldo: e.saldo }));
+    const nuevas = resumenFinca.nuevasCintasPorSemana || [];
     return resumenFinca.proximasSemanas.map((semana, i) => {
+      const nueva = nuevas[i];
+      if (nueva && nueva.semanaEmbolse) {
+        cohortes.push({ semanaEmbolse: nueva.semanaEmbolse, edad: nueva.edad, saldo: nueva.saldo });
+      }
       const filas = cohortes.map((c) => {
-        const edadEstaSemana = c.edad + i;
+        const edadEstaSemana = c.edad;
         const raw = pctEditados[edadEstaSemana];
         const pct =
           edadEstaSemana >= 8 && edadEstaSemana <= 12 && raw !== undefined && raw !== "" && !Number.isNaN(Number(raw)) ? Number(raw) : null;
@@ -359,6 +370,7 @@ export default function EstimacionesPage() {
         const estimado = esManual ? Number(manualRaw) : calculado;
         const fila = { semanaEmbolse: c.semanaEmbolse, edad: edadEstaSemana, estimado, calculado, esManual };
         c.saldo = Math.max(c.saldo - estimado, 0);
+        c.edad += 1;
         return fila;
       });
       const total = filas.reduce((acc, f) => acc + f.estimado, 0);
