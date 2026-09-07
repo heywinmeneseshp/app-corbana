@@ -339,7 +339,7 @@ export default function GraficoMovimientoAnual({
             se muestran con una sola.
           </p>
         )}
-        {!modoComparacion && (semanaUuid || motivoUuid) && (
+        {!modoComparacion && (semanaUuid || motivosUuids.length > 0) && (
           <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
             <span className="text-secondary small">Filtros activos:</span>
             {semanaUuid && (
@@ -347,11 +347,16 @@ export default function GraficoMovimientoAnual({
                 Semana: {semanas.find((s) => s.uuid === semanaUuid)?.codigo || "—"} <FiX size={12} />
               </button>
             )}
-            {motivoUuid && (
-              <button type="button" className="btn btn-sm btn-brand rounded-pill d-flex align-items-center gap-1" onClick={() => setMotivoUuid("")}>
-                Motivo: {data?.motivosRepique?.find((m) => m.uuid === motivoUuid)?.nombre || "—"} <FiX size={12} />
+            {motivosUuids.map((uuid) => (
+              <button
+                key={uuid}
+                type="button"
+                className="btn btn-sm btn-brand rounded-pill d-flex align-items-center gap-1"
+                onClick={() => setMotivosUuids((prev) => prev.filter((u) => u !== uuid))}
+              >
+                Motivo: {data?.motivosRepique?.find((m) => m.uuid === uuid)?.nombre || "—"} <FiX size={12} />
               </button>
-            )}
+            ))}
           </div>
         )}
 
@@ -430,7 +435,7 @@ export default function GraficoMovimientoAnual({
             {mostrarMotivos && data.motivosRepique?.length > 0 && (
               <CollapsibleCard
                 titulo="Por motivo"
-                subtitulo="Hacé clic en una barra para filtrar toda la página por ese motivo."
+                subtitulo="Clic para filtrar por ese motivo — Ctrl/Cmd+clic para marcar varios."
                 className="mt-3"
               >
                 <ResponsiveContainer width="100%" height={Math.max(220, data.motivosRepique.length * 32)}>
@@ -443,10 +448,14 @@ export default function GraficoMovimientoAnual({
                       dataKey="total"
                       radius={[0, 4, 4, 0]}
                       cursor="pointer"
-                      onClick={(entry) => setMotivoUuid(entry.uuid === motivoUuid ? "" : entry.uuid)}
+                      onClick={(entry, _index, event) => handleClickMotivo(entry.uuid, event)}
                     >
                       {data.motivosRepique.map((m) => (
-                        <Cell key={m.uuid} fill={YEAR_COLORS[0]} fillOpacity={!motivoUuid || m.uuid === motivoUuid ? 1 : 0.35} />
+                        <Cell
+                          key={m.uuid}
+                          fill={YEAR_COLORS[0]}
+                          fillOpacity={motivosUuids.length === 0 || motivosUuids.includes(m.uuid) ? 1 : 0.35}
+                        />
                       ))}
                       <LabelList
                         dataKey="total"
