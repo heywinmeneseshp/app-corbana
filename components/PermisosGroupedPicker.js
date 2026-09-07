@@ -44,7 +44,9 @@ const MENU_TREE = [
       },
       { codigo: "menu.racimos.registrar", nombre: "Registrar Embolse/Repique/Corte", prefijos: ["racimo_movimiento.crear", "racimo_movimiento.forzar_saldo_negativo"] },
       { codigo: "menu.racimos.saldos_lotes_cintas", nombre: "Saldos × Lotes y Cintas", prefijos: [] },
-      { codigo: "menu.racimos.reporte_embolses", nombre: "Reporte de Embolses", prefijos: [] },
+      { codigo: "menu.racimos.movimientos_semana", nombre: "Detalle Semanal (menú Reportes)", prefijos: [] },
+      { codigo: "menu.racimos.reporte_embolses", nombre: "Gráfico de Embolses (menú Reportes)", prefijos: [] },
+      { codigo: "menu.racimos.reporte_repiques", nombre: "Gráfico de Repiques (menú Reportes)", prefijos: [] },
     ],
   },
   {

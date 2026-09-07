@@ -37,6 +37,7 @@ import {
   FiImage,
   FiTruck,
   FiTarget,
+  FiDownload,
 } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
@@ -89,7 +90,6 @@ const NAV = [
       { key: "racimoMovimientoCrear2", label: "Registrar Repiques", icon: GiCancel, permKey: "racimoMovimientoCrear", href: "/racimos/repiques" },
       { key: "racimoMovimientoCrear3", label: "Registrar Corte", icon: GiScissors, permKey: "racimoMovimientoCrear", href: "/racimos/corte" },
       { key: "racimoSaldosLotesCintas", label: "Saldos × Lotes y Cintas", icon: FiBarChart2, permKey: "racimoSaldosLotesCintas", href: "/racimos/saldos-lotes-cintas" },
-      { key: "racimoReporteEmbolses", label: "Reporte de Embolses", icon: FiTrendingUp, permKey: "racimoReporteEmbolses", href: "/racimos/reporte-embolses" },
       { key: "racimoLiquidacion", label: "Liquidación", icon: FiCheckSquare, permKey: "racimoLiquidacion", href: "/racimos/liquidacion" },
     ],
   },
@@ -126,7 +126,22 @@ const NAV = [
     ],
   },
   { type: "link", key: "programacionCorte", label: "Programación de Corte", icon: GiScissors, permKey: "programacionCorte", href: "/programacion-corte" },
-  { type: "link", key: "reportes", label: "Reportes", icon: FiBarChart2, permKey: "reportes", href: "/reportes" },
+  {
+    type: "section",
+    key: "reportes",
+    label: "Reportes",
+    icon: FiBarChart2,
+    permKey: "reportesMenu",
+    pathPrefix: "/reportes",
+    items: [
+      { key: "reportes", label: "Descargas", icon: FiDownload, permKey: "reportes", href: "/reportes" },
+      // Punto de entrada único a los reportes de racimos: Gráfico de
+      // Embolses no tiene item propio acá porque ya se llega a él con el
+      // botón de ReportesTabs dentro de esta misma página — evita duplicar
+      // el mismo destino en el sidebar y en la página.
+      { key: "racimoMovimientosSemana", label: "Producción", icon: FiBarChart2, permKey: "racimoMovimientosSemana", href: "/reportes/detalle-semanal" },
+    ],
+  },
   {
     type: "section",
     key: "inventarios",
@@ -244,6 +259,7 @@ export default function Sidebar() {
       racimoMovimientoVer: hasPermission("menu.racimos.movimientos"),
       racimoMovimientoCrear: hasPermission("menu.racimos.registrar"),
       racimoSaldosLotesCintas: hasPermission("menu.racimos.saldos_lotes_cintas"),
+      racimoMovimientosSemana: hasPermission("menu.racimos.movimientos_semana"),
       racimoReporteEmbolses: hasPermission("menu.racimos.reporte_embolses"),
       racimoLiquidacion: hasPermission("menu.racimos.liquidacion"),
 
@@ -263,6 +279,14 @@ export default function Sidebar() {
       estimaciones: hasPermission("menu.estimaciones"),
       pronostico: hasPermission("menu.pronostico"),
       programacionCorte: hasPermission("menu.programacion_corte"),
+      // Sección Reportes: visible si el usuario tiene acceso a alguno de sus
+      // items (Descargas, Detalle Semanal, Gráfico de Embolses o Gráfico de
+      // Repiques, cada uno con su propio permiso).
+      reportesMenu:
+        hasPermission("menu.reportes") ||
+        hasPermission("menu.racimos.movimientos_semana") ||
+        hasPermission("menu.racimos.reporte_embolses") ||
+        hasPermission("menu.racimos.reporte_repiques"),
       reportes: hasPermission("menu.reportes"),
 
       inventariosMenu: hasPermission("menu.inventarios"),
