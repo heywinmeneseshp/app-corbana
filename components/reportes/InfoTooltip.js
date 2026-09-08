@@ -31,7 +31,7 @@ export default function InfoTooltip({ texto }) {
       </button>
       {abierto && (
         <div
-          className="card border-0 shadow-lg rounded-3 p-3 position-absolute text-secondary"
+          className="card border-0 shadow-lg rounded-3 p-3 position-absolute text-secondary fw-normal"
           style={{ top: "1.5rem", left: 0, width: "22rem", maxWidth: "80vw", zIndex: 20, fontSize: "0.8rem" }}
         >
           {texto}

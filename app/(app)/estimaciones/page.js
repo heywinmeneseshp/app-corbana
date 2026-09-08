@@ -1,12 +1,13 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FiTarget, FiSave, FiEye, FiList, FiAlertTriangle, FiBarChart2, FiDownload, FiChevronDown, FiChevronUp } from "react-icons/fi";
+import { FiTarget, FiSave, FiEye, FiList, FiAlertTriangle, FiBarChart2, FiDownload, FiChevronDown, FiChevronUp, FiMaximize2, FiX } from "react-icons/fi";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, LabelList } from "recharts";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import { calcularColorSemana, COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 import RequirePermission from "@/components/RequirePermission";
+import InfoTooltip from "@/components/reportes/InfoTooltip";
 
 const SEMANAS_DEFAULT = 8;
 
@@ -108,7 +109,14 @@ export default function EstimacionesPage() {
   const [escaleraFilas, setEscaleraFilas] = useState([]);
   const [escaleraLoading, setEscaleraLoading] = useState(false);
   const [filtroEscaleraFincaUuid, setFiltroEscaleraFincaUuid] = useState("");
+  // Filtro EXPLÍCITO de año: solo se llena cuando el usuario lo elige a
+  // mano en el select. Mientras esté vacío, el backend no aísla ningún año
+  // (usa la ventana amplia por defecto, que incluye el año siguiente para
+  // completar las últimas filas del año vigente).
   const [filtroEscaleraAnio, setFiltroEscaleraAnio] = useState("");
+  // Año que el backend terminó usando quando no hay filtro explícito — solo
+  // para que el select muestre el año correcto sin forzar el modo aislado.
+  const [escaleraAnioMostrado, setEscaleraAnioMostrado] = useState("");
   const [escaleraAniosDisponibles, setEscaleraAniosDisponibles] = useState([]);
   // Semana a enfocar (solo mueve el scroll, no vuelve a consultar el backend).
   const [filtroEscaleraSemanaUuid, setFiltroEscaleraSemanaUuid] = useState("");
@@ -139,6 +147,7 @@ export default function EstimacionesPage() {
   const [graficoSemanaHasta, setGraficoSemanaHasta] = useState("");
   const [graficoMostrarPuntos, setGraficoMostrarPuntos] = useState(true);
   const [graficoMostrarEtiquetas, setGraficoMostrarEtiquetas] = useState(false);
+  const [graficoRatioAmpliado, setGraficoRatioAmpliado] = useState(false);
   // 1 = etiqueta en cada punto, 2 = una de cada dos, etc.
   const [graficoDensidadEtiquetas, setGraficoDensidadEtiquetas] = useState(1);
   // Orden de la tabla del comparativo (clic en encabezado).
@@ -211,10 +220,12 @@ export default function EstimacionesPage() {
       setEscaleraFilas(res.filas || []);
       setSemanaActualEscalera(res.semanaActual || null);
       setEscaleraAniosDisponibles(res.aniosDisponibles || []);
-      // Preseleccionar el año que el backend terminó usando (el vigente la
-      // primera vez), para que el select ya muestre el año correcto.
-      if (!filtroEscaleraAnio && res.anioSeleccionado) {
-        setFiltroEscaleraAnio(String(res.anioSeleccionado));
+      // Solo para que el select muestre el año correcto — NO se guarda en
+      // filtroEscaleraAnio, porque eso activaría el modo "aislar este año"
+      // en el backend y cortaría las últimas filas del año (su ventana de
+      // 8 semanas siguientes cae en el año próximo).
+      if (res.anioSeleccionado) {
+        setEscaleraAnioMostrado(String(res.anioSeleccionado));
       }
     } catch (err) {
       setMsgError(err.message);
@@ -241,6 +252,12 @@ export default function EstimacionesPage() {
       const res = await apiFetch(`/estimaciones/resumen-finca?fincaUuid=${filtroFincaUuid}`);
       setResumenFinca(res);
       setPctEditados(Object.fromEntries((res.estimadoPorCinta || []).map((e) => [e.edad, e.porcentaje])));
+      // Los overrides celda-por-celda de "Sugerido próximas semanas" se
+      // indexan por semana.uuid — el mismo calendario de semanas es
+      // compartido por todas las fincas, así que sin este reset un valor
+      // editado a mano en la Finca A quedaba "pegado" y se filtraba a la
+      // misma celda (semana + edad) de la Finca B al cambiar de finca.
+      setEstimadoManual({});
       setRatiosEditados(
         Object.fromEntries(
           (res.proximasSemanas || []).map((s) => {
@@ -860,6 +877,53 @@ export default function EstimacionesPage() {
         <div className="mb-3">
           <h1 className="fw-bold h5 mb-1 d-flex align-items-center gap-2">
             <FiTarget className="text-primary" /> Estimaciones de Fincas
+            <InfoTooltip
+              texto={
+                <>
+                  <p className="mb-2">
+                    Estima cuántas cajas va a producir cada finca en las próximas semanas, a partir de las cintas
+                    (semanas de embolse) que ya tienen 8 a 12 semanas de edad — la ventana en la que normalmente se
+                    cortan.
+                  </p>
+                  <p className="mb-2">
+                    <strong>Patrón de corte</strong>: % histórico de cada edad (8-12) sobre el total cortado de las
+                    últimas cintas ya cerradas — se aplica sobre el saldo pendiente de cada cinta para calcular el
+                    estimado de la semana que viene.
+                  </p>
+                  <p className="mb-2">
+                    <strong>Sugerido próximas 8 semanas</strong>: proyecta la misma cinta envejeciendo semana a
+                    semana e incorpora las cintas nuevas que van cumpliendo 8 semanas — cada celda es editable, como
+                    Excel, y un valor editado se arrastra al saldo de las semanas siguientes.
+                  </p>
+                  <p className="mb-2">
+                    <strong>Ratio</strong> (cajas ÷ racimo cosechado) convierte el estimado de racimos en cajas —
+                    editable por semana, con el histórico real y el promedio de años anteriores como referencia.
+                  </p>
+                  <p className="mb-1">
+                    <strong>Restricciones</strong>
+                  </p>
+                  <ul className="mb-3 ps-3">
+                    <li>Solo se proyectan cintas en la ventana de edad 8 a 12 semanas — es la política de corte de la
+                      empresa; edad 13+ se trata como atraso real, no como proyección.</li>
+                    <li>Se carga y guarda una finca a la vez.</li>
+                    <li>Se respeta el acceso por finca de cada usuario (solo ve/edita las fincas que tiene
+                      asignadas).</li>
+                    <li>Acceso por rol: <strong>Ver</strong> solo permite consultar; <strong>Crear</strong> permite
+                      cargar y guardar estimaciones; <strong>Editar distribución</strong> además habilita editar el %
+                      del patrón de corte (Distribución por cinta del estimado). Sin ninguno de estos permisos no se
+                      puede ver ni cargar nada en el módulo.</li>
+                    <li>Cargue masivo: máximo 15,000 filas por archivo.</li>
+                  </ul>
+                  <a
+                    href="/manuales/estimaciones.pdf"
+                    download
+                    className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2 justify-content-center"
+                  >
+                    <FiDownload /> Descargar manual completo (PDF)
+                  </a>
+                </>
+              }
+            />
           </h1>
           <p className="text-secondary small mb-0">
             Cajas estimadas (unidad de 20kg equivalente, tasa configurada{" "}
@@ -1049,18 +1113,6 @@ export default function EstimacionesPage() {
 
                         {puedeGuardar && (
                         <div className="mt-3 pt-3 border-top">
-                          <div className="alert alert-success py-2 px-3 small mb-0 d-flex align-items-center flex-wrap gap-2">
-                            <strong>Estimado de corte para {resumenFinca.semanaEstimado?.codigo || "la semana que viene"}:</strong>
-                            <span className="h6 fw-bold mb-0">{estimadoTotalEditable.toLocaleString("es")} racimos</span>
-                            <span className="text-secondary">
-                              (% promedio de las últimas 5 cintas del patrón de corte, aplicado sobre lo que va a quedar pendiente por edad la semana que viene — editable abajo)
-                            </span>
-                          </div>
-                        </div>
-                        )}
-
-                        {puedeGuardar && (
-                        <div className="mt-3 pt-3 border-top">
                           <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
                             <div className="small fw-medium text-secondary">
                               Distribución por cinta del estimado — {resumenFinca.semanaEstimado?.codigo || "la semana que viene"} (el % es editable)
@@ -1156,47 +1208,124 @@ export default function EstimacionesPage() {
                         </div>
                         )}
 
-                        {graficoRatioData.length > 1 && (
-                          <div className="mt-3 pt-3 border-top">
-                            <div className="small fw-medium text-secondary mb-2">
-                              Histórico del ratio (cajas ÷ racimo cosechado) — real hasta hoy, proyectado hasta fin de año
-                            </div>
-                            <div style={{ width: "100%", height: 230 }}>
-                              <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={graficoRatioData} margin={{ top: 5, right: 10, left: -10, bottom: 30 }}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                                  <XAxis dataKey="codigo" tick={{ fontSize: 9 }} interval={0} angle={-60} textAnchor="end" height={50} />
-                                  <YAxis tick={{ fontSize: 10 }} width={45} domain={["auto", "auto"]} />
-                                  <Tooltip formatter={(v) => (v == null ? "—" : Number(v).toLocaleString("es", { maximumFractionDigits: 3 }))} />
-                                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                                  <Line type="monotone" dataKey="ratioReal" name="Ratio real" stroke="#2563eb" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} />
-                                  {puedeGuardar && (
-                                    <Line
-                                      type="monotone"
-                                      dataKey="proyectado"
-                                      name="Ratio proyectado (próximas 8 semanas)"
-                                      stroke="#dc2626"
-                                      strokeWidth={2.5}
-                                      strokeDasharray="5 3"
-                                      dot={{ r: 3 }}
-                                      connectNulls
-                                    />
-                                  )}
+                        {graficoRatioData.length > 1 && (() => {
+                          const renderGraficoRatio = (height) => (
+                            <ResponsiveContainer width="100%" height={height}>
+                              <LineChart data={graficoRatioData} margin={{ top: 5, right: 10, left: -10, bottom: 30 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                                <XAxis dataKey="codigo" tick={{ fontSize: 9 }} interval={0} angle={-60} textAnchor="end" height={50} />
+                                <YAxis tick={{ fontSize: 10 }} width={45} domain={["auto", "auto"]} />
+                                <Tooltip formatter={(v) => (v == null ? "—" : Number(v).toLocaleString("es", { maximumFractionDigits: 3 }))} />
+                                <Legend wrapperStyle={{ fontSize: 11 }} />
+                                <Line type="monotone" dataKey="ratioReal" name="Ratio real" stroke="#2563eb" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} />
+                                {puedeGuardar && (
                                   <Line
                                     type="monotone"
-                                    dataKey="promedio"
-                                    name="Promedio histórico (misma semana)"
-                                    stroke="#059669"
-                                    strokeWidth={2}
+                                    dataKey="proyectado"
+                                    name="Ratio proyectado (próximas 8 semanas)"
+                                    stroke="#dc2626"
+                                    strokeWidth={2.5}
                                     strokeDasharray="5 3"
-                                    dot={{ r: 2 }}
+                                    dot={{ r: 3 }}
                                     connectNulls
                                   />
-                                </LineChart>
-                              </ResponsiveContainer>
+                                )}
+                                <Line
+                                  type="monotone"
+                                  dataKey="promedio"
+                                  name="Promedio histórico (misma semana)"
+                                  stroke="#059669"
+                                  strokeWidth={2}
+                                  strokeDasharray="5 3"
+                                  dot={{ r: 2 }}
+                                  connectNulls
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          );
+                          return (
+                            <div className="mt-3 pt-3 border-top">
+                              <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                <div className="small fw-medium text-secondary">
+                                  Histórico del ratio (cajas ÷ racimo cosechado) — real hasta hoy, proyectado hasta fin de año
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-secondary p-1 border-0"
+                                  title="Ampliar gráfico"
+                                  onClick={() => setGraficoRatioAmpliado(true)}
+                                >
+                                  <FiMaximize2 size={14} />
+                                </button>
+                              </div>
+                              <div style={{ width: "100%", height: 230 }}>{renderGraficoRatio("100%")}</div>
+
+                              {graficoRatioAmpliado && (
+                                <div
+                                  className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+                                  style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1055 }}
+                                  onClick={() => setGraficoRatioAmpliado(false)}
+                                >
+                                  <div
+                                    className="bg-white rounded-4 shadow-lg p-4"
+                                    style={{ width: "90vw", maxWidth: "none" }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="d-flex align-items-center justify-content-between mb-3">
+                                      <h2 className="h6 fw-bold mb-0">
+                                        Histórico del ratio (cajas ÷ racimo cosechado) — real hasta hoy, proyectado hasta fin de año
+                                      </h2>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary p-1 border-0"
+                                        onClick={() => setGraficoRatioAmpliado(false)}
+                                      >
+                                        <FiX size={18} />
+                                      </button>
+                                    </div>
+                                    <div style={{ width: "100%", height: "65vh" }}>{renderGraficoRatio("100%")}</div>
+
+                                    {resumenFinca?.proximasSemanas?.length > 0 && (
+                                      <div className="mt-4 pt-3 border-top">
+                                        <div className="small fw-medium text-secondary mb-2">
+                                          Ratio (editable) — próximas {resumenFinca.proximasSemanas.length} semanas
+                                        </div>
+                                        <div className="d-flex flex-wrap gap-3">
+                                          {resumenFinca.proximasSemanas.map((semana) => (
+                                            <div key={semana.uuid} className="text-center">
+                                              <div className="small text-secondary mb-1">{semana.codigo}</div>
+                                              {puedeGuardar ? (
+                                                <input
+                                                  type="number"
+                                                  step="0.001"
+                                                  className="form-control form-control-sm text-end"
+                                                  style={{ width: "6rem" }}
+                                                  value={ratiosEditados[semana.numeroSemana] ?? ""}
+                                                  onChange={(ev) => {
+                                                    const match = /^-?\d*(\.\d{0,3})?/.exec(ev.target.value);
+                                                    const valor = match ? match[0] : ev.target.value;
+                                                    setRatiosEditados((prev) => ({ ...prev, [semana.numeroSemana]: valor }));
+                                                  }}
+                                                  onBlur={guardarRatiosCajas}
+                                                />
+                                              ) : (
+                                                <span>
+                                                  {ratiosEditados[semana.numeroSemana] != null && ratiosEditados[semana.numeroSemana] !== ""
+                                                    ? Number(ratiosEditados[semana.numeroSemana]).toLocaleString("es", { maximumFractionDigits: 3 })
+                                                    : "—"}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {puedeGuardar && proyeccionSemanas.length > 0 && (
                           <div className="mt-3 pt-3 border-top">
@@ -1205,7 +1334,7 @@ export default function EstimacionesPage() {
                                 Sugerido próximas {proyeccionSemanas.length} semanas — misma cinta, envejeciendo semana a semana (usa los mismos % editables de arriba)
                               </div>
                               {puedeGuardar && (
-                                <div className="d-flex gap-2">
+                                <div className="d-flex align-items-center gap-2">
                                   <button
                                     type="button"
                                     className="btn btn-outline-secondary btn-sm rounded-3"
@@ -1213,14 +1342,7 @@ export default function EstimacionesPage() {
                                   >
                                     Restaurar celdas calculadas
                                   </button>
-                                  <button
-                                    type="button"
-                                    className="btn btn-brand btn-sm rounded-3"
-                                    onClick={guardarRatiosCajas}
-                                    disabled={guardandoRatios}
-                                  >
-                                    {guardandoRatios ? "Guardando..." : "Guardar ratios"}
-                                  </button>
+                                  {guardandoRatios && <span className="small text-secondary">Guardando...</span>}
                                 </div>
                               )}
                             </div>
@@ -1254,7 +1376,7 @@ export default function EstimacionesPage() {
                                           const clave = `${semana.uuid}:${edad}`;
                                           return (
                                             <td key={edad} className="p-0" style={{ minWidth: "4rem" }}>
-                                              {!fila ? (
+                                              {!fila || !fila.semanaEmbolse ? (
                                                 <div className="py-2">—</div>
                                               ) : (
                                                 <div className="d-flex align-items-center justify-content-center gap-1 px-1">
@@ -1276,13 +1398,18 @@ export default function EstimacionesPage() {
                                                       className={`form-control form-control-sm text-center border-0 bg-transparent px-0 ${fila.esManual ? "fw-bold text-primary" : ""}`}
                                                       style={{ width: "3.2rem" }}
                                                       title={fila.esManual ? `Editado a mano (calculado: ${fila.calculado.toLocaleString("es")})` : fila.semanaEmbolse?.codigo}
-                                                      value={estimadoManual[clave] ?? fila.estimado}
+                                                      placeholder="—"
+                                                      value={
+                                                        estimadoManual[clave] ?? (fila.estimado === 0 ? "" : fila.estimado)
+                                                      }
                                                       onChange={(ev) =>
                                                         setEstimadoManual((prev) => ({ ...prev, [clave]: ev.target.value }))
                                                       }
                                                     />
                                                   ) : (
-                                                    <span title={fila.semanaEmbolse?.codigo}>{fila.estimado.toLocaleString("es")}</span>
+                                                    <span title={fila.semanaEmbolse?.codigo}>
+                                                      {fila.estimado === 0 ? "—" : fila.estimado.toLocaleString("es")}
+                                                    </span>
                                                   )}
                                                 </div>
                                               )}
@@ -1308,6 +1435,7 @@ export default function EstimacionesPage() {
                                                 const valor = match ? match[0] : ev.target.value;
                                                 setRatiosEditados((prev) => ({ ...prev, [semana.numeroSemana]: valor }));
                                               }}
+                                              onBlur={guardarRatiosCajas}
                                             />
                                           ) : (
                                             <span>
@@ -1431,7 +1559,7 @@ export default function EstimacionesPage() {
                       <label className="form-label small fw-medium">Año</label>
                       <select
                         className="form-select rounded-3"
-                        value={filtroEscaleraAnio}
+                        value={filtroEscaleraAnio || escaleraAnioMostrado}
                         onChange={(e) => {
                           setFiltroEscaleraAnio(e.target.value);
                           setFiltroEscaleraSemanaUuid("");

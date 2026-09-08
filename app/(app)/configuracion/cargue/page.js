@@ -156,11 +156,8 @@ export default function CargueMasivoPage() {
         {(hasPermission("estimacion.crear") || hasPermission("estimacion.editar_distribucion")) && (
           <BulkUploadCard
             title="Cargue masivo de Estimaciones de Fincas (histórico semana a semana)"
-            description="Formato ancho: Codigo finca | Semana registro (ej. S36-2026) | Semana 1 … Semana 8 (cajas de 20 kg estimadas para las 8 semanas siguientes). Ejemplo: 525 | S36-2026 | 1500 | 1250 | 1300 | 1300 | 1200 | 1250 | 1200 | 1400. Si ya existe un registro para la misma semana, finca y usuario que carga, se omite (podés sobrescribirlo después). Se respeta el acceso por finca del usuario. Máximo 15,000 filas por archivo."
+            description="Formato ancho: Codigo finca | Semana registro (ej. S36-2026) | Semana 1 … Semana 8 (cajas de 20 kg estimadas para las 8 semanas siguientes). Ejemplo: 525 | S36-2026 | 1500 | 1250 | 1300 | 1300 | 1200 | 1250 | 1200 | 1400. Si ya existe un registro para la misma semana, finca y usuario que carga, se actualiza en vez de duplicarlo. Se respeta el acceso por finca del usuario. Máximo 15,000 filas por archivo."
             endpoint="/estimaciones/bulk-upload"
-            overwriteEndpoint={
-              hasPermission("estimacion.crear") || hasPermission("estimacion.editar_distribucion") ? "/estimaciones/bulk-update" : null
-            }
             templateHeaders={["Codigo finca", "Semana registro", "Semana 1", "Semana 2", "Semana 3", "Semana 4", "Semana 5", "Semana 6", "Semana 7", "Semana 8"]}
             templateExampleRow={["525", "S36-2026", "1500", "1250", "1300", "1300", "1200", "1250", "1200", "1400"]}
             templateFilename="plantilla_estimaciones.xlsx"
@@ -168,16 +165,10 @@ export default function CargueMasivoPage() {
             renderResult={(r) => (
               <>
                 <p className="mb-1">
-                  {r.totalFilas} fila(s) procesadas: <strong>{r.creados}</strong> registro(s) creado(s)
-                  {r.saltados > 0 && <>, <strong>{r.saltados}</strong> omitido(s) por duplicado</>}.
+                  {r.totalFilas} fila(s) procesadas: <strong>{r.creados}</strong> creada(s), <strong>{r.actualizados}</strong> actualizada(s).
                 </p>
                 <ErrorList errores={r.errores} />
               </>
-            )}
-            renderResultOverwrite={(r) => (
-              <p className="mb-1">
-                {r.totalFilas} fila(s) procesadas: <strong>{r.actualizados}</strong> sobrescrita(s), <strong>{r.creados}</strong> creada(s) de nuevo.
-              </p>
             )}
           />
         )}
@@ -217,6 +208,46 @@ export default function CargueMasivoPage() {
                 <p className="mb-1">
                   {r.totalFilas} fila(s) procesadas: <strong>{r.creados}</strong> registro(s) creado(s)
                   {r.saltados > 0 && <>, <strong>{r.saltados}</strong> omitido(s) por duplicado</>}.
+                </p>
+                <ErrorList errores={r.errores} />
+              </>
+            )}
+          />
+        )}
+
+        {hasPermission("menu.maestros.usuarios") && (
+          <BulkUploadCard
+            title="Cargue masivo de Usuarios"
+            description="Columnas esperadas: usuario, nombre, apellido, email, cargo (opcional), estado (opcional: activo/inactivo — en blanco no cambia el estado de un usuario existente), roles (opcional, nombres separados por coma) y fincas (opcional, códigos separados por coma). Si el usuario ya existe se actualiza; si no, se crea con una contraseña generada automáticamente que se envía por correo."
+            endpoint="/users/bulk-upload"
+            templateHeaders={["usuario", "nombre", "apellido", "email", "cargo", "estado", "roles", "fincas"]}
+            templateExampleRow={["jperez", "Juan", "Pérez", "jperez@corbana.com", "Supervisor de Campo", "activo", "Supervisor", "525,530"]}
+            templateFilename="plantilla_usuarios.xlsx"
+            renderResult={(r) => (
+              <>
+                <p className="mb-1">
+                  {r.totalFilas} fila(s) procesadas: <strong>{r.usuariosCreados}</strong> creado(s),{" "}
+                  <strong>{r.usuariosActualizados}</strong> actualizado(s).
+                </p>
+                <ErrorList errores={r.errores} />
+              </>
+            )}
+          />
+        )}
+
+        {hasPermission("inventario.articulos.crear") && (
+          <BulkUploadCard
+            title="Cargue masivo de Artículos de Inventario"
+            description="Columnas esperadas: nombre, codigo (opcional), descripcion (opcional), categoria (opcional, nombre exacto de la categoría), unidadMedida (opcional, código exacto de la unidad — ej. KG, UND), costoCompra (opcional), precioVenta (opcional), manejaInventario (opcional: si/no), stockMinimo (opcional), stockMaximo (opcional), estado (opcional: activo/inactivo). Si ya existe un artículo con ese nombre, se actualiza en vez de duplicarlo."
+            endpoint="/inventarios/articulos/bulk-upload"
+            templateHeaders={["nombre", "codigo", "descripcion", "categoria", "unidadMedida", "costoCompra", "precioVenta", "manejaInventario", "stockMinimo", "stockMaximo", "estado"]}
+            templateExampleRow={["Guante de nitrilo", "GN-001", "Guante desechable talla M", "Insumos de campo", "UND", "1200", "0", "si", "50", "500", "activo"]}
+            templateFilename="plantilla_articulos.xlsx"
+            renderResult={(r) => (
+              <>
+                <p className="mb-1">
+                  {r.totalFilas} fila(s) procesadas: <strong>{r.articulosCreados}</strong> creado(s),{" "}
+                  <strong>{r.articulosActualizados}</strong> actualizado(s).
                 </p>
                 <ErrorList errores={r.errores} />
               </>

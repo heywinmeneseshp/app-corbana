@@ -44,9 +44,12 @@ const MENU_TREE = [
       },
       { codigo: "menu.racimos.registrar", nombre: "Registrar Embolse/Repique/Corte", prefijos: ["racimo_movimiento.crear", "racimo_movimiento.forzar_saldo_negativo"] },
       { codigo: "menu.racimos.saldos_lotes_cintas", nombre: "Saldos × Lotes y Cintas", prefijos: [] },
-      { codigo: "menu.racimos.movimientos_semana", nombre: "Detalle Semanal (menú Reportes)", prefijos: [] },
-      { codigo: "menu.racimos.reporte_embolses", nombre: "Gráfico de Embolses (menú Reportes)", prefijos: [] },
-      { codigo: "menu.racimos.reporte_repiques", nombre: "Gráfico de Repiques (menú Reportes)", prefijos: [] },
+      // Detalle Semanal / Gráfico de Embolses / Gráfico de Repiques viven acá
+      // por su código de permiso histórico (racimos.*), pero en el sidebar
+      // real están dentro de la sección "Reportes" (ver Sidebar.js) — se
+      // agrupan ahí abajo, junto a "menu.reportes", para que este árbol
+      // coincida con dónde el usuario los ve navegando y no haya que
+      // adivinar en qué sección buscarlos al armar un rol.
     ],
   },
   {
@@ -72,6 +75,21 @@ const MENU_TREE = [
       { codigo: "menu.sanidad_vegetal.objetivos", nombre: "Objetivos", prefijos: ["objetivo_evaluacion."] },
     ],
   },
+  {
+    // Habilitar "Reportes" (menu.reportes) da acceso a la pestaña
+    // "Descargas" y, de paso, hace visible la sección Reportes del sidebar
+    // — los submenús de acá abajo son las otras pantallas de esa misma
+    // sección (cada una con su propio permiso independiente, así que
+    // marcar "Reportes" no las activa automáticamente: hay que agregarlas
+    // una por una igual que en cualquier otra sección).
+    codigo: "menu.reportes",
+    nombre: "Reportes",
+    submenus: [
+      { codigo: "menu.racimos.movimientos_semana", nombre: "Producción (Detalle Semanal)", prefijos: [] },
+      { codigo: "menu.racimos.reporte_embolses", nombre: "Gráfico de Embolses", prefijos: [] },
+      { codigo: "menu.racimos.reporte_repiques", nombre: "Gráfico de Repiques", prefijos: [] },
+    ],
+  },
 ];
 
 // Ítems planos del menú (sin submenú propio) — se agregan como tag al mismo
@@ -83,7 +101,6 @@ const ITEMS_PLANOS = [
   { codigo: "menu.estimaciones", nombre: "Estimaciones de Fincas", prefijos: ["estimacion."] },
   { codigo: "menu.pronostico", nombre: "Pronóstico de Cajas", prefijos: ["pronostico."] },
   { codigo: "menu.programacion_corte", nombre: "Programación de Corte", prefijos: ["programacion_corte."] },
-  { codigo: "menu.reportes", nombre: "Reportes", prefijos: [] },
 ];
 
 const TODOS_LOS_CODIGOS_DE_MENU = new Set([
