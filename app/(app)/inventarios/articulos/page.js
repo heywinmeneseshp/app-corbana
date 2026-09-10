@@ -284,7 +284,11 @@ export default function ArticulosInventarioPage() {
           <div className="table-responsive">
             <table className="table table-sm table-hover mb-0 align-middle">
               <thead>
-                <tr className="small text-secondary" style={{ borderBottom: "1px solid #f1f5f9" }}>
+                {/* Bootstrap pinta el fondo en cada <th>, no en el <tr>
+                    (.table > * > * > * { background-color: var(--bs-table-bg) })
+                    — un background inline en el <tr> queda tapado por eso.
+                    `table-light` fija esa variable para que sí se herede. */}
+                <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
                   <th className="fw-medium">Código</th>
                   <th className="fw-medium">Nombre</th>
                   <th className="fw-medium">Categoría</th>

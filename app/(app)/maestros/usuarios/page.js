@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiSearch, FiEdit2, FiShield, FiSave, FiX, FiMapPin, FiToggleLeft, FiToggleRight, FiCheck, FiRefreshCw } from "react-icons/fi";
+import { FiPlus, FiSearch, FiEdit2, FiShield, FiSave, FiX, FiMapPin, FiToggleLeft, FiToggleRight, FiCheck, FiRefreshCw, FiEye } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
+import { startImpersonation, getCurrentUser } from "@/lib/auth";
+import { esAdministrador } from "@/lib/laborEstados";
 import ModalShell from "@/components/ModalShell";
 import TagPicker from "@/components/TagPicker";
 import RequirePermission from "@/components/RequirePermission";
@@ -21,6 +23,14 @@ export default function UsuariosPage() {
   const [resetModal, setResetModal] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetResult, setResetResult] = useState(null);
+  const [esAdmin, setEsAdmin] = useState(false);
+  const [miUuid, setMiUuid] = useState(null);
+  const [verComoLoadingUuid, setVerComoLoadingUuid] = useState(null);
+
+  useEffect(() => {
+    setEsAdmin(esAdministrador());
+    setMiUuid(getCurrentUser()?.uuid || null);
+  }, []);
 
   async function loadUsuarios() {
     setLoading(true);
@@ -52,6 +62,25 @@ export default function UsuariosPage() {
       loadUsuarios();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  // "Ver como usuario": junta los permisos de TODOS los roles del usuario
+  // (unión, igual que hace el backend al armar el token en login — ver
+  // auth.service.js#buildTokenPair) y los guarda como simulación de
+  // frontend (ver lib/auth.js). Mismo criterio ya aprobado para "Ver como
+  // rol" en Roles: no crea una sesión nueva, solo cambia lo que se ve en
+  // el menú/pantallas de este navegador.
+  const handleVerComoUsuario = async (usuario) => {
+    setVerComoLoadingUuid(usuario.uuid);
+    try {
+      const tokenPair = await apiFetch(`/users/${usuario.uuid}/impersonate`, { method: "POST" });
+      startImpersonation(tokenPair);
+      window.location.assign("/");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setVerComoLoadingUuid(null);
     }
   };
 
@@ -238,6 +267,17 @@ export default function UsuariosPage() {
                         >
                           <FiMapPin /> Fincas
                         </button>
+                        {esAdmin && usuario.uuid !== miUuid && usuario.estado && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 text-nowrap"
+                            title="Ver el menú y las pantallas como este usuario"
+                            disabled={verComoLoadingUuid === usuario.uuid}
+                            onClick={() => handleVerComoUsuario(usuario)}
+                          >
+                            <FiEye /> {verComoLoadingUuid === usuario.uuid ? "Cargando..." : "Ver como"}
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={`btn btn-sm border-0 ${usuario.estado ? "text-secondary" : "text-success"}`}

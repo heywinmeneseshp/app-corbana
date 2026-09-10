@@ -258,11 +258,25 @@ function ModalConfigDestinatarios({ onClose }) {
       apiFetch("/evaluaciones/alertas-destinatarios"),
     ])
       .then(([rolesRes, usuariosRes, destRes]) => {
-        setRoles(rolesRes.items || []);
-        setUsuarios(usuariosRes.items || []);
+        const rolesItems = rolesRes.items || [];
+        const usuariosItems = usuariosRes.items || [];
+        setRoles(rolesItems);
+        setUsuarios(usuariosItems);
         setCorreosTexto((destRes.correos || []).join(", "));
-        setRolesSel(destRes.rolesUuids || []);
-        setUsuariosSel(destRes.usuariosUuids || []);
+        // TagPicker trabaja con objetos { uuid, label, sublabel } — hay que
+        // rehidratar los uuids guardados contra la lista completa (mismo
+        // patrón que ReporteLabores.js). Guardar los uuids crudos hacía que
+        // el PUT mandara objetos y el backend respondiera "Invalid value".
+        setRolesSel(
+          rolesItems
+            .filter((r) => (destRes.rolesUuids || []).includes(r.uuid))
+            .map((r) => ({ uuid: r.uuid, label: r.nombre })),
+        );
+        setUsuariosSel(
+          usuariosItems
+            .filter((u) => (destRes.usuariosUuids || []).includes(u.uuid))
+            .map((u) => ({ uuid: u.uuid, label: nombreCompleto(u), sublabel: u.email })),
+        );
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -280,7 +294,11 @@ function ModalConfigDestinatarios({ onClose }) {
         .filter(Boolean);
       await apiFetch("/evaluaciones/alertas-destinatarios", {
         method: "PUT",
-        body: JSON.stringify({ correos, rolesUuids: rolesSel, usuariosUuids: usuariosSel }),
+        body: JSON.stringify({
+          correos,
+          rolesUuids: rolesSel.map((r) => r.uuid),
+          usuariosUuids: usuariosSel.map((u) => u.uuid),
+        }),
       });
       setGuardado(true);
     } catch (err) {

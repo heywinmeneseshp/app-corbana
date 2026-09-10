@@ -7,6 +7,7 @@ import {
   FiHome,
   FiLayers,
   FiUploadCloud,
+  FiSend,
   FiBarChart2,
   FiTrendingUp,
   FiActivity,
@@ -38,6 +39,7 @@ import {
   FiTruck,
   FiTarget,
   FiDownload,
+  FiDroplet,
 } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
@@ -180,12 +182,16 @@ const NAV = [
       { key: "configLogistica", label: "Conexión con Logística", icon: FiShare2, permKey: "configuracion", href: "/configuracion/logistica" },
       { key: "configVersionApp", label: "Versión App Móvil", icon: FiSmartphone, permKey: "configuracion", href: "/configuracion/version-app" },
       { key: "configCargue", label: "Cargue Masivo", icon: FiUploadCloud, permKey: "configuracion", href: "/configuracion/cargue" },
+      { key: "configComunicados", label: "Comunicados", icon: FiSend, permKey: "configuracion", href: "/configuracion/comunicados" },
       { key: "configBackup", label: "Base de Datos", icon: FiDatabase, permKey: "configuracion", href: "/configuracion/backup" },
       { key: "configConversion", label: "Tasa de Conversión", icon: FiPackage, permKey: "configuracion", href: "/configuracion/conversion" },
+      { key: "configMezclaParametros", label: "Parámetros de Mezclas", icon: FiDroplet, permKey: "configuracion", href: "/configuracion/mezcla-parametros" },
       { key: "configMarca", label: "Marca de la App", icon: FiImage, permKey: "configuracion", href: "/configuracion/marca" },
     ],
   },
 ];
+
+const TOP_LEVEL_LINK_HREFS = NAV.filter((e) => e.type === "link").map((e) => e.href);
 
 // Quita tildes (vía NFD + rango unicode de marcas diacríticas) para que
 // buscar "grafico" encuentre "Gráficos" sin que el usuario tenga que
@@ -196,6 +202,21 @@ const normalizar = (s) =>
     .toLowerCase()
     .normalize("NFD")
     .replace(DIACRITICOS, "");
+
+// Un link queda "activo" si la ruta actual es exactamente su href, o si
+// cuelga de él (ej. href "/racimos/movimientos" y ruta
+// "/racimos/movimientos/123"). El problema: cuando un href es prefijo de
+// OTRO href hermano (ej. "Descargas" → "/reportes" y "Producción" →
+// "/reportes/detalle-semanal"), estando en "/reportes/detalle-semanal" los
+// dos calzaban como activos. Acá el hermano más específico (href más largo)
+// gana, así que "Descargas" ya no se enciende estando en "Producción".
+function esLinkActivo(pathname, href, hermanosHrefs) {
+  if (pathname === href) return true;
+  if (!pathname.startsWith(`${href}/`)) return false;
+  return !hermanosHrefs.some(
+    (h) => h !== href && h.length > href.length && (pathname === h || pathname.startsWith(`${h}/`)),
+  );
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -444,7 +465,7 @@ export default function Sidebar() {
           if (entry.type === "link") {
             const Icon = entry.icon;
             return (
-              <Link key={entry.key} href={entry.href} className={navLinkClass(pathname === entry.href || pathname.startsWith(`${entry.href}/`))} title={entry.label}>
+              <Link key={entry.key} href={entry.href} className={navLinkClass(esLinkActivo(pathname, entry.href, TOP_LEVEL_LINK_HREFS))} title={entry.label}>
                 <Icon size={18} />
                 {label(entry.label)}
               </Link>
@@ -478,8 +499,9 @@ export default function Sidebar() {
                 <div className="ps-4 d-flex flex-column gap-1">
                   {entry.items.map((item) => {
                     const ItemIcon = item.icon;
+                    const hermanosHrefs = entry.items.map((i) => i.href);
                     return (
-                      <Link key={item.key} href={item.href} className={navLinkClass(pathname === item.href || pathname.startsWith(`${item.href}/`))}>
+                      <Link key={item.key} href={item.href} className={navLinkClass(esLinkActivo(pathname, item.href, hermanosHrefs))}>
                         <ItemIcon size={16} />
                         {item.label}
                       </Link>

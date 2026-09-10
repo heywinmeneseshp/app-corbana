@@ -90,7 +90,7 @@ export default function ObjetivosEvaluacionPage() {
           <div className="table-responsive">
             <table className="table table-hover mb-0 align-middle">
               <thead>
-                <tr className="small text-secondary" style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
                   <th className="fw-medium">Tipo</th>
                   <th className="fw-medium">Ámbito</th>
                   <th className="fw-medium">Edad</th>

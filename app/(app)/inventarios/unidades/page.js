@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2 } from "react-icons/fi";
+import { useEffect, useMemo, useState } from "react";
+import { FiPlus, FiEdit2, FiTrash2, FiRepeat } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
+import { construirGrafoUnidades, convertirCantidad } from "@/lib/unidadConversion";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
@@ -181,6 +182,8 @@ export default function UnidadesInventarioPage() {
           </div>
         </div>
 
+        <CalculadoraConversionCard unidades={items} />
+
         <ConversionesCard unidades={items} />
 
         {modalOpen && (
@@ -267,6 +270,120 @@ export default function UnidadesInventarioPage() {
         )}
       </div>
     </RequirePermission>
+  );
+}
+
+// Calculadora de conversión — usa las conversiones ya registradas abajo
+// (ConversionesCard) como un grafo bidireccional (ver lib/unidadConversion.js):
+// cada par origen→destino también habilita destino→origen (factor
+// inverso), y se busca un camino aunque no exista una conversión DIRECTA
+// entre las dos unidades elegidas (ej. si hay ton→kg y kg→g registradas,
+// esto resuelve ton→g encadenando ambas, sin que el usuario tenga que
+// crear esa conversión a mano). Mismo grafo que usa el selector de
+// "Unidad" en Mezclas para sugerir solo unidades compatibles con el
+// artículo elegido.
+function CalculadoraConversionCard({ unidades }) {
+  const [conversiones, setConversiones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [cantidad, setCantidad] = useState("1");
+  const [origenUuid, setOrigenUuid] = useState("");
+  const [destinoUuid, setDestinoUuid] = useState("");
+
+  useEffect(() => {
+    apiFetch("/inventarios/unidades/conversiones")
+      .then((data) => setConversiones(Array.isArray(data) ? data : data.items || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const grafo = useMemo(() => construirGrafoUnidades(conversiones), [conversiones]);
+  const resultado = useMemo(() => {
+    const num = Number(cantidad);
+    if (!Number.isFinite(num)) return null;
+    return convertirCantidad(grafo, origenUuid, destinoUuid, num);
+  }, [grafo, origenUuid, destinoUuid, cantidad]);
+
+  const unidadOrigen = unidades.find((u) => u.uuid === origenUuid);
+  const unidadDestino = unidades.find((u) => u.uuid === destinoUuid);
+  const sinCamino = origenUuid && destinoUuid && origenUuid !== destinoUuid && resultado === null;
+
+  function intercambiar() {
+    setOrigenUuid(destinoUuid);
+    setDestinoUuid(origenUuid);
+  }
+
+  return (
+    <div className="card border-0 shadow-sm rounded-4 p-4 mb-4">
+      <h2 className="h6 fw-bold mb-1">Calculadora de conversión</h2>
+      <p className="text-secondary small mb-3">
+        Convierte una cantidad entre dos unidades, encadenando las conversiones registradas abajo si hace falta
+        (ej. toneladas → kilogramos → gramos).
+      </p>
+
+      <div className="row g-2 align-items-end">
+        <div className="col-6 col-md-3">
+          <label className="form-label small fw-medium mb-1">Cantidad</label>
+          <input
+            type="number"
+            step="any"
+            className="form-control rounded-3 form-control-sm"
+            value={cantidad}
+            onChange={(e) => setCantidad(e.target.value)}
+          />
+        </div>
+        <div className="col-6 col-md-4">
+          <label className="form-label small fw-medium mb-1">De</label>
+          <select className="form-select rounded-3 form-select-sm" value={origenUuid} onChange={(e) => setOrigenUuid(e.target.value)}>
+            <option value="">Selecciona...</option>
+            {unidades.map((u) => (
+              <option key={u.uuid} value={u.uuid}>
+                {u.codigo} — {u.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="col-auto d-none d-md-flex">
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary rounded-3 mb-1"
+            title="Intercambiar origen y destino"
+            disabled={!origenUuid && !destinoUuid}
+            onClick={intercambiar}
+          >
+            <FiRepeat />
+          </button>
+        </div>
+        <div className="col-6 col-md-4">
+          <label className="form-label small fw-medium mb-1">A</label>
+          <select className="form-select rounded-3 form-select-sm" value={destinoUuid} onChange={(e) => setDestinoUuid(e.target.value)}>
+            <option value="">Selecciona...</option>
+            {unidades.map((u) => (
+              <option key={u.uuid} value={u.uuid}>
+                {u.codigo} — {u.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        {loading && <p className="text-secondary small mb-0">Cargando conversiones...</p>}
+        {!loading && resultado !== null && unidadOrigen && unidadDestino && (
+          <p className="mb-0">
+            <span className="text-secondary">{Number(cantidad)} {unidadOrigen.simbolo} =</span>{" "}
+            <strong className="fs-5">
+              {resultado.toLocaleString("es-CO", { maximumFractionDigits: 6 })} {unidadDestino.simbolo}
+            </strong>
+          </p>
+        )}
+        {!loading && sinCamino && (
+          <p className="text-danger small mb-0">
+            No hay ninguna conversión (directa o encadenada) registrada entre estas dos unidades — agrega una en
+            &quot;Conversiones entre unidades&quot; abajo.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 

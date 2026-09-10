@@ -76,18 +76,47 @@ const MENU_TREE = [
     ],
   },
   {
-    // Habilitar "Reportes" (menu.reportes) da acceso a la pestaña
-    // "Descargas" y, de paso, hace visible la sección Reportes del sidebar
-    // — los submenús de acá abajo son las otras pantallas de esa misma
-    // sección (cada una con su propio permiso independiente, así que
-    // marcar "Reportes" no las activa automáticamente: hay que agregarlas
-    // una por una igual que en cualquier otra sección).
+    // Solo dos interruptores en esta sección: habilitar "Reportes" (Paso 1)
+    // da acceso a "Descargas" (la pestaña de /reportes); el único submenú,
+    // "Producción", es un solo interruptor que da vista TOTAL a esa parte
+    // (Detalle Semanal + Gráfico de Embolses + Gráfico de Repiques) — son 3
+    // permisos reales distintos por código histórico (racimos.*), pero se
+    // agregan/quitan siempre juntos como "companions" para no exponerlos
+    // como 3 permisos sueltos que haya que armar a mano.
     codigo: "menu.reportes",
     nombre: "Reportes",
     submenus: [
-      { codigo: "menu.racimos.movimientos_semana", nombre: "Producción (Detalle Semanal)", prefijos: [] },
-      { codigo: "menu.racimos.reporte_embolses", nombre: "Gráfico de Embolses", prefijos: [] },
-      { codigo: "menu.racimos.reporte_repiques", nombre: "Gráfico de Repiques", prefijos: [] },
+      {
+        codigo: "menu.racimos.movimientos_semana",
+        nombre: "Producción",
+        prefijos: [],
+        companions: ["menu.racimos.reporte_embolses", "menu.racimos.reporte_repiques"],
+      },
+    ],
+  },
+  {
+    // Por ahora Inventarios solo restringe qué SECCIONES/SUBMENÚS se ven
+    // (por eso cada submenú tiene "prefijos: []" — sin permisos granulares
+    // de crear/editar/eliminar todavía, esos siguen sin restricción hasta
+    // que se pida esa parte — ver esPermisoAccionInventario en lib/auth.js).
+    codigo: "menu.inventarios",
+    nombre: "Inventarios",
+    submenus: [
+      { codigo: "menu.inventarios.dashboard", nombre: "Dashboard", prefijos: [] },
+      { codigo: "menu.inventarios.articulos", nombre: "Artículos", prefijos: [] },
+      { codigo: "menu.inventarios.categorias", nombre: "Categorías", prefijos: [] },
+      { codigo: "menu.inventarios.unidades", nombre: "Unidades", prefijos: [] },
+      { codigo: "menu.inventarios.almacenes", nombre: "Almacenes", prefijos: [] },
+      { codigo: "menu.inventarios.motivos", nombre: "Motivos", prefijos: [] },
+      { codigo: "menu.inventarios.movimientos", nombre: "Movimientos (incluye Existencias y Kardex)", prefijos: [] },
+      { codigo: "menu.inventarios.mezclas", nombre: "Mezclas", prefijos: [] },
+      { codigo: "menu.inventarios.elaboraciones", nombre: "Elaboraciones", prefijos: [] },
+      { codigo: "menu.inventarios.proformas", nombre: "Proformas", prefijos: [] },
+      { codigo: "menu.inventarios.equipos", nombre: "Equipos", prefijos: [] },
+      { codigo: "menu.inventarios.proveedores", nombre: "Proveedores", prefijos: [] },
+      { codigo: "menu.inventarios.planes", nombre: "Planes de Mantenimiento", prefijos: [] },
+      { codigo: "menu.inventarios.programaciones", nombre: "Programaciones de Mantenimiento", prefijos: [] },
+      { codigo: "menu.inventarios.ordenes", nombre: "Órdenes de Mantenimiento", prefijos: [] },
     ],
   },
 ];
@@ -106,6 +135,10 @@ const ITEMS_PLANOS = [
 const TODOS_LOS_CODIGOS_DE_MENU = new Set([
   ...MENU_TREE.map((m) => m.codigo),
   ...MENU_TREE.flatMap((m) => m.submenus.map((s) => s.codigo)),
+  // Permisos "compañeros" (ver comentario de "Producción" arriba): se
+  // agregan/quitan solos al lado de su submenú, así que no deben aparecer
+  // sueltos en "Otros permisos" más abajo.
+  ...MENU_TREE.flatMap((m) => m.submenus.flatMap((s) => s.companions || [])),
   ...ITEMS_PLANOS.map((i) => i.codigo),
 ]);
 
@@ -145,7 +178,10 @@ export default function PermisosGroupedPicker({ items, selected, onChange }) {
     for (const q of quitados) {
       const seccion = MENU_TREE.find((m) => m.codigo === q.sublabel);
       if (!seccion) continue;
-      const codigosHijos = new Set(seccion.submenus.map((s) => s.codigo));
+      const codigosHijos = new Set([
+        ...seccion.submenus.map((s) => s.codigo),
+        ...seccion.submenus.flatMap((s) => s.companions || []),
+      ]);
       const prefijosNietos = seccion.submenus.flatMap((s) => s.prefijos);
       resultado = resultado.filter(
         (s) => !codigosHijos.has(s.sublabel) && !prefijosNietos.some((p) => s.sublabel?.startsWith(p)),
@@ -225,12 +261,32 @@ function SubmenuBlock({ seccion, items, selected, onChange }) {
 
   const toggleSubmenu = (nuevaLista) => {
     const codigosNuevos = new Set(nuevaLista.map((i) => i.sublabel));
+    const codigosAntes = new Set(submenuSelected.map((s) => s.sublabel));
     const quitados = submenuSelected.filter((s) => !codigosNuevos.has(s.sublabel));
+    const agregados = nuevaLista.filter((s) => !codigosAntes.has(s.sublabel));
     let resultado = [...selected.filter((s) => !submenuItems.some((i) => i.uuid === s.uuid)), ...nuevaLista];
     for (const q of quitados) {
       const submenu = seccion.submenus.find((s) => s.codigo === q.sublabel);
       if (!submenu) continue;
       resultado = resultado.filter((s) => !submenu.prefijos.some((p) => s.sublabel?.startsWith(p)));
+      // Quitar también los permisos "compañeros" que este submenú agrega en
+      // bloque (ver comentario de "Producción" arriba) — se activan y
+      // desactivan siempre juntos, no quedan sueltos.
+      if (submenu.companions?.length) {
+        resultado = resultado.filter((s) => !submenu.companions.includes(s.sublabel));
+      }
+    }
+    // Agregar en bloque los permisos "compañeros" del/los submenú(s) recién
+    // marcados, si existen como permiso real en la base (`items`).
+    for (const a of agregados) {
+      const submenu = seccion.submenus.find((s) => s.codigo === a.sublabel);
+      if (!submenu?.companions?.length) continue;
+      const yaPresentes = new Set(resultado.map((s) => s.sublabel));
+      for (const companionCodigo of submenu.companions) {
+        if (yaPresentes.has(companionCodigo)) continue;
+        const companionItem = items.find((i) => i.sublabel === companionCodigo);
+        if (companionItem) resultado.push(companionItem);
+      }
     }
     onChange(resultado);
   };

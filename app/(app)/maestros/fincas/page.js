@@ -176,7 +176,7 @@ export default function FincasPage() {
         <div className="table-responsive">
           <table className="table table-hover mb-0 align-middle">
             <thead>
-              <tr className="small text-secondary" style={{ borderBottom: "1px solid #f1f5f9" }}>
+              <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
                 <th className="fw-medium" style={{ width: "2.5rem" }}>
                   <input
                     type="checkbox"
@@ -692,7 +692,7 @@ function LotesModal({ finca, onClose }) {
       <div className="table-responsive">
         <table className="table table-sm table-hover align-middle mb-0">
           <thead>
-            <tr className="small text-secondary" style={{ borderBottom: "1px solid #f1f5f9" }}>
+            <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
               <th className="fw-medium">Lote</th>
               <th className="fw-medium">Área Disponible</th>
               <th className="fw-medium">Área en Producción</th>
@@ -745,8 +745,8 @@ function LotesModal({ finca, onClose }) {
                               <FiSave /> Guardar
                             </button>
                             {esAdmin && (
-                              <button type="button" className="btn btn-sm btn-outline-danger" title="Eliminar lote" onClick={() => handleDeleteLote(lote)}>
-                                <FiTrash2 />
+                              <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex" style={{ color: "#dc2626" }} title="Eliminar lote" onClick={() => handleDeleteLote(lote)}>
+                                <FiTrash2 size={15} />
                               </button>
                             )}
                           </div>
