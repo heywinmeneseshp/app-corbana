@@ -15,21 +15,31 @@ export default function MezclaParametrosForm() {
   const [phMinimo, setPhMinimo] = useState("");
   const [phMaximo, setPhMaximo] = useState("");
   const [ceMaxima, setCeMaxima] = useState("");
+  const [roles, setRoles] = useState([]);
+  const [aprobadores, setAprobadores] = useState([]); // uuids de rol
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    apiFetch("/inventarios/mezclas/parametros")
-      .then((data) => {
+    Promise.all([
+      apiFetch("/inventarios/mezclas/parametros"),
+      apiFetch("/roles?limit=100").catch(() => ({ items: [] })),
+    ])
+      .then(([data, rolesData]) => {
         setPhMinimo(String(data.phMinimo ?? ""));
         setPhMaximo(String(data.phMaximo ?? ""));
         setCeMaxima(String(data.ceMaxima ?? ""));
+        setAprobadores(Array.isArray(data.aprobadoresRolesUuids) ? data.aprobadoresRolesUuids : []);
+        setRoles(rolesData.items || []);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const toggleAprobador = (uuid) =>
+    setAprobadores((prev) => (prev.includes(uuid) ? prev.filter((u) => u !== uuid) : [...prev, uuid]));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,11 +59,13 @@ export default function MezclaParametrosForm() {
           phMinimo: Number(phMinimo),
           phMaximo: Number(phMaximo),
           ceMaxima: Number(ceMaxima),
+          aprobadoresRolesUuids: aprobadores,
         }),
       });
       setPhMinimo(String(data.phMinimo));
       setPhMaximo(String(data.phMaximo));
       setCeMaxima(String(data.ceMaxima));
+      setAprobadores(Array.isArray(data.aprobadoresRolesUuids) ? data.aprobadoresRolesUuids : []);
       setOk("Parámetros guardados correctamente.");
     } catch (err) {
       setError(err.message);
@@ -115,6 +127,31 @@ export default function MezclaParametrosForm() {
               estos valores no afecta pruebas ya finalizadas — cada una guarda los parámetros que estaban vigentes
               cuando se aprobó.
             </p>
+
+            <hr className="my-3" />
+            <label className="form-label small fw-medium">Roles que pueden aprobar mezclas</label>
+            <p className="form-text small mt-0 mb-2">
+              Tras crear el elaborado, la prueba queda <strong>pendiente de aprobación</strong> y el artículo elaborado
+              no se puede usar hasta que un usuario de alguno de estos roles la apruebe. Sin roles marcados, solo el
+              Administrador puede aprobar.
+            </p>
+            <div className="d-flex flex-wrap gap-2 mb-3">
+              {roles.length === 0 && <span className="text-secondary small">No hay roles para mostrar.</span>}
+              {roles.map((r) => (
+                <label
+                  key={r.uuid}
+                  className={`btn btn-sm rounded-3 ${aprobadores.includes(r.uuid) ? "btn-brand" : "btn-outline-secondary"}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="d-none"
+                    checked={aprobadores.includes(r.uuid)}
+                    onChange={() => toggleAprobador(r.uuid)}
+                  />
+                  {r.nombre}
+                </label>
+              ))}
+            </div>
 
             {error && <div className="alert alert-danger py-2 small">{error}</div>}
             {ok && <div className="alert alert-success py-2 small">{ok}</div>}

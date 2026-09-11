@@ -14,6 +14,40 @@ function emptyComponenteRow() {
   return { articuloUuid: "", cantidad: "1", unidadUuid: "" };
 }
 
+function fmtFechaHora(v) {
+  if (!v) return null;
+  return new Date(v).toLocaleString("es-CO", { timeZone: "America/Bogota", dateStyle: "medium", timeStyle: "short" });
+}
+
+function nombreUsuario(u) {
+  if (!u) return "—";
+  return `${u.nombre || ""} ${u.apellido || ""}`.trim() || u.usuario || "—";
+}
+
+// Nombre + "cargo" (roles del usuario) + opcionalmente la fecha/hora del
+// hito (finalización / aprobación).
+function TrazaItem({ titulo, usuario, fecha, pendiente }) {
+  const cargo = (usuario?.roles || []).map((r) => r.nombre).join(", ");
+  return (
+    <div className="col-12 col-md-4">
+      <div className="small text-secondary text-uppercase fw-semibold" style={{ fontSize: "0.68rem", letterSpacing: "0.03em" }}>
+        {titulo}
+      </div>
+      {pendiente ? (
+        <div className="small fw-medium" style={{ color: "#b45309" }}>
+          Pendiente
+        </div>
+      ) : (
+        <>
+          {fecha !== undefined && <div className="small fw-medium">{fmtFechaHora(fecha) || "—"}</div>}
+          <div className="small">{nombreUsuario(usuario)}</div>
+          {cargo && <div className="small text-secondary">{cargo}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function MezclaPruebaDetallePage() {
   const { uuid } = useParams();
   const router = useRouter();
@@ -54,8 +88,15 @@ export default function MezclaPruebaDetallePage() {
 
   // ─── Etapas ───
   const [etapaForm, setEtapaForm] = useState({ componenteUuid: "", ph: "", ce: "", observaciones: "" });
+  const [etapaFotos, setEtapaFotos] = useState([]); // [{file, previewUrl}] — evidencia de la etapa que se está por registrar
   const [savingEtapa, setSavingEtapa] = useState(false);
   const [etapaError, setEtapaError] = useState("");
+  // Subida de fotos a una etapa YA registrada — key: etapaUuid en curso
+  const [subiendoFotoEtapa, setSubiendoFotoEtapa] = useState("");
+  // Etapa cuyo modal de evidencia está abierto (ver/agregar/eliminar fotos)
+  const [fotosModalEtapaUuid, setFotosModalEtapaUuid] = useState(null);
+  // Foto abierta a pantalla completa (lightbox) — { src, alt } o null
+  const [fotoAmpliada, setFotoAmpliada] = useState(null);
 
   // ─── Fotos ───
   const [pendingFotos, setPendingFotos] = useState([]); // [{file, previewUrl}]
@@ -63,9 +104,11 @@ export default function MezclaPruebaDetallePage() {
   const [fotosError, setFotosError] = useState("");
   const [fotoUrls, setFotoUrls] = useState({}); // { [fotoUuid]: blobUrl }
 
-  // ─── Finalizar / Crear elaborado ───
+  // ─── Finalizar / Crear elaborado / Aprobar ───
   const [finalizando, setFinalizando] = useState(false);
   const [finalizarError, setFinalizarError] = useState("");
+  const [aprobando, setAprobando] = useState(false);
+  const [aprobarError, setAprobarError] = useState("");
   const [elaboradoModalOpen, setElaboradoModalOpen] = useState(false);
   const [elaboradoForm, setElaboradoForm] = useState({
     cantidadElaborada: "1",
@@ -271,21 +314,77 @@ export default function MezclaPruebaDetallePage() {
     }
     setSavingEtapa(true);
     try {
-      await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/etapas`, {
-        method: "POST",
-        body: JSON.stringify({
-          componenteUuid: etapaForm.componenteUuid || null,
-          ph: Number(etapaForm.ph),
-          ce: Number(etapaForm.ce),
-          observaciones: etapaForm.observaciones || null,
-        }),
-      });
+      const versionActualizada = await apiFetch(
+        `/inventarios/mezclas/${uuid}/versiones/${version.uuid}/etapas`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            componenteUuid: etapaForm.componenteUuid || null,
+            ph: Number(etapaForm.ph),
+            ce: Number(etapaForm.ce),
+            observaciones: etapaForm.observaciones || null,
+          }),
+        },
+      );
+
+      // Sube la evidencia fotográfica adjunta a ESTA etapa recién creada
+      // (la de mayor `numero` en la versión devuelta).
+      if (etapaFotos.length) {
+        const nuevaEtapa = (versionActualizada.etapas || []).reduce(
+          (max, e) => (!max || e.numero > max.numero ? e : max),
+          null,
+        );
+        if (nuevaEtapa) {
+          const formData = new FormData();
+          formData.append("etapaUuid", nuevaEtapa.uuid);
+          etapaFotos.forEach(({ file }) => formData.append("fotos", file));
+          await apiFetchFormData(
+            `/inventarios/mezclas/${uuid}/versiones/${version.uuid}/fotos`,
+            formData,
+          );
+        }
+      }
+
+      etapaFotos.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
+      setEtapaFotos([]);
       setEtapaForm({ componenteUuid: "", ph: "", ce: "", observaciones: "" });
       await load();
     } catch (err) {
       setEtapaError(err.message);
     } finally {
       setSavingEtapa(false);
+    }
+  }
+
+  function handleSelectEtapaFiles(e) {
+    const files = Array.from(e.target.files || []);
+    setEtapaFotos((prev) => [...prev, ...files.map((file) => ({ file, previewUrl: URL.createObjectURL(file) }))]);
+    e.target.value = "";
+  }
+
+  function limpiarEtapaFotos() {
+    setEtapaFotos((prev) => {
+      prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      return [];
+    });
+  }
+
+  // Agrega fotos a una etapa que YA fue registrada.
+  async function handleSubirFotosAEtapa(etapaUuid, fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setEtapaError("");
+    setSubiendoFotoEtapa(etapaUuid);
+    try {
+      const formData = new FormData();
+      formData.append("etapaUuid", etapaUuid);
+      files.forEach((file) => formData.append("fotos", file));
+      await apiFetchFormData(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/fotos`, formData);
+      await load();
+    } catch (err) {
+      setEtapaError(err.message);
+    } finally {
+      setSubiendoFotoEtapa("");
     }
   }
 
@@ -373,6 +472,33 @@ export default function MezclaPruebaDetallePage() {
       setFinalizarError(err.message);
     } finally {
       setFinalizando(false);
+    }
+  }
+
+  async function handleAprobar() {
+    if (
+      !confirm(
+        "¿Aprobar esta prueba? Se registrará la entrada del artículo elaborado al inventario y quedará habilitado para usarse.",
+      )
+    )
+      return;
+    setAprobarError("");
+    setAprobando(true);
+    try {
+      const resultado = await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/aprobar`, { method: "POST" });
+      if (resultado?.requiereConfirmacion) {
+        const detalle = resultado.advertencias.map((a) => a.mensaje).join("\n\n");
+        if (!confirm(`${detalle}\n\n¿Aprobar de todas formas? El inventario quedará en negativo para el/los artículo(s) listados.`)) return;
+        await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/aprobar`, {
+          method: "POST",
+          body: JSON.stringify({ forzarSaldoNegativo: true }),
+        });
+      }
+      await load();
+    } catch (err) {
+      setAprobarError(err.message);
+    } finally {
+      setAprobando(false);
     }
   }
 
@@ -497,10 +623,29 @@ export default function MezclaPruebaDetallePage() {
                 <FiPackage /> Crear elaborado
               </button>
             )}
+            {version.estadoPrueba === "PENDIENTE_APROBACION" && (
+              <button
+                type="button"
+                className="btn btn-brand rounded-3 d-flex align-items-center gap-2"
+                disabled={aprobando}
+                onClick={handleAprobar}
+              >
+                <FiCheckCircle /> {aprobando ? "Aprobando..." : "Aprobar prueba"}
+              </button>
+            )}
           </div>
         </div>
 
         {finalizarError && <div className="alert alert-danger py-2 small">{finalizarError}</div>}
+        {aprobarError && <div className="alert alert-danger py-2 small">{aprobarError}</div>}
+        {version.estadoPrueba === "PENDIENTE_APROBACION" && (
+          <div className="alert alert-warning py-2 small">
+            El artículo elaborado <strong>{mezcla.articuloElaborado?.nombre}</strong> ya fue creado pero está
+            <strong> inactivo</strong> y <strong>todavía no entró al inventario</strong>: la entrada de stock se genera
+            recién al aprobar. Hasta entonces no se puede usar en movimientos, elaboraciones ni proformas — necesita la
+            aprobación de un usuario de un rol autorizado.
+          </div>
+        )}
 
         {/* ─── Información general ─── */}
         <div className="card border-0 rounded-4 mb-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
@@ -582,6 +727,28 @@ export default function MezclaPruebaDetallePage() {
               <span className="small text-secondary">
                 Documento inventario: <strong>{version.movimientoDocumento || "—"}</strong>
               </span>
+            </div>
+          </div>
+        )}
+
+        {(version.finalizadaEn || version.aprobadaEn || version.operador) && (
+          <div className="card border-0 rounded-4 mb-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            <div className="card-body p-3">
+              <h2 className="h6 fw-bold mb-2">Trazabilidad</h2>
+              <div className="row g-3">
+                <TrazaItem titulo="Creada por" usuario={version.operador} />
+                <TrazaItem
+                  titulo="Prueba finalizada"
+                  fecha={version.finalizadaEn}
+                  usuario={version.finalizadaPor}
+                />
+                <TrazaItem
+                  titulo="Aprobación"
+                  fecha={version.aprobadaEn}
+                  usuario={version.aprobadaPor}
+                  pendiente={version.estadoPrueba === "PENDIENTE_APROBACION"}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -710,31 +877,32 @@ export default function MezclaPruebaDetallePage() {
               <table className="table table-sm align-middle mb-0">
                 <thead>
                   <tr className="table-light small text-secondary">
-                    <th>#</th>
+                    <th className="text-center">#</th>
                     <th>Componente incorporado</th>
-                    <th>pH</th>
-                    <th>CE</th>
-                    <th>Resultado</th>
-                    <th>Fecha</th>
+                    <th className="text-center">pH</th>
+                    <th className="text-center">CE</th>
+                    <th className="text-center">Resultado</th>
+                    <th className="text-center">Fecha</th>
                     <th>Observaciones</th>
+                    <th className="text-center">Evidencia</th>
                     {editable && puedeCrear && <th style={{ width: "2.5rem" }} />}
                   </tr>
                 </thead>
                 <tbody>
                   {(version.etapas || []).length === 0 && (
                     <tr>
-                      <td colSpan={editable && puedeCrear ? 8 : 7} className="text-center text-secondary small py-2">
+                      <td colSpan={editable && puedeCrear ? 9 : 8} className="text-center text-secondary small py-2">
                         Sin etapas registradas todavía.
                       </td>
                     </tr>
                   )}
                   {(version.etapas || []).map((et) => (
                     <tr key={et.uuid}>
-                      <td className="small">{et.numero}</td>
+                      <td className="small text-center">{et.numero}</td>
                       <td className="small">{et.componente?.articulo?.nombre || "—"}</td>
-                      <td className="small">{Number(et.ph).toFixed(2)}</td>
-                      <td className="small">{Number(et.ce).toFixed(2)}</td>
-                      <td className="small">
+                      <td className="small text-center">{Number(et.ph).toFixed(2)}</td>
+                      <td className="small text-center">{Number(et.ce).toFixed(2)}</td>
+                      <td className="small text-center">
                         <span
                           className="badge rounded-pill small"
                           style={
@@ -746,10 +914,47 @@ export default function MezclaPruebaDetallePage() {
                           {et.resultado === "CUMPLE" ? "Cumple" : "No cumple"}
                         </span>
                       </td>
-                      <td className="small text-secondary">
+                      <td className="small text-secondary text-center">
                         {et.medidoEn ? new Date(et.medidoEn).toLocaleString("es-CO", { timeZone: "America/Bogota" }) : "—"}
                       </td>
                       <td className="small text-secondary">{et.observaciones || "—"}</td>
+                      <td className="text-center">
+                        {(() => {
+                          const nFotos = (et.fotos || []).length;
+                          const subiendo = subiendoFotoEtapa === et.uuid;
+                          // Con la prueba ya guardada (no editable) el botón es
+                          // solo de consulta: sin fondo verde, solo el ícono.
+                          const claseBoton = editable
+                            ? `btn btn-sm rounded-3 px-2 ${nFotos > 0 ? "btn-brand" : "btn-outline-secondary"}`
+                            : "btn btn-sm btn-link p-0 text-decoration-none";
+                          return (
+                            <button
+                              type="button"
+                              className={`${claseBoton} d-inline-flex align-items-center justify-content-center gap-1`}
+                              style={{ minHeight: 31 }}
+                              title={nFotos > 0 ? `Ver ${nFotos} evidencia(s)` : "Sin evidencia" + (editable && puedeCrear ? " — agregar" : "")}
+                              onClick={() => setFotosModalEtapaUuid(et.uuid)}
+                            >
+                              {subiendo ? (
+                                <span className="spinner-border spinner-border-sm" />
+                              ) : (
+                                <FiCamera
+                                  size={16}
+                                  style={!editable ? { color: nFotos > 0 ? "#16a34a" : "#9ca3af" } : undefined}
+                                />
+                              )}
+                              {nFotos > 0 && (
+                                <span
+                                  className="fw-bold"
+                                  style={{ fontSize: 12, lineHeight: 1, color: editable ? "#fff" : "#16a34a" }}
+                                >
+                                  {nFotos}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })()}
+                      </td>
                       {editable && puedeCrear && (
                         <td>
                           <button
@@ -771,8 +976,8 @@ export default function MezclaPruebaDetallePage() {
             {editable && puedeCrear && (
               <form onSubmit={handleAgregarEtapa} className="border-top pt-3">
                 <p className="small fw-medium mb-2">Registrar nueva etapa</p>
-                <div className="row g-2 align-items-end">
-                  <div className="col-12 col-md-3">
+                <div className="d-flex flex-wrap flex-md-nowrap align-items-end gap-2">
+                  <div className="flex-grow-1" style={{ minWidth: "12rem" }}>
                     <label className="form-label small mb-1">Componente incorporado</label>
                     <select
                       className="form-select form-select-sm rounded-3"
@@ -787,7 +992,7 @@ export default function MezclaPruebaDetallePage() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-6 col-md-2">
+                  <div style={{ width: "5.5rem" }} className="flex-shrink-0">
                     <label className="form-label small mb-1">pH</label>
                     <input
                       type="number"
@@ -800,7 +1005,7 @@ export default function MezclaPruebaDetallePage() {
                       onChange={(e) => setEtapaForm((f) => ({ ...f, ph: e.target.value }))}
                     />
                   </div>
-                  <div className="col-6 col-md-2">
+                  <div style={{ width: "5.5rem" }} className="flex-shrink-0">
                     <label className="form-label small mb-1">CE</label>
                     <input
                       type="number"
@@ -812,7 +1017,7 @@ export default function MezclaPruebaDetallePage() {
                       onChange={(e) => setEtapaForm((f) => ({ ...f, ce: e.target.value }))}
                     />
                   </div>
-                  <div className="col-12 col-md-3">
+                  <div className="flex-grow-1" style={{ minWidth: "10rem" }}>
                     <label className="form-label small mb-1">Observaciones</label>
                     <input
                       type="text"
@@ -821,11 +1026,37 @@ export default function MezclaPruebaDetallePage() {
                       onChange={(e) => setEtapaForm((f) => ({ ...f, observaciones: e.target.value }))}
                     />
                   </div>
-                  <div className="col-12 col-md-2">
-                    <button type="submit" className="btn btn-brand btn-sm rounded-3 w-100" disabled={savingEtapa}>
-                      {savingEtapa ? "Guardando..." : "Registrar"}
-                    </button>
-                  </div>
+                  <label
+                    className={`btn btn-sm rounded-3 d-inline-flex align-items-center justify-content-center gap-1 flex-shrink-0 px-2 mb-0 ${
+                      etapaFotos.length ? "btn-brand" : "btn-outline-secondary"
+                    }`}
+                    style={{ minHeight: 31 }}
+                    title={
+                      etapaFotos.length
+                        ? `${etapaFotos.length} evidencia(s) adjunta(s) — clic para quitar`
+                        : "Adjuntar evidencia fotográfica (galería o cámara, opcional)"
+                    }
+                    onClick={etapaFotos.length ? (e) => { e.preventDefault(); limpiarEtapaFotos(); } : undefined}
+                  >
+                    <FiCamera size={16} />
+                    {etapaFotos.length > 0 && (
+                      <span className="fw-bold" style={{ fontSize: 12, lineHeight: 1, color: "#fff" }}>
+                        {etapaFotos.length}
+                      </span>
+                    )}
+                    {!etapaFotos.length && (
+                      <input type="file" accept="image/*" multiple className="d-none" onChange={handleSelectEtapaFiles} />
+                    )}
+                  </label>
+                  <button
+                    type="submit"
+                    className="btn btn-brand btn-sm rounded-3 d-inline-flex align-items-center justify-content-center flex-shrink-0 p-0"
+                    style={{ width: 31, height: 31 }}
+                    disabled={savingEtapa}
+                    title="Registrar etapa"
+                  >
+                    {savingEtapa ? <span className="spinner-border spinner-border-sm" /> : <FiPlus size={18} />}
+                  </button>
                 </div>
                 {etapaError && <div className="alert alert-danger py-2 small mt-2">{etapaError}</div>}
               </form>
@@ -836,13 +1067,28 @@ export default function MezclaPruebaDetallePage() {
         {/* ─── Evidencia fotográfica ─── */}
         <div className="card border-0 rounded-4 mb-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="card-body p-3">
-            <h2 className="h6 fw-bold mb-2">Evidencia fotográfica</h2>
+            <h2 className="h6 fw-bold mb-1">Evidencia fotográfica general</h2>
+            <p className="text-secondary small mb-2">La evidencia por etapa se agrega en la tabla de arriba.</p>
 
             <div className="d-flex flex-wrap gap-2 mb-3">
-              {(version.fotos || []).map((foto) => (
+              {(version.fotos || []).map((foto, idxFoto) => (
                 <div key={foto.uuid} className="position-relative" style={{ width: 96, height: 96 }}>
                   {fotoUrls[foto.uuid] ? (
-                    <img src={fotoUrls[foto.uuid]} alt={foto.nombreOriginal} className="rounded-3 border" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img
+                      src={fotoUrls[foto.uuid]}
+                      alt={foto.nombreOriginal}
+                      className="rounded-3 border"
+                      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
+                      onClick={() =>
+                        setFotoAmpliada({
+                          fotos: (version.fotos || []).map((f) => ({
+                            src: fotoUrls[f.uuid],
+                            alt: f.nombreOriginal || "evidencia",
+                          })),
+                          idx: idxFoto,
+                        })
+                      }
+                    />
                   ) : (
                     <div className="rounded-3 border d-flex align-items-center justify-content-center small text-secondary" style={{ width: "100%", height: "100%" }}>
                       ...
@@ -890,7 +1136,7 @@ export default function MezclaPruebaDetallePage() {
                 <div className="d-flex flex-wrap gap-2 align-items-center">
                   <label className="btn btn-outline-secondary btn-sm rounded-3 d-inline-flex align-items-center gap-1 mb-0">
                     <FiCamera size={14} /> Cámara / Galería
-                    <input type="file" accept="image/*" multiple capture="environment" className="d-none" onChange={handleSelectFiles} />
+                    <input type="file" accept="image/*" multiple className="d-none" onChange={handleSelectFiles} />
                   </label>
                   {pendingFotos.length > 0 && (
                     <button type="button" className="btn btn-brand btn-sm rounded-3" disabled={uploadingFotos} onClick={handleUploadFotos}>
@@ -1061,6 +1307,159 @@ export default function MezclaPruebaDetallePage() {
             </form>
           </ModalShell>
         )}
+
+        {(() => {
+          const etapaModal = (version?.etapas || []).find((e) => e.uuid === fotosModalEtapaUuid);
+          if (!etapaModal) return null;
+          const fotosEtapa = etapaModal.fotos || [];
+          const subiendo = subiendoFotoEtapa === etapaModal.uuid;
+          return (
+            <ModalShell
+              title={`Evidencia — Etapa ${etapaModal.numero}`}
+              onClose={() => setFotosModalEtapaUuid(null)}
+              size="lg"
+            >
+              {fotosEtapa.length === 0 && (
+                <p className="text-secondary small mb-3">Esta etapa no tiene evidencia fotográfica todavía.</p>
+              )}
+              <div className="d-flex flex-wrap gap-2 mb-3">
+                {fotosEtapa.map((foto, idxFoto) => (
+                  <div key={foto.uuid} className="position-relative" style={{ width: 140, height: 140 }}>
+                    {fotoUrls[foto.uuid] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={fotoUrls[foto.uuid]}
+                        alt={foto.nombreOriginal || "evidencia"}
+                        className="rounded-3 border"
+                        style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
+                        onClick={() =>
+                          setFotoAmpliada({
+                            fotos: fotosEtapa.map((f) => ({
+                              src: fotoUrls[f.uuid],
+                              alt: f.nombreOriginal || "evidencia",
+                            })),
+                            idx: idxFoto,
+                          })
+                        }
+                      />
+                    ) : (
+                      <div
+                        className="rounded-3 border d-flex align-items-center justify-content-center text-secondary small"
+                        style={{ width: "100%", height: "100%" }}
+                      >
+                        Cargando…
+                      </div>
+                    )}
+                    {editable && puedeEditar && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-danger rounded-circle position-absolute d-flex align-items-center justify-content-center p-0"
+                        style={{ width: 24, height: 24, top: -8, right: -8 }}
+                        title="Eliminar foto"
+                        onClick={() => handleEliminarFoto(foto.uuid)}
+                      >
+                        <FiX size={13} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {editable && puedeCrear && (
+                <label className="btn btn-outline-secondary btn-sm rounded-3 d-inline-flex align-items-center gap-1 mb-0">
+                  {subiendo ? <span className="spinner-border spinner-border-sm" /> : <FiCamera size={14} />}
+                  {subiendo ? "Subiendo..." : "Agregar evidencia (galería o cámara)"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="d-none"
+                    disabled={subiendo}
+                    onChange={(e) => handleSubirFotosAEtapa(etapaModal.uuid, e.target.files)}
+                  />
+                </label>
+              )}
+              {etapaError && <div className="alert alert-danger py-2 small mt-2">{etapaError}</div>}
+            </ModalShell>
+          );
+        })()}
+
+        {fotoAmpliada && (() => {
+          const { fotos: fotosLb, idx } = fotoAmpliada;
+          const total = fotosLb.length;
+          const actual = fotosLb[idx];
+          const ir = (delta) => setFotoAmpliada((prev) => ({ ...prev, idx: (prev.idx + delta + total) % total }));
+          return (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setFotoAmpliada(null)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setFotoAmpliada(null);
+                else if (e.key === "ArrowLeft" && total > 1) { e.preventDefault(); ir(-1); }
+                else if (e.key === "ArrowRight" && total > 1) { e.preventDefault(); ir(1); }
+              }}
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 1080,
+                background: "rgba(0,0,0,.85)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 24,
+                cursor: "zoom-out",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-light rounded-circle position-absolute d-flex align-items-center justify-content-center p-0"
+                style={{ width: 36, height: 36, top: 16, right: 16 }}
+                title="Cerrar"
+                onClick={(e) => { e.stopPropagation(); setFotoAmpliada(null); }}
+              >
+                <FiX size={18} />
+              </button>
+
+              {total > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-light rounded-circle position-absolute d-flex align-items-center justify-content-center p-0 fw-bold"
+                    style={{ width: 44, height: 44, left: 16, top: "50%", transform: "translateY(-50%)", fontSize: 22, lineHeight: 1 }}
+                    title="Anterior"
+                    onClick={(e) => { e.stopPropagation(); ir(-1); }}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-light rounded-circle position-absolute d-flex align-items-center justify-content-center p-0 fw-bold"
+                    style={{ width: 44, height: 44, right: 16, top: "50%", transform: "translateY(-50%)", fontSize: 22, lineHeight: 1 }}
+                    title="Siguiente"
+                    onClick={(e) => { e.stopPropagation(); ir(1); }}
+                  >
+                    ›
+                  </button>
+                  <span
+                    className="position-absolute text-white small"
+                    style={{ bottom: 20, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,.5)", padding: "4px 10px", borderRadius: 999 }}
+                  >
+                    {idx + 1} / {total}
+                  </span>
+                </>
+              )}
+
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                key={idx}
+                src={actual?.src}
+                alt={actual?.alt}
+                style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8 }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          );
+        })()}
       </div>
     </RequirePermission>
   );

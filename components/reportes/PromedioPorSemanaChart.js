@@ -8,8 +8,8 @@ import InfoTooltip from "@/components/reportes/InfoTooltip";
 import { usePrecipitacionOverlay, conPrecipitacion, PrecipitacionControls, PrecipitacionSerie } from "@/components/reportes/PrecipitacionOverlay";
 
 // Color de la cinta de embolse por semana (mismo ciclo de 8 colores que el
-// backend: src/utils/semanaColor.js). Se usa para pintar el punto de cada
-// semana en la gráfica.
+// backend: src/utils/semanaColor.js). Lo consume IndicadoresEvaluaciones;
+// este gráfico (Suma Bruta) ya NO pinta los puntos por cinta.
 export const COLORES_CINTA = {
   Azul: "#2563eb",
   Blanco: "#e2e8f0",
@@ -23,8 +23,7 @@ export const COLORES_CINTA = {
 };
 
 // Promedio por semana (todas las fincas o una en particular). El promedio se
-// calcula en el backend, por lo que refleja siempre los valores vigentes. El
-// punto de cada semana se pinta con el color de su cinta de embolse.
+// calcula en el backend, por lo que refleja siempre los valores vigentes.
 //
 // `fincaUuid` es controlado desde afuera (ver SumaBrutaGraficos más abajo)
 // para que el mismo filtro aplique a este gráfico y al de "por hoja" a la
@@ -112,10 +111,7 @@ export default function PromedioPorSemanaChart({
                 <Tooltip
                   cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }}
                   formatter={(value, name) => [Number(value).toLocaleString("es"), name === "promedio" ? "Promedio" : name]}
-                  labelFormatter={(label, payload) => {
-                    const cinta = payload?.[0]?.payload?.cinta;
-                    return `Semana ${label}${cinta ? ` — Cinta ${cinta}` : ""}`;
-                  }}
+                  labelFormatter={(label) => `Semana ${label}`}
                 />
                 {limitesControl.map((limite) => (
                   <ReferenceLine
@@ -132,17 +128,14 @@ export default function PromedioPorSemanaChart({
                   dataKey="promedio"
                   stroke={colorLinea}
                   strokeWidth={2}
-                  dot={(props) => {
-                    const { cx, cy, payload } = props;
-                    return <circle cx={cx} cy={cy} r={4} fill={COLORES_CINTA[payload.cinta] || "#94a3b8"} stroke="#fff" strokeWidth={1.5} />;
-                  }}
+                  dot={{ r: 3, fill: colorLinea, stroke: "#fff", strokeWidth: 1.5 }}
                   activeDot={{ r: 5 }}
                 />
                 <PrecipitacionSerie activo={precip.activo} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <p className="text-secondary small mb-0 mt-1">Cada punto representa una semana, pintado con el color de su cinta de embolse.</p>
+          <p className="text-secondary small mb-0 mt-1">Cada punto es el promedio de Suma Bruta de esa semana de registro.</p>
         </>
       )}
     </div>

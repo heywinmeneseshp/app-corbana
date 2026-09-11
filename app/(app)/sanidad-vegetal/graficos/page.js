@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { FiX } from "react-icons/fi";
-import { hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
@@ -229,19 +228,19 @@ function ModalUmbralesSbHoja({ umbrales, onClose, onGuardado }) {
   );
 }
 
-// El permiso null en Clima es intencional: la lista de clima (GET /clima) ya
-// es visible para cualquier usuario autenticado, sin permiso puntual — el
-// gráfico sigue el mismo criterio. Ver cualquiera de las 3 evaluaciones
-// exige el mismo permiso genérico (evaluacion.ver), ya no uno por tipo.
+// Quien puede abrir este submenú (menu.sanidad_vegetal.graficos) ve todas
+// sus pestañas: el backend ya acepta ese permiso de menú para leer los
+// promedios de evaluaciones, así que no hace falta `evaluacion.ver` aparte.
+// (Clima además es visible para cualquier usuario autenticado.)
 const TIPOS = [
-  { key: "Índice de infección", label: "Índice de Infección", permiso: "evaluacion.ver" },
-  { key: "Conteo de Hojas", label: "Conteo de Hojas", permiso: "evaluacion.ver" },
-  { key: "Suma Bruta", label: "Suma Bruta", permiso: "evaluacion.ver" },
-  { key: "Clima", label: "Clima", permiso: null },
+  { key: "Índice de infección", label: "Índice de Infección" },
+  { key: "Conteo de Hojas", label: "Conteo de Hojas" },
+  { key: "Suma Bruta", label: "Suma Bruta" },
+  { key: "Clima", label: "Clima" },
 ];
 
 export default function SanidadGraficosPage() {
-  const tabsVisibles = TIPOS.filter((t) => !t.permiso || hasPermission(t.permiso));
+  const tabsVisibles = TIPOS;
   // El tab por defecto tiene que ser uno que el usuario efectivamente pueda
   // ver — antes siempre arrancaba en "Índice de infección" porque la página
   // entera exigía ese permiso; ahora alguien sin permisos de Sanidad Vegetal

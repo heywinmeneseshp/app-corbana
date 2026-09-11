@@ -18,6 +18,7 @@ import {
 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
+import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 import { COLORES_CINTA } from "@/components/reportes/PromedioPorSemanaChart";
 import MapaEvaluacionesModal from "@/components/reportes/MapaEvaluacionesModal";
 
@@ -119,8 +120,13 @@ export default function IndicadoresEvaluaciones() {
         const semanasAnio = (semanasData.items || []).sort((a, b) => a.numeroSemana - b.numeroSemana);
         setSemanas(semanasAnio);
         const hoy = hoyIso();
-        const actual = semanasAnio.find((s) => hoy >= s.fechaInicio && hoy <= s.fechaFin);
-        if (actual) setSemanaUuid((prev) => prev || actual.uuid);
+        const idxActual = semanasAnio.findIndex((s) => hoy >= s.fechaInicio && hoy <= s.fechaFin);
+        // Por defecto se abre en la semana ANTERIOR a la actual — la semana
+        // en curso todavía no suele tener todas las evaluaciones cargadas.
+        // (Si la actual es la primera del año, se queda en ella.)
+        const porDefecto =
+          idxActual > 0 ? semanasAnio[idxActual - 1] : idxActual === 0 ? semanasAnio[0] : null;
+        if (porDefecto) setSemanaUuid((prev) => prev || porDefecto.uuid);
       })
       .catch((err) => setError(err.message));
   }, [anio]);
@@ -238,14 +244,18 @@ export default function IndicadoresEvaluaciones() {
               onChange={(e) => setAnio(Number(e.target.value))}
             />
           </div>
+          <div>
+            <label className="form-label small fw-medium text-secondary mb-1">Semana</label>
+            <SemanaAutocomplete
+              semanas={semanas}
+              value={semanaUuid}
+              onChange={setSemanaUuid}
+              placeholder="Buscá una semana"
+              width={150}
+              limit={50}
+            />
+          </div>
           {[
-            {
-              label: "Semana",
-              value: semanaUuid,
-              onChange: setSemanaUuid,
-              placeholder: "Seleccioná una semana",
-              options: semanas.map((s) => ({ value: s.uuid, text: s.codigo })),
-            },
             {
               label: "Finca",
               value: fincaUuid,

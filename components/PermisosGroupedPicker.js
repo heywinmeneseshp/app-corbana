@@ -210,14 +210,19 @@ export default function PermisosGroupedPicker({ items, selected, onChange }) {
         const permisosItem = items.filter((i) => item.prefijos.some((p) => i.sublabel?.startsWith(p)));
         if (permisosItem.length === 0) return null;
         return (
-          <div key={item.codigo} className="card border-0 shadow-sm rounded-4 p-3 mb-3">
-            <div className="fw-semibold small mb-2">{item.nombre}</div>
-            <PermisosSubBlock
-              permisos={permisosItem}
-              selected={selected}
-              onChange={onChange}
-              prefijos={item.prefijos}
-            />
+          // Mismo encabezado verde que las secciones con submenú — un ítem
+          // plano igual es un acceso primario del menú, no un sub-bloque
+          // suelto, así que se muestra con la misma jerarquía visual.
+          <div key={item.codigo} className="card border-0 shadow-sm rounded-4 mb-3 overflow-hidden">
+            <div className="bg-brand px-3 py-2 fw-semibold small text-white">{item.nombre}</div>
+            <div className="p-3">
+              <PermisosSubBlock
+                permisos={permisosItem}
+                selected={selected}
+                onChange={onChange}
+                prefijos={item.prefijos}
+              />
+            </div>
           </div>
         );
       })}

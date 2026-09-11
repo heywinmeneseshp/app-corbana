@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { FiTrendingUp } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
-import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ReporteEvaluacion from "@/components/reportes/ReporteEvaluacion";
 import IndicadoresEvaluaciones from "@/components/reportes/IndicadoresEvaluaciones";
 
-// Ver cualquiera de las 3 evaluaciones exige el mismo permiso genérico
-// (evaluacion.ver) — ya no uno propio por tipo.
+// Quien puede abrir este módulo (menu.sanidad_vegetal.evaluaciones) ve
+// todas sus pestañas — el backend ya acepta ese mismo permiso de menú para
+// leer los datos, así que no hace falta asignar `evaluacion.ver` aparte.
 const TIPOS = [
   { key: "Índice de infección", label: "Índice de Infección" },
   { key: "Conteo de Hojas", label: "Conteo de Hojas" },
@@ -29,7 +29,7 @@ export default function SanidadEvaluacionesPage() {
   }, []);
 
   const tipoActual = tiposEvaluacion.find((t) => t.nombre === tab);
-  const tabsVisibles = hasPermission("evaluacion.ver") ? TIPOS : [];
+  const tabsVisibles = TIPOS;
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.evaluaciones">
