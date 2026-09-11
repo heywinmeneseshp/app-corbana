@@ -47,6 +47,7 @@ function parseOutboxSql(texto) {
       } else if (c === "'" && actual.trim() === "") {
         enComillas = true;
         campoEsString = true;
+        actual = ""; // descarta el espacio en blanco acumulado antes de la comilla (ej. ", 'valor'")
       } else if (c === "," || c === ")") {
         const valor = campoEsString ? actual : actual.trim();
         valores.push(valor.trim() === "NULL" && !campoEsString ? null : campoEsString ? actual : valor);
