@@ -24,8 +24,9 @@ export default function ObjetivosEvaluacionPage() {
   const [creando, setCreando] = useState(false);
   const [editModal, setEditModal] = useState(null); // null | objetivo
 
-  const [filtroTexto, setFiltroTexto] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroFincaUuid, setFiltroFincaUuid] = useState("");
+  const [filtroLoteUuid, setFiltroLoteUuid] = useState("");
   const [filtroEstado, setFiltroEstado] = useState(""); // "" | "activo" | "inactivo"
   const [seleccionados, setSeleccionados] = useState(new Set());
   const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
@@ -33,11 +34,27 @@ export default function ObjetivosEvaluacionPage() {
   const ambitoDe = (o) =>
     o.finca ? `Finca: ${o.finca.nombre}` : `Lote: ${o.lote?.nombre ?? ""} (${o.lote?.finca?.nombre ?? "—"})`;
 
+  // Opciones de lote del filtro: se arman a partir de los lotes que ya
+  // aparecen en los objetivos cargados (no hace falta pedir /lotes aparte).
+  // Si ya hay finca elegida en el filtro, se acota a los lotes de esa finca.
+  const lotesFiltroDisponibles = [
+    ...new Map(
+      items
+        .filter((o) => o.lote)
+        .filter((o) => !filtroFincaUuid || o.lote.finca?.uuid === filtroFincaUuid)
+        .map((o) => [o.lote.uuid, o.lote]),
+    ).values(),
+  ].sort((a, b) => a.nombre.localeCompare(b.nombre));
+
   const itemsFiltrados = items.filter((o) => {
     if (filtroTipo && o.tipoEvaluacion?.uuid !== filtroTipo) return false;
     if (filtroEstado === "activo" && !o.estado) return false;
     if (filtroEstado === "inactivo" && o.estado) return false;
-    if (filtroTexto.trim() && !ambitoDe(o).toLowerCase().includes(filtroTexto.trim().toLowerCase())) return false;
+    if (filtroFincaUuid) {
+      const fincaDelObjetivo = o.finca?.uuid ?? o.lote?.finca?.uuid;
+      if (fincaDelObjetivo !== filtroFincaUuid) return false;
+    }
+    if (filtroLoteUuid && o.lote?.uuid !== filtroLoteUuid) return false;
     return true;
   });
 
@@ -136,14 +153,6 @@ export default function ObjetivosEvaluacionPage() {
         {error && <div className="alert alert-danger py-2 small border-0 rounded-3">{error}</div>}
 
         <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-          <input
-            type="text"
-            className="form-control form-control-sm rounded-3"
-            style={{ maxWidth: 240 }}
-            placeholder="Buscar por finca o lote..."
-            value={filtroTexto}
-            onChange={(e) => setFiltroTexto(e.target.value)}
-          />
           <select
             className="form-select form-select-sm rounded-3"
             style={{ maxWidth: 220 }}
@@ -159,6 +168,36 @@ export default function ObjetivosEvaluacionPage() {
           </select>
           <select
             className="form-select form-select-sm rounded-3"
+            style={{ maxWidth: 200 }}
+            value={filtroFincaUuid}
+            onChange={(e) => {
+              setFiltroFincaUuid(e.target.value);
+              setFiltroLoteUuid("");
+            }}
+          >
+            <option value="">Todas las fincas</option>
+            {fincas.map((f) => (
+              <option key={f.uuid} value={f.uuid}>
+                {f.nombre}
+              </option>
+            ))}
+          </select>
+          <select
+            className="form-select form-select-sm rounded-3"
+            style={{ maxWidth: 200 }}
+            value={filtroLoteUuid}
+            onChange={(e) => setFiltroLoteUuid(e.target.value)}
+            disabled={lotesFiltroDisponibles.length === 0}
+          >
+            <option value="">Todos los lotes</option>
+            {lotesFiltroDisponibles.map((l) => (
+              <option key={l.uuid} value={l.uuid}>
+                {l.nombre}
+              </option>
+            ))}
+          </select>
+          <select
+            className="form-select form-select-sm rounded-3"
             style={{ maxWidth: 160 }}
             value={filtroEstado}
             onChange={(e) => setFiltroEstado(e.target.value)}
@@ -167,13 +206,14 @@ export default function ObjetivosEvaluacionPage() {
             <option value="activo">Activo</option>
             <option value="inactivo">Inactivo</option>
           </select>
-          {(filtroTexto || filtroTipo || filtroEstado) && (
+          {(filtroTipo || filtroFincaUuid || filtroLoteUuid || filtroEstado) && (
             <button
               type="button"
               className="btn btn-sm btn-link text-secondary text-decoration-none"
               onClick={() => {
-                setFiltroTexto("");
                 setFiltroTipo("");
+                setFiltroFincaUuid("");
+                setFiltroLoteUuid("");
                 setFiltroEstado("");
               }}
             >
