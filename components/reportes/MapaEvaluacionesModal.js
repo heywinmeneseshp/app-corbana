@@ -68,7 +68,12 @@ const CAPAS = {
 function fechaCorta(iso) {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "numeric" });
+    // `fecha` es una fecha calendario pura (sin hora, ej. "2026-09-11"), no
+    // un instante. Formatearla sin fijar UTC hace que new Date() la
+    // interprete como medianoche UTC y toLocaleDateString la muestre en el
+    // huso horario del navegador: en Colombia (UTC-5) eso corre el día
+    // mostrado un día hacia atrás (11 de sept. aparecía como 10).
+    return new Date(iso).toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
   } catch {
     return iso;
   }
