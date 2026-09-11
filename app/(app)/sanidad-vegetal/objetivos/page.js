@@ -24,6 +24,55 @@ export default function ObjetivosEvaluacionPage() {
   const [creando, setCreando] = useState(false);
   const [editModal, setEditModal] = useState(null); // null | objetivo
 
+  const [filtroTexto, setFiltroTexto] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState(""); // "" | "activo" | "inactivo"
+  const [seleccionados, setSeleccionados] = useState(new Set());
+  const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
+
+  const ambitoDe = (o) =>
+    o.finca ? `Finca: ${o.finca.nombre}` : `Lote: ${o.lote?.nombre ?? ""} (${o.lote?.finca?.nombre ?? "—"})`;
+
+  const itemsFiltrados = items.filter((o) => {
+    if (filtroTipo && o.tipoEvaluacion?.uuid !== filtroTipo) return false;
+    if (filtroEstado === "activo" && !o.estado) return false;
+    if (filtroEstado === "inactivo" && o.estado) return false;
+    if (filtroTexto.trim() && !ambitoDe(o).toLowerCase().includes(filtroTexto.trim().toLowerCase())) return false;
+    return true;
+  });
+
+  function toggleSeleccionado(uuid) {
+    setSeleccionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(uuid)) next.delete(uuid);
+      else next.add(uuid);
+      return next;
+    });
+  }
+
+  function toggleSeleccionarTodos() {
+    setSeleccionados((prev) =>
+      itemsFiltrados.every((o) => prev.has(o.uuid)) ? new Set() : new Set(itemsFiltrados.map((o) => o.uuid)),
+    );
+  }
+
+  async function handleEliminarSeleccionados() {
+    if (seleccionados.size === 0) return;
+    if (!confirm(`¿Eliminar ${seleccionados.size} objetivo(s) seleccionado(s)?`)) return;
+    setEliminandoSeleccion(true);
+    try {
+      await Promise.all(
+        [...seleccionados].map((uuid) => apiFetch(`/evaluaciones/objetivos/${uuid}`, { method: "DELETE" })),
+      );
+      setSeleccionados(new Set());
+      loadObjetivos();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEliminandoSeleccion(false);
+    }
+  }
+
   async function loadObjetivos() {
     setLoading(true);
     setError("");
@@ -86,11 +135,80 @@ export default function ObjetivosEvaluacionPage() {
 
         {error && <div className="alert alert-danger py-2 small border-0 rounded-3">{error}</div>}
 
+        <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <input
+            type="text"
+            className="form-control form-control-sm rounded-3"
+            style={{ maxWidth: 240 }}
+            placeholder="Buscar por finca o lote..."
+            value={filtroTexto}
+            onChange={(e) => setFiltroTexto(e.target.value)}
+          />
+          <select
+            className="form-select form-select-sm rounded-3"
+            style={{ maxWidth: 220 }}
+            value={filtroTipo}
+            onChange={(e) => setFiltroTipo(e.target.value)}
+          >
+            <option value="">Todos los tipos</option>
+            {tipos.map((t) => (
+              <option key={t.uuid} value={t.uuid}>
+                {t.nombre}
+              </option>
+            ))}
+          </select>
+          <select
+            className="form-select form-select-sm rounded-3"
+            style={{ maxWidth: 160 }}
+            value={filtroEstado}
+            onChange={(e) => setFiltroEstado(e.target.value)}
+          >
+            <option value="">Todos los estados</option>
+            <option value="activo">Activo</option>
+            <option value="inactivo">Inactivo</option>
+          </select>
+          {(filtroTexto || filtroTipo || filtroEstado) && (
+            <button
+              type="button"
+              className="btn btn-sm btn-link text-secondary text-decoration-none"
+              onClick={() => {
+                setFiltroTexto("");
+                setFiltroTipo("");
+                setFiltroEstado("");
+              }}
+            >
+              Limpiar filtros
+            </button>
+          )}
+
+          {hasPermission("objetivo_evaluacion.eliminar") && seleccionados.size > 0 && (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger rounded-3 d-flex align-items-center gap-2 ms-auto"
+              disabled={eliminandoSeleccion}
+              onClick={handleEliminarSeleccionados}
+            >
+              <FiTrash2 size={14} />
+              {eliminandoSeleccion ? "Eliminando..." : `Eliminar ${seleccionados.size} seleccionado(s)`}
+            </button>
+          )}
+        </div>
+
         <div className="card border-0 rounded-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="table-responsive">
             <table className="table table-hover mb-0 align-middle">
               <thead>
                 <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
+                  {hasPermission("objetivo_evaluacion.eliminar") && (
+                    <th style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={itemsFiltrados.length > 0 && itemsFiltrados.every((o) => seleccionados.has(o.uuid))}
+                        onChange={toggleSeleccionarTodos}
+                      />
+                    </th>
+                  )}
                   <th className="fw-medium">Tipo</th>
                   <th className="fw-medium">Ámbito</th>
                   <th className="fw-medium">Edad</th>
@@ -102,25 +220,33 @@ export default function ObjetivosEvaluacionPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={6} className="text-center text-secondary py-4">
+                    <td colSpan={7} className="text-center text-secondary py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
-                {!loading && items.length === 0 && (
+                {!loading && itemsFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center text-secondary py-4">
-                      No hay objetivos configurados todavía.
+                    <td colSpan={7} className="text-center text-secondary py-4">
+                      {items.length === 0 ? "No hay objetivos configurados todavía." : "Ningún objetivo coincide con el filtro."}
                     </td>
                   </tr>
                 )}
                 {!loading &&
-                  items.map((o) => (
+                  itemsFiltrados.map((o) => (
                     <tr key={o.uuid}>
+                      {hasPermission("objetivo_evaluacion.eliminar") && (
+                        <td>
+                          <input
+                            type="checkbox"
+                            className="form-check-input"
+                            checked={seleccionados.has(o.uuid)}
+                            onChange={() => toggleSeleccionado(o.uuid)}
+                          />
+                        </td>
+                      )}
                       <td className="fw-medium">{o.tipoEvaluacion?.nombre}</td>
-                      <td className="small text-secondary">
-                        {o.finca ? `Finca: ${o.finca.nombre}` : `Lote: ${o.lote?.nombre} (${o.lote?.finca?.nombre ?? "—"})`}
-                      </td>
+                      <td className="small text-secondary">{ambitoDe(o)}</td>
                       <td className="small text-secondary">
                         {o.edadMinima != null && o.edadMaxima != null
                           ? `${o.edadMinima} a ${o.edadMaxima} sem. (c/u)`
