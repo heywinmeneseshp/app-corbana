@@ -107,6 +107,7 @@ export default function GraficoMovimientoAnual({
   const [semanas, setSemanas] = useState([]);
   const [semanaUuid, setSemanaUuid] = useState("");
   const [motivosUuids, setMotivosUuids] = useState([]);
+  const [edadesSeleccionadas, setEdadesSeleccionadas] = useState([]);
   const [sortRanking, setSortRanking] = useState({ field: "total", dir: "desc" });
   const [data, setData] = useState(null); // modo simple (0-1 objetivo)
   const [seriesResultado, setSeriesResultado] = useState(null); // modo comparación (2+ objetivos)
@@ -180,6 +181,7 @@ export default function GraficoMovimientoAnual({
         if (objetivo?.fincaUuids?.length > 0) params.set("fincaUuids", objetivo.fincaUuids.join(","));
         if (semanaUuid) params.set("semanaUuid", semanaUuid);
         if (motivosUuids.length > 0) params.set("motivoUuids", motivosUuids.join(","));
+        if (edadesSeleccionadas.length > 0) params.set("edades", edadesSeleccionadas.join(","));
         const res = await apiFetch(`/racimo-movimientos/reporte-embolses?${params.toString()}`);
         setData(res);
         setSeriesResultado(null);
@@ -209,17 +211,20 @@ export default function GraficoMovimientoAnual({
   // tipo/uuid no alcanzaría para disparar un refetch.
   const objetivosKey = objetivosEfectivos.map((o) => `${o.uuid}:${(o.fincaUuids || []).join("-")}:${o.anios.join("-")}`).join(",");
   const motivosKey = motivosUuids.join(",");
+  const edadesKey = edadesSeleccionadas.join(",");
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     handleConsultar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [objetivosKey, semanaUuid, motivosKey, tipo]);
+  }, [objetivosKey, semanaUuid, motivosKey, edadesKey, tipo]);
 
-  // Al cambiar de finca/grupo/año, los motivos elegidos pueden ya no existir
-  // en el nuevo alcance — se limpian para no dejar un filtro fantasma.
+  // Al cambiar de finca/grupo/año, los motivos y edades elegidos pueden ya
+  // no existir en el nuevo alcance — se limpian para no dejar un filtro
+  // fantasma.
   useEffect(() => {
     setMotivosUuids([]);
+    setEdadesSeleccionadas([]);
   }, [objetivosKey]);
 
   // Clic en una barra de motivo: sin Ctrl/Cmd, reemplaza la selección por
@@ -233,6 +238,18 @@ export default function GraficoMovimientoAnual({
         return prev.includes(uuid) ? prev.filter((u) => u !== uuid) : [...prev, uuid];
       }
       return prev.length === 1 && prev[0] === uuid ? [] : [uuid];
+    });
+  }
+
+  // Clic en una barra de edad: mismo comportamiento que handleClickMotivo
+  // (sin Ctrl/Cmd reemplaza la selección; con Ctrl/Cmd la agrega/saca).
+  function handleClickEdad(edadSemanas, event) {
+    const multiple = event?.ctrlKey || event?.metaKey;
+    setEdadesSeleccionadas((prev) => {
+      if (multiple) {
+        return prev.includes(edadSemanas) ? prev.filter((e) => e !== edadSemanas) : [...prev, edadSemanas];
+      }
+      return prev.length === 1 && prev[0] === edadSemanas ? [] : [edadSemanas];
     });
   }
 
@@ -339,7 +356,7 @@ export default function GraficoMovimientoAnual({
             se muestran con una sola.
           </p>
         )}
-        {!modoComparacion && (semanaUuid || motivosUuids.length > 0) && (
+        {!modoComparacion && (semanaUuid || motivosUuids.length > 0 || edadesSeleccionadas.length > 0) && (
           <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
             <span className="text-secondary small">Filtros activos:</span>
             {semanaUuid && (
@@ -355,6 +372,16 @@ export default function GraficoMovimientoAnual({
                 onClick={() => setMotivosUuids((prev) => prev.filter((u) => u !== uuid))}
               >
                 Motivo: {data?.motivosRepique?.find((m) => m.uuid === uuid)?.nombre || "—"} <FiX size={12} />
+              </button>
+            ))}
+            {edadesSeleccionadas.map((edad) => (
+              <button
+                key={edad}
+                type="button"
+                className="btn btn-sm btn-brand rounded-pill d-flex align-items-center gap-1"
+                onClick={() => setEdadesSeleccionadas((prev) => prev.filter((e) => e !== edad))}
+              >
+                Edad: {edad} <FiX size={12} />
               </button>
             ))}
           </div>
@@ -460,6 +487,50 @@ export default function GraficoMovimientoAnual({
                       <LabelList
                         dataKey="total"
                         position="right"
+                        formatter={(v) => Number(v).toLocaleString("es")}
+                        style={{ fontSize: "0.7rem", fill: "#374151", fontWeight: 600 }}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CollapsibleCard>
+            )}
+
+            {mostrarMotivos && data.edadesRepique?.length > 0 && (
+              <CollapsibleCard
+                titulo="Por edad"
+                subtitulo="Semanas entre el embolse de la cinta y el repique. Clic para filtrar por esa edad — Ctrl/Cmd+clic para marcar varias."
+                className="mt-3"
+              >
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={data.edadesRepique} margin={{ top: 20, right: 20, left: 0, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis
+                      dataKey="edadSemanas"
+                      tickFormatter={(v) => `Edad ${v}`}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <YAxis tick={{ fontSize: 11 }} width={60} />
+                    <Tooltip
+                      formatter={(v) => Number(v).toLocaleString("es")}
+                      labelFormatter={(v) => `Edad ${v}`}
+                    />
+                    <Bar
+                      dataKey="total"
+                      radius={[4, 4, 0, 0]}
+                      cursor="pointer"
+                      onClick={(entry, _index, event) => handleClickEdad(entry.edadSemanas, event)}
+                    >
+                      {data.edadesRepique.map((e) => (
+                        <Cell
+                          key={e.edadSemanas}
+                          fill={colorPrincipal}
+                          fillOpacity={edadesSeleccionadas.length === 0 || edadesSeleccionadas.includes(e.edadSemanas) ? 1 : 0.35}
+                        />
+                      ))}
+                      <LabelList
+                        dataKey="total"
+                        position="top"
                         formatter={(v) => Number(v).toLocaleString("es")}
                         style={{ fontSize: "0.7rem", fill: "#374151", fontWeight: 600 }}
                       />
