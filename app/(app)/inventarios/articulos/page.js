@@ -20,6 +20,8 @@ function emptyForm() {
     manejaInventario: true,
     stockMinimo: "0",
     stockMaximo: "",
+    dosisMaximaPorHectarea: "",
+    dosisMaximaUnidadUuid: "",
     estado: true,
   };
 }
@@ -159,6 +161,8 @@ export default function ArticulosInventarioPage() {
       manejaInventario: articulo.manejaInventario,
       stockMinimo: String(articulo.stockMinimo ?? 0),
       stockMaximo: articulo.stockMaximo != null ? String(articulo.stockMaximo) : "",
+      dosisMaximaPorHectarea: articulo.dosisMaximaPorHectarea != null ? String(articulo.dosisMaximaPorHectarea) : "",
+      dosisMaximaUnidadUuid: articulo.dosisMaximaUnidad?.uuid || "",
       estado: articulo.estado,
     });
     setFormError("");
@@ -180,6 +184,8 @@ export default function ArticulosInventarioPage() {
         precioVenta: Number(form.precioVenta),
         stockMinimo: form.stockMinimo === "" ? null : Number(form.stockMinimo),
         stockMaximo: form.stockMaximo === "" ? null : Number(form.stockMaximo),
+        dosisMaximaPorHectarea: form.dosisMaximaPorHectarea === "" ? null : Number(form.dosisMaximaPorHectarea),
+        dosisMaximaUnidadUuid: form.dosisMaximaUnidadUuid || null,
       };
       if (editing) {
         await apiFetch(`/inventarios/articulos/${editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
@@ -554,6 +560,43 @@ export default function ArticulosInventarioPage() {
                   />
                 </div>
               </div>
+
+              {categorias.find((c) => c.uuid === form.categoriaUuid)?.tipo === "INSUMO" && (
+                <div className="row g-3 mb-3 align-items-end">
+                  <div className="col-12">
+                    <p className="small fw-medium mb-1">Dosificación</p>
+                    <p className="form-text small mt-0 mb-2">
+                      Dosis máxima recomendada por hectárea para este insumo (solo de referencia, ej. &quot;4 L/ha&quot;).
+                    </p>
+                  </div>
+                  <div className="col-6">
+                    <label className="form-label small fw-medium">Dosis máxima por hectárea</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      className="form-control rounded-3"
+                      value={form.dosisMaximaPorHectarea}
+                      onChange={(e) => setForm((f) => ({ ...f, dosisMaximaPorHectarea: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-6">
+                    <label className="form-label small fw-medium">Unidad</label>
+                    <select
+                      className="form-select rounded-3"
+                      value={form.dosisMaximaUnidadUuid}
+                      onChange={(e) => setForm((f) => ({ ...f, dosisMaximaUnidadUuid: e.target.value }))}
+                    >
+                      <option value="">Sin unidad</option>
+                      {unidades.map((u) => (
+                        <option key={u.uuid} value={u.uuid}>
+                          {u.nombre} ({u.simbolo})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="form-check mb-3">
                 <input

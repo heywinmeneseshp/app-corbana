@@ -44,6 +44,7 @@ function CintaDot({ color }) {
 export default function MovimientosPage() {
   const puedeEliminar = hasPermission("racimo_movimiento.eliminar");
   const puedeEliminarMasivo = hasPermission("racimo_movimiento.eliminar_masivo");
+  const puedeAjustar = hasPermission("racimo_movimiento.ajustar");
   const [fincas, setFincas] = useState([]);
   const [lotes, setLotes] = useState([]);
   const [semanas, setSemanas] = useState([]);
@@ -255,6 +256,14 @@ export default function MovimientosPage() {
                 <Link href="/racimos/corte" className="dropdown-item small py-2 px-3 d-block text-decoration-none text-dark">
                   Registrar Corte
                 </Link>
+                {puedeAjustar && (
+                  <>
+                    <hr className="my-1" />
+                    <Link href="/racimos/ajustes" className="dropdown-item small py-2 px-3 d-block text-decoration-none text-dark">
+                      Registrar Ajuste
+                    </Link>
+                  </>
+                )}
               </div>
             )}
             </div>
@@ -434,7 +443,10 @@ export default function MovimientosPage() {
                 {!loading &&
                   items.map((item) => {
                     const badge = TIPO_BADGE[item.tipo];
-                    const esPositivo = item.tipo === "EMBOLSE";
+                    // Un ajuste puede tener cantidad negativa O positiva
+                    // (corrige de más o de menos) — el signo se toma
+                    // directo de la cantidad en vez de asumirlo por tipo.
+                    const esPositivo = item.esAjuste ? item.cantidad >= 0 : item.tipo === "EMBOLSE";
                     const esSeleccionable = !item.esHistorico || meta.puedeEliminarHistorico;
                     return (
                       <tr key={item.uuid}>
@@ -469,11 +481,21 @@ export default function MovimientosPage() {
                           >
                             {badge.label}
                           </span>
+                          {item.esAjuste && (
+                            <span
+                              className="badge rounded-pill small ms-1"
+                              style={{ backgroundColor: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1" }}
+                              title="Corrige un movimiento anterior del mismo tipo"
+                            >
+                              Ajuste
+                            </span>
+                          )}
                         </td>
                         <td className="small">{motivoDe(item)}</td>
                         <td className="text-end small fw-medium" style={{ color: esPositivo ? "#047857" : "#b91c1c" }}>
-                          {esPositivo ? "+" : "-"}
-                          {item.cantidad.toLocaleString()}
+                          {item.esAjuste
+                            ? `${item.cantidad > 0 ? "+" : ""}${item.cantidad.toLocaleString()}`
+                            : `${esPositivo ? "+" : "-"}${item.cantidad.toLocaleString()}`}
                         </td>
                         <td className="small">{item.creadoPor?.usuario || "Sistema"}</td>
                         <td className="text-end">

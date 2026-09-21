@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FiPlus, FiTrash2, FiChevronLeft, FiChevronRight, FiClock, FiEye, FiAlertTriangle } from "react-icons/fi";
+import { FiPlus, FiTrash2, FiChevronLeft, FiChevronRight, FiClock, FiEye, FiAlertTriangle, FiDownload, FiFileText } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import { estadoPruebaInfo } from "@/lib/mezclaEstados";
+import { verReporteMezclaPdf, descargarReporteMezclaPdf } from "@/lib/mezclaReporteExport";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
@@ -41,7 +42,15 @@ export default function MezclasPage() {
     setLoading(true);
     setError("");
     try {
-      const qs = new URLSearchParams({ page: String(page), limit: "100", ...(search ? { search } : {}) });
+      // incluirDirectas=false: esta pantalla es de PRUEBAS de laboratorio —
+      // una mezcla creada con "Nueva mezcla" (sin prueba, ver
+      // inventarios/elaboraciones) no debe aparecer acá.
+      const qs = new URLSearchParams({
+        page: String(page),
+        limit: "100",
+        incluirDirectas: "false",
+        ...(search ? { search } : {}),
+      });
       const { items: rows, meta: m } = await apiFetch(`/inventarios/mezclas?${qs}`);
       setItems(rows);
       setMeta(m);
@@ -104,6 +113,27 @@ export default function MezclasPage() {
     try {
       await apiFetch(`/inventarios/mezclas/${mezcla.uuid}`, { method: "DELETE" });
       load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // El listado solo trae la versión "resumida" (LIST_INCLUDE, sin
+  // componentes/etapas) — el reporte necesita el detalle completo, igual
+  // que la pantalla de la prueba, así que se pide antes de generar el PDF.
+  async function handleVerReporte(mezcla) {
+    try {
+      const detalle = await apiFetch(`/inventarios/mezclas/${mezcla.uuid}`);
+      verReporteMezclaPdf(detalle);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleDescargarReporte(mezcla) {
+    try {
+      const detalle = await apiFetch(`/inventarios/mezclas/${mezcla.uuid}`);
+      descargarReporteMezclaPdf(detalle);
     } catch (err) {
       setError(err.message);
     }
@@ -222,6 +252,22 @@ export default function MezclasPage() {
                               onClick={() => router.push(`/inventarios/mezclas/${m.uuid}`)}
                             >
                               <FiEye size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
+                              title="Ver reporte de la prueba en PDF"
+                              onClick={() => handleVerReporte(m)}
+                            >
+                              <FiFileText size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
+                              title="Descargar reporte en PDF"
+                              onClick={() => handleDescargarReporte(m)}
+                            >
+                              <FiDownload size={15} />
                             </button>
                             {esAdministrador() && (
                               <button

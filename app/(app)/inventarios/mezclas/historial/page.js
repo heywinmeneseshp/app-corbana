@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FiArrowLeft, FiChevronLeft, FiChevronRight, FiEye } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { estadoPruebaInfo, ESTADO_PRUEBA_INFO } from "@/lib/mezclaEstados";
+import { parseFechaUTC } from "@/lib/fecha";
 import RequirePermission from "@/components/RequirePermission";
 
 export default function HistorialMezclasPage() {
@@ -228,7 +229,7 @@ export default function HistorialMezclasPage() {
                     return (
                       <tr key={v.uuid} style={{ cursor: "pointer" }} onClick={() => router.push(`/inventarios/mezclas/${v.mezcla?.uuid}`)}>
                         <td className="small text-secondary">
-                          {v.created_at ? new Date(v.created_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" }) : "—"}
+                          {v.created_at ? parseFechaUTC(v.created_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" }) : "—"}
                         </td>
                         <td className="small fw-medium">{v.mezcla?.nombre}</td>
                         <td className="small text-secondary">{v.mezcla?.articuloElaborado?.nombre || "—"}</td>

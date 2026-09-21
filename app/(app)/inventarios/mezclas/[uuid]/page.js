@@ -2,21 +2,30 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FiPlus, FiX, FiCamera, FiTrash2, FiArrowLeft, FiCheckCircle, FiXCircle, FiPackage } from "react-icons/fi";
+import { FiPlus, FiX, FiCamera, FiTrash2, FiArrowLeft, FiCheckCircle, FiXCircle, FiPackage, FiInfo, FiClock } from "react-icons/fi";
 import { apiFetch, apiFetchFormData, apiFetchBlob } from "@/lib/api";
-import { hasPermission } from "@/lib/auth";
+import { hasPermission, getCurrentUser } from "@/lib/auth";
 import { estadoPruebaInfo, ESTADOS_PRUEBA_EDITABLES } from "@/lib/mezclaEstados";
 import { construirGrafoUnidades, unidadesAlcanzables, convertirCantidad } from "@/lib/unidadConversion";
+import { sellarFotos } from "@/lib/fotoSello";
+import { parseFechaUTC } from "@/lib/fecha";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
-function emptyComponenteRow() {
-  return { articuloUuid: "", cantidad: "1", unidadUuid: "" };
+function emptyEtapaForm() {
+  return { modo: "NUEVO_INSUMO", componenteUuid: "", articuloUuid: "", cantidad: "1", unidadUuid: "", ph: "", ce: "", observaciones: "" };
 }
 
+const INTERVALOS_HOMOGENEIDAD = [
+  ["15MIN", "15 minutos"],
+  ["30MIN", "30 minutos"],
+  ["60MIN", "1 hora"],
+];
+
 function fmtFechaHora(v) {
-  if (!v) return null;
-  return new Date(v).toLocaleString("es-CO", { timeZone: "America/Bogota", dateStyle: "medium", timeStyle: "short" });
+  const d = parseFechaUTC(v);
+  if (!d) return null;
+  return d.toLocaleString("es-CO", { timeZone: "America/Bogota", dateStyle: "medium", timeStyle: "short" });
 }
 
 function nombreUsuario(u) {
@@ -26,7 +35,7 @@ function nombreUsuario(u) {
 
 // Nombre + "cargo" (roles del usuario) + opcionalmente la fecha/hora del
 // hito (finalización / aprobación).
-function TrazaItem({ titulo, usuario, fecha, pendiente }) {
+function TrazaItem({ titulo, usuario, fecha, pendiente, mostrarUsuario = true }) {
   const cargo = (usuario?.roles || []).map((r) => r.nombre).join(", ");
   return (
     <div className="col-12 col-md-4">
@@ -40,8 +49,12 @@ function TrazaItem({ titulo, usuario, fecha, pendiente }) {
       ) : (
         <>
           {fecha !== undefined && <div className="small fw-medium">{fmtFechaHora(fecha) || "—"}</div>}
-          <div className="small">{nombreUsuario(usuario)}</div>
-          {cargo && <div className="small text-secondary">{cargo}</div>}
+          {mostrarUsuario && (
+            <>
+              <div className="small">{nombreUsuario(usuario)}</div>
+              {cargo && <div className="small text-secondary">{cargo}</div>}
+            </>
+          )}
         </>
       )}
     </div>
@@ -65,6 +78,24 @@ export default function MezclaPruebaDetallePage() {
 
   const version = mezcla?.versiones?.[0] || null;
   const editable = version ? ESTADOS_PRUEBA_EDITABLES.includes(version.estadoPrueba) : false;
+  // Si la última medición no cumple los parámetros, no tiene sentido
+  // seguir sumando insumos de la receta como si nada — se bloquea "Agregar
+  // insumo" (pedido explícito). "Corrección de pH" solo sirve si lo que
+  // falló fue el pH: si la CE es la que no cumple (con o sin el pH),
+  // corregir el pH no la arregla — no hay forma de corregir CE en esta
+  // prueba, así que ahí se bloquea todo y solo queda finalizar.
+  const ultimaEtapa = version?.etapas?.length ? version.etapas[version.etapas.length - 1] : null;
+  const bloqueadoPorNoCumple = ultimaEtapa?.resultado === "NO_CUMPLE";
+  // !== true (no solo === false): si por algún motivo no se sabe con
+  // certeza que la CE está bien (ej. una etapa vieja sin este dato), se
+  // bloquea por las dudas en vez de asumir que solo falló el pH.
+  const ceSinCorregir = bloqueadoPorNoCumple && ultimaEtapa?.cumpleCe !== true;
+  // Si algún punto de control de homogeneidad dio "no homogénea" (se
+  // separó), no hay forma de corregir eso ajustando pH/insumos — se
+  // bloquea seguir registrando etapas Y más puntos de homogeneidad,
+  // solo queda finalizar la prueba (pedido explícito).
+  const homogeneidadFalla = (version?.homogeneidad || []).some((h) => h.homogenea === false);
+  const reguladorPhUuid = articulos.find((a) => a.nombre === "Regulador de pH")?.uuid;
 
   const puedeCrear = hasPermission("inventario.mezclas.crear");
   const puedeEditar = hasPermission("inventario.mezclas.editar");
@@ -82,12 +113,19 @@ export default function MezclaPruebaDetallePage() {
   const infoCompleta = Boolean(mezcla?.nombre);
 
   // ─── Componentes ───
-  const [componentesForm, setComponentesForm] = useState([emptyComponenteRow()]);
+  const [componentesForm, setComponentesForm] = useState([]);
   const [savingComponentes, setSavingComponentes] = useState(false);
   const [componentesError, setComponentesError] = useState("");
 
   // ─── Etapas ───
-  const [etapaForm, setEtapaForm] = useState({ componenteUuid: "", ph: "", ce: "", observaciones: "" });
+  // modo: "NUEVO_INSUMO" (agrega el insumo a la receta Y mide, en un solo
+  // paso — antes había que guardarlo en "Componentes" aparte antes de
+  // poder elegirlo acá), "SOLO_MEDICION" (mide sin agregar insumo) o
+  // "CORRECCION_PH" (insumo puntual, ej. regulador de pH, que NO se agrega
+  // a la receta). articuloUuid/cantidad/unidadUuid se reutilizan para
+  // NUEVO_INSUMO y CORRECCION_PH — son el mismo tipo de campo, solo cambia
+  // a dónde va el insumo elegido.
+  const [etapaForm, setEtapaForm] = useState(emptyEtapaForm());
   const [etapaFotos, setEtapaFotos] = useState([]); // [{file, previewUrl}] — evidencia de la etapa que se está por registrar
   const [savingEtapa, setSavingEtapa] = useState(false);
   const [etapaError, setEtapaError] = useState("");
@@ -99,10 +137,13 @@ export default function MezclaPruebaDetallePage() {
   const [fotoAmpliada, setFotoAmpliada] = useState(null);
 
   // ─── Fotos ───
-  const [pendingFotos, setPendingFotos] = useState([]); // [{file, previewUrl}]
-  const [uploadingFotos, setUploadingFotos] = useState(false);
-  const [fotosError, setFotosError] = useState("");
   const [fotoUrls, setFotoUrls] = useState({}); // { [fotoUuid]: blobUrl }
+
+  // ─── Prueba de homogeneidad (15/30/60 min) ───
+  // Estado por intervalo: { [intervalo]: { homogenea: "si"|"no"|"", fotos: [{file, previewUrl}] } }
+  const [homogForm, setHomogForm] = useState({});
+  const [savingHomog, setSavingHomog] = useState(""); // intervalo en curso, o ""
+  const [homogError, setHomogError] = useState({});
 
   // ─── Finalizar / Crear elaborado / Aprobar ───
   const [finalizando, setFinalizando] = useState(false);
@@ -133,18 +174,12 @@ export default function MezclaPruebaDetallePage() {
       setInfoForm({ nombre: detalle.nombre || "" });
       const v = detalle.versiones?.[0];
       setComponentesForm(
-        v?.componentes?.length
-          ? v.componentes.map((c) => ({
-              // uuid: marca esta fila como YA GUARDADA — se usa para
-              // bloquear su eliminación (ver removeComponenteRow). Una fila
-              // agregada en esta misma sesión sin guardar todavía no tiene
-              // uuid, y esa sí se puede quitar libremente.
-              uuid: c.uuid,
-              articuloUuid: c.articulo?.uuid || "",
-              cantidad: String(c.cantidad ?? 1),
-              unidadUuid: c.unidad?.uuid || "",
-            }))
-          : [emptyComponenteRow()],
+        (v?.componentes || []).map((c) => ({
+          uuid: c.uuid,
+          articuloUuid: c.articulo?.uuid || "",
+          cantidad: String(c.cantidad ?? 1),
+          unidadUuid: c.unidad?.uuid || "",
+        })),
       );
     } catch (err) {
       setError(err.message);
@@ -186,8 +221,20 @@ export default function MezclaPruebaDetallePage() {
     if (!version) return [];
     const generales = version.fotos || [];
     const deEtapas = (version.etapas || []).flatMap((e) => e.fotos || []);
-    return [...generales, ...deEtapas];
+    const deHomogeneidad = (version.homogeneidad || []).flatMap((h) => h.fotos || []);
+    return [...generales, ...deEtapas, ...deHomogeneidad];
   }, [version]);
+
+  // Si la última medición no cumple, "Agregar insumo" queda deshabilitado
+  // (ver bloqueadoPorNoCumple) — si el formulario justo quedó en ese modo
+  // (ej. recién se reseteó tras registrar la etapa que no cumplió), lo
+  // pasa solo a "Corrección de pH".
+  useEffect(() => {
+    if (bloqueadoPorNoCumple && etapaForm.modo === "NUEVO_INSUMO") {
+      setEtapaForm((f) => ({ ...f, modo: "CORRECCION_PH", componenteUuid: "", articuloUuid: "", cantidad: "1", unidadUuid: "" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bloqueadoPorNoCumple]);
 
   useEffect(() => {
     if (!todasLasFotos.length) return;
@@ -211,30 +258,6 @@ export default function MezclaPruebaDetallePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todasLasFotos.map((f) => f.uuid).join(",")]);
 
-  // ─── Información general ───
-
-  async function guardarInfoGeneral() {
-    setInfoError("");
-    if (!infoForm.nombre.trim()) {
-      setInfoError("Completa el nombre de la prueba.");
-      return;
-    }
-    setSavingInfo(true);
-    try {
-      // El validador de actualización no acepta nombre vacío (solo se puede
-      // asignar, no volver a limpiar) — por eso acá siempre va con valor.
-      await apiFetch(`/inventarios/mezclas/${uuid}`, {
-        method: "PUT",
-        body: JSON.stringify({ nombre: infoForm.nombre.trim() }),
-      });
-      await load();
-    } catch (err) {
-      setInfoError(err.message);
-    } finally {
-      setSavingInfo(false);
-    }
-  }
-
   // ─── Componentes ───
 
   // Unidades "compatibles" con un artículo: la suya propia + las
@@ -251,49 +274,74 @@ export default function MezclaPruebaDetallePage() {
     return unidades.filter((u) => alcanzables.has(u.uuid));
   }
 
-  function updateComponente(idx, field, value) {
-    setComponentesForm((rows) => {
-      const next = [...rows];
-      next[idx] = { ...next[idx], [field]: value };
-      // Al cambiar el artículo, si la unidad ya elegida dejó de ser
-      // compatible con el nuevo artículo, se limpia en vez de dejar una
-      // combinación inválida seleccionada sin que se note.
-      if (field === "articuloUuid" && next[idx].unidadUuid) {
-        const compatibles = unidadesCompatiblesPara(value);
-        if (!compatibles.some((u) => u.uuid === next[idx].unidadUuid)) {
-          next[idx] = { ...next[idx], unidadUuid: "" };
-        }
+  // La unidad "más chica" compatible con un artículo (ej. ml en vez de L,
+  // gramo en vez de Kg) — pedido explícito: en la prueba de laboratorio,
+  // los insumos se dosifican en cantidades chicas, así que conviene
+  // arrancar en la unidad más fina en vez de la unidad base del artículo.
+  // Se mide el "tamaño" de cada unidad compatible convirtiendo 1 unidad a
+  // la unidad base del artículo — la que da el número más chico es la más
+  // fina (ej. 1 ml = 0.001 L, contra 1 L = 1 L).
+  function unidadMasPequenaPara(articuloUuid) {
+    const articulo = articulos.find((a) => a.uuid === articuloUuid);
+    const unidadBaseUuid = articulo?.unidadMedida?.uuid;
+    if (!unidadBaseUuid) return "";
+    const compatibles = unidadesCompatiblesPara(articuloUuid);
+    let mejor = unidadBaseUuid;
+    let mejorTamano = 1;
+    for (const u of compatibles) {
+      const tamano = convertirCantidad(grafoUnidades, u.uuid, unidadBaseUuid, 1);
+      if (tamano != null && tamano < mejorTamano) {
+        mejorTamano = tamano;
+        mejor = u.uuid;
       }
-      return next;
-    });
+    }
+    return mejor;
   }
 
-  function addComponenteRow() {
-    setComponentesForm((rows) => [...rows, emptyComponenteRow()]);
+  function computeNextComponentes(rows, idx, field, value) {
+    const next = [...rows];
+    next[idx] = { ...next[idx], [field]: value };
+    // Al cambiar el artículo, si la unidad ya elegida dejó de ser
+    // compatible con el nuevo artículo, se limpia en vez de dejar una
+    // combinación inválida seleccionada sin que se note.
+    if (field === "articuloUuid" && next[idx].unidadUuid) {
+      const compatibles = unidadesCompatiblesPara(value);
+      if (!compatibles.some((u) => u.uuid === next[idx].unidadUuid)) {
+        next[idx] = { ...next[idx], unidadUuid: "" };
+      }
+    }
+    return next;
   }
 
-  // Solo se pueden quitar filas que todavía NO se hayan guardado (sin
-  // uuid) — una vez guardado un componente, ya no se puede eliminar
+  function updateComponente(idx, field, value) {
+    setComponentesForm((rows) => computeNextComponentes(rows, idx, field, value));
+  }
+
+  // Guarda ediciones a insumos YA agregados a la receta (cantidad/unidad) —
+  // agregar un insumo NUEVO ya no pasa por acá: se hace desde "Registrar
+  // nueva etapa" (ver handleAgregarEtapa), en un solo paso junto con su
+  // medición. Un insumo guardado tampoco se puede eliminar de la receta
   // (pedido explícito: evita perder trazabilidad si una etapa ya lo
   // referencia).
-  function removeComponenteRow(idx) {
-    setComponentesForm((rows) => (rows[idx]?.uuid ? rows : rows.filter((_, i) => i !== idx)));
-  }
-
-  async function guardarComponentes() {
+  // Cambiar cantidad o unidad guarda solo (sin botón aparte — pedido
+  // explícito: "si se cambia, ya se sabe que cambió y debe actualizar").
+  // La cantidad guarda al salir del campo (onBlur), no en cada tecleada.
+  // PATCH puntual sobre ESA fila (por su uuid) — nunca destruye/recrea
+  // toda la lista, para no invalidar el componenteId que ya pueda tener
+  // guardado una etapa anterior apuntando a esta misma fila (bug real
+  // reportado: reemplazar toda la lista le cambiaba el id por debajo y la
+  // etapa vieja quedaba mostrando "—" en vez del insumo).
+  async function updateComponenteYGuardar(idx, field, value) {
+    const next = computeNextComponentes(componentesForm, idx, field, value);
+    setComponentesForm(next);
+    const fila = next[idx];
+    if (!fila.uuid || !fila.cantidad) return;
     setComponentesError("");
-    const validos = componentesForm.filter((c) => c.articuloUuid && c.cantidad);
-    if (!validos.length) {
-      setComponentesError("Agrega al menos un componente con artículo y cantidad.");
-      return;
-    }
     setSavingComponentes(true);
     try {
-      await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/componentes`, {
-        method: "PUT",
-        body: JSON.stringify({
-          componentes: validos.map((c) => ({ articuloUuid: c.articuloUuid, cantidad: Number(c.cantidad), unidadUuid: c.unidadUuid || null })),
-        }),
+      await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/componentes/${fila.uuid}`, {
+        method: "PATCH",
+        body: JSON.stringify({ cantidad: Number(fila.cantidad), unidadUuid: fila.unidadUuid || null }),
       });
       await load();
     } catch (err) {
@@ -312,18 +360,68 @@ export default function MezclaPruebaDetallePage() {
       setEtapaError("Ingresa pH y CE medidos.");
       return;
     }
+    if (etapaForm.modo === "CORRECCION_PH" && (!etapaForm.cantidad || !etapaForm.unidadUuid)) {
+      setEtapaError("Ingresa la cantidad y la unidad usadas para corregir el pH.");
+      return;
+    }
+    if (etapaForm.modo === "NUEVO_INSUMO" && (!etapaForm.articuloUuid || !etapaForm.cantidad || !etapaForm.unidadUuid)) {
+      setEtapaError("Selecciona el insumo, la cantidad y la unidad a agregar.");
+      return;
+    }
+    if (etapaFotos.length === 0) {
+      setEtapaError("Adjunta una foto de evidencia antes de registrar la etapa.");
+      return;
+    }
     setSavingEtapa(true);
     try {
+      let componenteUuid = etapaForm.componenteUuid || null;
+
+      if (etapaForm.modo === "NUEVO_INSUMO") {
+        // Agrega el insumo a la receta (componentes) y, en el mismo paso,
+        // registra la etapa que lo mide — antes había que guardarlo en
+        // "Componentes de la receta" aparte antes de poder elegirlo acá.
+        // INSERT puntual (no reemplaza toda la lista): así el
+        // componenteId que las etapas anteriores ya tenían guardado sigue
+        // apuntando a la misma fila (bug real reportado: con el PUT que
+        // reemplazaba toda la lista, la primera etapa quedaba mostrando
+        // "—" apenas se agregaba un segundo insumo).
+        const resultado = await apiFetch(
+          `/inventarios/mezclas/${uuid}/versiones/${version.uuid}/componentes/agregar`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              articuloUuid: etapaForm.articuloUuid,
+              cantidad: Number(etapaForm.cantidad),
+              unidadUuid: etapaForm.unidadUuid || null,
+            }),
+          },
+        );
+        componenteUuid = resultado.componenteUuid || null;
+      }
+
       const versionActualizada = await apiFetch(
         `/inventarios/mezclas/${uuid}/versiones/${version.uuid}/etapas`,
         {
           method: "POST",
-          body: JSON.stringify({
-            componenteUuid: etapaForm.componenteUuid || null,
-            ph: Number(etapaForm.ph),
-            ce: Number(etapaForm.ce),
-            observaciones: etapaForm.observaciones || null,
-          }),
+          body: JSON.stringify(
+            etapaForm.modo === "CORRECCION_PH"
+              ? {
+                  // El artículo NO se manda: el backend siempre usa/crea
+                  // "Regulador de pH" (ver mezcla.service.js#agregarEtapa).
+                  tipoEtapa: "CORRECCION_PH",
+                  cantidadCorreccion: Number(etapaForm.cantidad),
+                  unidadCorreccionUuid: etapaForm.unidadUuid,
+                  ph: Number(etapaForm.ph),
+                  ce: Number(etapaForm.ce),
+                  observaciones: etapaForm.observaciones || null,
+                }
+              : {
+                  componenteUuid,
+                  ph: Number(etapaForm.ph),
+                  ce: Number(etapaForm.ce),
+                  observaciones: etapaForm.observaciones || null,
+                },
+          ),
         },
       );
 
@@ -347,7 +445,7 @@ export default function MezclaPruebaDetallePage() {
 
       etapaFotos.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
       setEtapaFotos([]);
-      setEtapaForm({ componenteUuid: "", ph: "", ce: "", observaciones: "" });
+      setEtapaForm(emptyEtapaForm());
       await load();
     } catch (err) {
       setEtapaError(err.message);
@@ -356,10 +454,16 @@ export default function MezclaPruebaDetallePage() {
     }
   }
 
-  function handleSelectEtapaFiles(e) {
+  // Nombre a estampar en las fotos de evidencia (fecha/hora + GPS + este
+  // usuario) — pedido explícito, ver lib/fotoSello.js.
+  const usuarioSello = nombreUsuario(getCurrentUser());
+
+  async function handleSelectEtapaFiles(e) {
     const files = Array.from(e.target.files || []);
-    setEtapaFotos((prev) => [...prev, ...files.map((file) => ({ file, previewUrl: URL.createObjectURL(file) }))]);
     e.target.value = "";
+    if (!files.length) return;
+    const selladas = await sellarFotos(files, { usuario: usuarioSello });
+    setEtapaFotos((prev) => [...prev, ...selladas.map((file) => ({ file, previewUrl: URL.createObjectURL(file) }))]);
   }
 
   function limpiarEtapaFotos() {
@@ -376,9 +480,10 @@ export default function MezclaPruebaDetallePage() {
     setEtapaError("");
     setSubiendoFotoEtapa(etapaUuid);
     try {
+      const selladas = await sellarFotos(files, { usuario: usuarioSello });
       const formData = new FormData();
       formData.append("etapaUuid", etapaUuid);
-      files.forEach((file) => formData.append("fotos", file));
+      selladas.forEach((file) => formData.append("fotos", file));
       await apiFetchFormData(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/fotos`, formData);
       await load();
     } catch (err) {
@@ -401,54 +506,100 @@ export default function MezclaPruebaDetallePage() {
 
   // ─── Fotos ───
 
-  function handleSelectFiles(e) {
-    const files = Array.from(e.target.files || []);
-    setPendingFotos((prev) => [...prev, ...files.map((file) => ({ file, previewUrl: URL.createObjectURL(file) }))]);
-    e.target.value = "";
-  }
-
-  function removePendingFoto(idx) {
-    setPendingFotos((prev) => {
-      const next = [...prev];
-      URL.revokeObjectURL(next[idx].previewUrl);
-      next.splice(idx, 1);
-      return next;
-    });
-  }
-
-  async function handleUploadFotos() {
-    if (!pendingFotos.length) return;
-    setFotosError("");
-    setUploadingFotos(true);
-    try {
-      const formData = new FormData();
-      pendingFotos.forEach(({ file }) => formData.append("fotos", file));
-      await apiFetchFormData(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/fotos`, formData);
-      pendingFotos.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
-      setPendingFotos([]);
-      await load();
-    } catch (err) {
-      setFotosError(err.message);
-    } finally {
-      setUploadingFotos(false);
-    }
-  }
-
+  // Usada desde la evidencia por etapa y por punto de control de
+  // homogeneidad — ya no hay una sección de "Evidencia fotográfica
+  // general" con su propio slot de error, así que se avisa con alert().
   async function handleEliminarFoto(fotoUuid) {
     if (!confirm("¿Eliminar esta foto?")) return;
     try {
       await apiFetch(`/inventarios/mezclas/fotos/${fotoUuid}`, { method: "DELETE" });
       await load();
     } catch (err) {
-      setFotosError(err.message);
+      alert(err.message);
+    }
+  }
+
+  // ─── Prueba de homogeneidad ───
+
+  async function handleSelectHomogFiles(intervalo, e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    const selladas = await sellarFotos(files, { usuario: usuarioSello });
+    setHomogForm((prev) => ({
+      ...prev,
+      [intervalo]: {
+        homogenea: prev[intervalo]?.homogenea ?? "",
+        fotos: [...(prev[intervalo]?.fotos || []), ...selladas.map((file) => ({ file, previewUrl: URL.createObjectURL(file) }))],
+      },
+    }));
+  }
+
+  // Registra el punto de control (Sí/No homogénea) y, si hay fotos
+  // adjuntas, las sube en el mismo paso — mismo patrón de dos llamadas que
+  // ya usa "Agregar insumo" en Etapas.
+  async function handleRegistrarHomogeneidad(intervalo) {
+    const form = homogForm[intervalo] || { homogenea: "", fotos: [] };
+    if (form.homogenea === "") {
+      setHomogError((prev) => ({ ...prev, [intervalo]: "Indica si la mezcla sigue homogénea." }));
+      return;
+    }
+    if (form.fotos.length === 0) {
+      setHomogError((prev) => ({ ...prev, [intervalo]: "Adjunta una foto de evidencia antes de registrar." }));
+      return;
+    }
+    setHomogError((prev) => ({ ...prev, [intervalo]: "" }));
+    setSavingHomog(intervalo);
+    try {
+      const versionConPunto = await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/homogeneidad`, {
+        method: "POST",
+        body: JSON.stringify({ intervalo, homogenea: form.homogenea === "si" }),
+      });
+      if (form.fotos.length) {
+        const punto = (versionConPunto.homogeneidad || []).find((h) => h.intervalo === intervalo);
+        if (punto) {
+          const formData = new FormData();
+          formData.append("homogeneidadUuid", punto.uuid);
+          form.fotos.forEach(({ file }) => formData.append("fotos", file));
+          await apiFetchFormData(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/fotos`, formData);
+        }
+      }
+      form.fotos.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
+      setHomogForm((prev) => ({ ...prev, [intervalo]: { homogenea: "", fotos: [] } }));
+      await load();
+    } catch (err) {
+      setHomogError((prev) => ({ ...prev, [intervalo]: err.message }));
+    } finally {
+      setSavingHomog("");
     }
   }
 
   // ─── Finalizar / Crear elaborado ───
 
-  async function handleFinalizar() {
+  // Guarda el nombre y finaliza la prueba en un solo paso (el botón de
+  // "Información general" pasó a ser esto — antes eran dos acciones
+  // separadas: "Guardar" el nombre y, aparte, "Finalizar prueba").
+  async function handleGuardarYFinalizar() {
+    if (!infoForm.nombre.trim()) {
+      setInfoError("Completa el nombre de la prueba.");
+      return;
+    }
     if (!confirm("¿Finalizar esta prueba? Se generará la salida de inventario por los componentes usados y ya no se podrá editar.")) return;
+    setInfoError("");
     setFinalizarError("");
+    setSavingInfo(true);
+    try {
+      await apiFetch(`/inventarios/mezclas/${uuid}`, {
+        method: "PUT",
+        body: JSON.stringify({ nombre: infoForm.nombre.trim() }),
+      });
+    } catch (err) {
+      setInfoError(err.message);
+      setSavingInfo(false);
+      return;
+    }
+    setSavingInfo(false);
+
     setFinalizando(true);
     try {
       const resultado = await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/finalizar`, { method: "POST" });
@@ -461,15 +612,19 @@ export default function MezclaPruebaDetallePage() {
         const confirmarNegativo = confirm(
           `${detalle}\n\n¿Confirmás finalizar de todas formas? El inventario quedará en negativo para el/los artículo(s) listados.`,
         );
-        if (!confirmarNegativo) return;
-        await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/finalizar`, {
-          method: "POST",
-          body: JSON.stringify({ forzarSaldoNegativo: true }),
-        });
+        if (confirmarNegativo) {
+          await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/finalizar`, {
+            method: "POST",
+            body: JSON.stringify({ forzarSaldoNegativo: true }),
+          });
+        }
       }
       await load();
     } catch (err) {
       setFinalizarError(err.message);
+      // El nombre ya se guardó aunque falle finalizar — refresca para que
+      // no quede desactualizado en pantalla.
+      await load();
     } finally {
       setFinalizando(false);
     }
@@ -503,18 +658,25 @@ export default function MezclaPruebaDetallePage() {
   }
 
   function openElaboradoModal() {
+    // Unidad por defecto: Litro, si existe en el catálogo — el operador la
+    // puede cambiar igual.
+    const unidadLitro = unidades.find((u) => u.nombre?.toLowerCase() === "litro" || u.simbolo?.toLowerCase() === "l");
     setElaboradoForm({
       cantidadElaborada: "1",
       almacenUuid: version?.almacen?.uuid || "",
+      // No se pide en el formulario — la fecha real del elaborado se fija a
+      // la fecha de aprobación (ver mezcla.service.js#aprobar); esto solo
+      // completa el campo requerido mientras tanto.
       fecha: new Date().toISOString().slice(0, 10),
       observaciones: "",
       // El nombre de la prueba suele calzar con el del producto — se
       // precarga como punto de partida, pero el operador lo puede cambiar.
       articuloNombre: mezcla?.nombre || "",
-      articuloCodigo: "",
+      // Sugerencia de código a partir del código de la prueba (MEZ-0007 →
+      // ELAB-0007) — el operador la puede editar libremente antes de crear.
+      articuloCodigo: mezcla?.codigo ? mezcla.codigo.replace(/^MEZ/, "ELAB") : "",
       articuloCategoriaUuid: "",
-      articuloUnidadMedidaUuid: "",
-      articuloPrecioVenta: "",
+      articuloUnidadMedidaUuid: unidadLitro?.uuid || "",
     });
     setElaboradoError("");
     setElaboradoModalOpen(true);
@@ -534,7 +696,6 @@ export default function MezclaPruebaDetallePage() {
         articuloCodigo: elaboradoForm.articuloCodigo || null,
         articuloCategoriaUuid: elaboradoForm.articuloCategoriaUuid,
         articuloUnidadMedidaUuid: elaboradoForm.articuloUnidadMedidaUuid || null,
-        articuloPrecioVenta: elaboradoForm.articuloPrecioVenta === "" ? null : Number(elaboradoForm.articuloPrecioVenta),
       };
       const resultado = await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/crear-elaborado`, {
         method: "POST",
@@ -594,30 +755,63 @@ export default function MezclaPruebaDetallePage() {
           <FiArrowLeft /> Volver a Mezclas
         </button>
 
-        <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+        {/* ─── Encabezado tipo reporte — misma banda verde y banda clara de
+            datos que el PDF (ver lib/mezclaReporteExport.js), para que la
+            pantalla se vea como el mismo documento. ─── */}
+        <div
+          className="rounded-4 p-4 mb-3 d-flex flex-wrap align-items-center justify-content-between gap-3"
+          style={{ backgroundColor: "#166534" }}
+        >
           <div>
-            <h1 className="fw-bold h3 mb-1 d-flex align-items-center gap-2">
-              {mezcla.nombre || <span className="text-secondary fst-italic">Sin nombre asignado</span>}
-              <span className="badge rounded-pill small" style={{ backgroundColor: info.bg, color: info.color }}>
-                {info.label}
-              </span>
+            <h1 className="fw-bold h4 mb-1 text-white text-uppercase" style={{ letterSpacing: "0.02em" }}>
+              CORBANA ZOMAC S.A.S.
             </h1>
-            <p className="text-secondary mb-0">
-              {mezcla.codigo} — Almacén: <strong>{version.almacen?.nombre || "—"}</strong>
+            <p className="small mb-0" style={{ color: "rgba(255,255,255,.85)" }}>
+              REPORTE DE PRUEBA DE LABORATORIO — MEZCLAS
             </p>
           </div>
-          <div className="d-flex gap-2">
-            {editable && puedeCrear && (
-              <button
-                type="button"
-                className="btn btn-brand rounded-3"
-                disabled={finalizando || !infoCompleta}
-                title={!infoCompleta ? "Completa el nombre de la prueba en Información general" : undefined}
-                onClick={handleFinalizar}
-              >
-                {finalizando ? "Finalizando..." : "Finalizar prueba"}
-              </button>
-            )}
+          <div className="text-white text-md-end">
+            <div className="small" style={{ color: "rgba(255,255,255,.7)" }}>
+              SGC-FO-PM-V1
+            </div>
+            <div className="fw-bold">{mezcla.codigo}</div>
+          </div>
+        </div>
+
+        <div className="card border-0 rounded-4 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div className="card-body p-3">
+            <div className="row g-3 text-center">
+              <div className="col-6 col-md-3">
+                <div className="small text-uppercase fw-semibold" style={{ color: "#166534", fontSize: "0.68rem", letterSpacing: "0.03em" }}>
+                  Nombre
+                </div>
+                <div className="fw-bold small mt-1">{mezcla.nombre || "Sin nombre asignado"}</div>
+              </div>
+              <div className="col-6 col-md-3">
+                <div className="small text-uppercase fw-semibold" style={{ color: "#166534", fontSize: "0.68rem", letterSpacing: "0.03em" }}>
+                  Código
+                </div>
+                <div className="small mt-1">{mezcla.codigo}</div>
+              </div>
+              <div className="col-6 col-md-3">
+                <div className="small text-uppercase fw-semibold" style={{ color: "#166534", fontSize: "0.68rem", letterSpacing: "0.03em" }}>
+                  Estado
+                </div>
+                <div className="small mt-1 fw-semibold" style={{ color: info.color }}>
+                  {info.label.toUpperCase()}
+                </div>
+              </div>
+              <div className="col-6 col-md-3">
+                <div className="small text-uppercase fw-semibold" style={{ color: "#166534", fontSize: "0.68rem", letterSpacing: "0.03em" }}>
+                  Almacén
+                </div>
+                <div className="small mt-1">{version.almacen?.nombre || "—"}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-4 d-flex justify-content-end gap-2">
             {version.estadoPrueba === "OPTIMA" && !version.elaboracionGenerada && puedeElaborar && (
               <button type="button" className="btn btn-success rounded-3 d-flex align-items-center gap-2" onClick={openElaboradoModal}>
                 <FiPackage /> Crear elaborado
@@ -633,62 +827,17 @@ export default function MezclaPruebaDetallePage() {
                 <FiCheckCircle /> {aprobando ? "Aprobando..." : "Aprobar prueba"}
               </button>
             )}
-          </div>
         </div>
 
-        {finalizarError && <div className="alert alert-danger py-2 small">{finalizarError}</div>}
         {aprobarError && <div className="alert alert-danger py-2 small">{aprobarError}</div>}
         {version.estadoPrueba === "PENDIENTE_APROBACION" && (
           <div className="alert alert-warning py-2 small">
             El artículo elaborado <strong>{mezcla.articuloElaborado?.nombre}</strong> ya fue creado pero está
-            <strong> inactivo</strong> y <strong>todavía no entró al inventario</strong>: la entrada de stock se genera
-            recién al aprobar. Hasta entonces no se puede usar en movimientos, elaboraciones ni proformas — necesita la
-            aprobación de un usuario de un rol autorizado.
+            <strong> inactivo</strong>: se activa recién al aprobar. Un elaborado nunca tiene saldo propio — al
+            usarse, descuenta automáticamente los insumos de su receta. Hasta que se apruebe no se puede usar en
+            movimientos, elaboraciones ni proformas — necesita la aprobación de un usuario de un rol autorizado.
           </div>
         )}
-
-        {/* ─── Información general ─── */}
-        <div className="card border-0 rounded-4 mb-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <div className="card-body p-3">
-            <h2 className="h6 fw-bold mb-2">Información general</h2>
-            {editable && puedeCrear ? (
-              <>
-                {!infoCompleta && (
-                  <p className="small text-secondary mb-2">
-                    El nombre se asigna acá — hace falta completarlo antes de poder finalizar la prueba. El artículo
-                    elaborado (producto) todavía no existe: se crea más adelante, a partir de la prueba exitosa, al
-                    usar &quot;Crear elaborado&quot;.
-                  </p>
-                )}
-                <div className="row g-3 align-items-end mb-2">
-                  <div className="col-12 col-md-8">
-                    <label className="form-label small fw-medium">
-                      Nombre <span className="text-danger">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control rounded-3"
-                      maxLength={150}
-                      value={infoForm.nombre}
-                      onChange={(e) => setInfoForm((f) => ({ ...f, nombre: e.target.value }))}
-                    />
-                  </div>
-                  <div className="col-12 col-md-2">
-                    <button type="button" className="btn btn-brand btn-sm rounded-3 w-100" disabled={savingInfo} onClick={guardarInfoGeneral}>
-                      {savingInfo ? "Guardando..." : "Guardar"}
-                    </button>
-                  </div>
-                </div>
-                {infoError && <div className="alert alert-danger py-2 small mb-0">{infoError}</div>}
-              </>
-            ) : (
-              <p className="small text-secondary mb-0">
-                Producto elaborado:{" "}
-                <strong>{mezcla.articuloElaborado?.nombre || "Aún no generado"}</strong>
-              </p>
-            )}
-          </div>
-        </div>
 
         {version.estadoPrueba === "CONVERTIDA" && version.elaboracionGenerada && (
           <div className="alert alert-primary py-2 small">
@@ -704,188 +853,306 @@ export default function MezclaPruebaDetallePage() {
         )}
 
         {(version.estadoPrueba === "OPTIMA" || version.estadoPrueba === "NO_VALIDA" || version.estadoPrueba === "CONVERTIDA") && (
-          <div className="card border-0 rounded-4 mb-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-            <div className="card-body p-3 d-flex flex-wrap gap-4 align-items-center">
-              <span className="small fw-medium d-flex align-items-center gap-1">
-                {version.estadoPrueba === "NO_VALIDA" ? (
-                  <FiXCircle className="text-danger" />
-                ) : (
-                  <FiCheckCircle style={{ color: "#047857" }} />
-                )}
-                Resultado final
-              </span>
-              <span className="small text-secondary">
-                pH final: <strong>{version.phFinal ?? "—"}</strong>
-              </span>
-              <span className="small text-secondary">
-                CE final: <strong>{version.ceFinal ?? "—"}</strong>
-              </span>
-              <span className="small text-secondary">
-                Rango usado: pH {version.parametrosUsados?.phMinimo}–{version.parametrosUsados?.phMaximo}, CE &lt;{" "}
-                {version.parametrosUsados?.ceMaxima}
-              </span>
-              <span className="small text-secondary">
-                Documento inventario: <strong>{version.movimientoDocumento || "—"}</strong>
+          <div
+            className="mb-4 rounded-3 overflow-hidden"
+            style={{ border: `1px solid ${version.estadoPrueba === "NO_VALIDA" ? "#fecaca" : "#a7f3d0"}` }}
+          >
+            <div
+              className="px-3 py-2 d-flex align-items-center gap-2"
+              style={{
+                backgroundColor: version.estadoPrueba === "NO_VALIDA" ? "#fee2e2" : "#d1fae5",
+                color: version.estadoPrueba === "NO_VALIDA" ? "#b91c1c" : "#047857",
+              }}
+            >
+              {version.estadoPrueba === "NO_VALIDA" ? <FiXCircle /> : <FiCheckCircle />}
+              <span className="fw-bold text-uppercase small" style={{ letterSpacing: "0.06em" }}>
+                {version.estadoPrueba === "NO_VALIDA" ? "No cumple parámetros" : "Cumple parámetros"}
               </span>
             </div>
-          </div>
-        )}
-
-        {(version.finalizadaEn || version.aprobadaEn || version.operador) && (
-          <div className="card border-0 rounded-4 mb-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-            <div className="card-body p-3">
-              <h2 className="h6 fw-bold mb-2">Trazabilidad</h2>
-              <div className="row g-3">
-                <TrazaItem titulo="Creada por" usuario={version.operador} />
-                <TrazaItem
-                  titulo="Prueba finalizada"
-                  fecha={version.finalizadaEn}
-                  usuario={version.finalizadaPor}
-                />
-                <TrazaItem
-                  titulo="Aprobación"
-                  fecha={version.aprobadaEn}
-                  usuario={version.aprobadaPor}
-                  pendiente={version.estadoPrueba === "PENDIENTE_APROBACION"}
-                />
+            <div className="card-body p-3 bg-white">
+              <div className="row g-4">
+                <div className="col-6 col-md-3">
+                  <div className="small text-secondary text-uppercase fw-semibold" style={{ fontSize: "0.68rem", letterSpacing: "0.03em" }}>
+                    pH final
+                  </div>
+                  <div className="fw-bold" style={{ fontSize: "1.5rem", lineHeight: 1.2 }}>
+                    {version.phFinal ?? "—"}
+                  </div>
+                  <div className="small text-secondary">
+                    rango {version.parametrosUsados?.phMinimo}–{version.parametrosUsados?.phMaximo}
+                  </div>
+                </div>
+                <div className="col-6 col-md-3">
+                  <div className="small text-secondary text-uppercase fw-semibold" style={{ fontSize: "0.68rem", letterSpacing: "0.03em" }}>
+                    CE final
+                  </div>
+                  <div className="fw-bold" style={{ fontSize: "1.5rem", lineHeight: 1.2 }}>
+                    {version.ceFinal ?? "—"}
+                  </div>
+                  <div className="small text-secondary">máx {version.parametrosUsados?.ceMaxima}</div>
+                </div>
+                <div className="col-12 col-md-6 border-start-md ps-md-4">
+                  <div className="small text-secondary text-uppercase fw-semibold" style={{ fontSize: "0.68rem", letterSpacing: "0.03em" }}>
+                    Documento de inventario
+                  </div>
+                  <div className="small fw-medium mt-1">{version.movimientoDocumento || "—"}</div>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* ─── Componentes ─── */}
-        <div className="card border-0 rounded-4 mb-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <div className="card-body p-3">
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <h2 className="h6 fw-bold mb-0">Componentes</h2>
-              {editable && puedeCrear && (
-                <button type="button" className="btn btn-sm btn-outline-secondary rounded-3 d-inline-flex align-items-center gap-1" onClick={addComponenteRow}>
-                  <FiPlus size={14} /> Agregar
-                </button>
-              )}
-            </div>
-            <div className="table-responsive">
-              <table className="table table-sm align-middle mb-2">
-                <thead>
-                  <tr className="table-light small text-secondary">
-                    <th style={{ minWidth: "14rem" }}>Artículo</th>
-                    <th style={{ minWidth: "10rem" }}>Unidad</th>
-                    <th style={{ width: "8rem" }}>Cantidad</th>
-                    <th style={{ minWidth: "8rem" }}>Equivale a</th>
-                    {editable && puedeCrear && <th style={{ width: "2.5rem" }} />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(editable ? componentesForm : version.componentes || []).map((c, idx) => {
-                    if (!editable) {
-                      return (
-                        <tr key={c.uuid || idx}>
-                          <td className="small">{c.articulo?.nombre || "—"}</td>
-                          <td className="small text-secondary">{c.unidad?.simbolo || ""}</td>
-                          <td className="small">{Number(c.cantidad).toFixed(2)}</td>
-                          <td className="small text-secondary">—</td>
-                        </tr>
-                      );
-                    }
-                    const unidadesFila = unidadesCompatiblesPara(c.articuloUuid);
-                    const articuloFila = articulos.find((a) => a.uuid === c.articuloUuid);
-                    const unidadBaseUuid = articuloFila?.unidadMedida?.uuid;
-                    const cantidadNum = Number(c.cantidad);
-                    // Preview en vivo de a cuánto equivale lo que se está
-                    // midiendo, en la unidad BASE del artículo — la misma
-                    // conversión que el backend aplica de verdad al
-                    // descontar inventario (ver unidadConversion.js en la
-                    // API), acá solo se muestra antes de guardar.
-                    const mostrarConversion =
-                      c.unidadUuid && unidadBaseUuid && c.unidadUuid !== unidadBaseUuid && Number.isFinite(cantidadNum) && cantidadNum > 0;
-                    const cantidadConvertida = mostrarConversion
-                      ? convertirCantidad(grafoUnidades, c.unidadUuid, unidadBaseUuid, cantidadNum)
-                      : null;
-                    const unidadBaseSimbolo = articuloFila?.unidadMedida?.simbolo;
-                    return (
-                      <tr key={idx}>
-                        <td>
-                          <select className="form-select form-select-sm rounded-3" value={c.articuloUuid} onChange={(e) => updateComponente(idx, "articuloUuid", e.target.value)}>
-                            <option value="">Selecciona...</option>
-                            {articulos.map((a) => (
-                              <option key={a.uuid} value={a.uuid}>
-                                {a.codigo ? `${a.codigo} — ${a.nombre}` : a.nombre}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <select className="form-select form-select-sm rounded-3" value={c.unidadUuid} onChange={(e) => updateComponente(idx, "unidadUuid", e.target.value)}>
-                            <option value="">Sin unidad</option>
-                            {unidadesFila.map((u) => (
-                              <option key={u.uuid} value={u.uuid}>
-                                {u.simbolo}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            className="form-control form-control-sm rounded-3"
-                            value={c.cantidad}
-                            onChange={(e) => updateComponente(idx, "cantidad", e.target.value)}
-                          />
-                        </td>
-                        <td className="small text-secondary text-nowrap">
-                          {mostrarConversion &&
-                            (cantidadConvertida === null
-                              ? "sin conversión registrada"
-                              : `= ${cantidadConvertida.toLocaleString("es-CO", { maximumFractionDigits: 4 })} ${unidadBaseSimbolo || ""}`)}
-                        </td>
-                        <td>
-                          {!c.uuid && componentesForm.length > 1 && (
-                            <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex text-danger" onClick={() => removeComponenteRow(idx)}>
-                              <FiX size={16} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {(editable ? componentesForm : version.componentes || []).length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="text-center text-secondary small py-2">
-                        Sin componentes registrados todavía.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {componentesError && <div className="alert alert-danger py-2 small">{componentesError}</div>}
-            {editable && puedeCrear && (
-              <button type="button" className="btn btn-brand btn-sm rounded-3" disabled={savingComponentes} onClick={guardarComponentes}>
-                {savingComponentes ? "Guardando..." : "Guardar componentes"}
-              </button>
-            )}
+        {/* ─── Insumos y mediciones ───
+            Un solo contenedor: agregar un insumo a la receta y registrar
+            su medición de pH/CE es UNA sola acción (ver handleAgregarEtapa)
+            — antes había que guardar "Componentes de la receta" aparte
+            antes de poder elegirlo en la medición. */}
+        <div className="card border-0 rounded-4 mb-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div className="px-3 py-1" style={{ backgroundColor: "#166534" }}>
+            <h2 className="h6 fw-bold mb-0 text-white text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "0.03em" }}>
+              Insumos y mediciones
+            </h2>
           </div>
-        </div>
+          <div className="p-3">
+            {editable && puedeCrear && (
+              <form onSubmit={handleAgregarEtapa} className="pt-3 pb-3 mb-3 border-top">
+                <div className="mb-2">
+                  <p className="small fw-medium mb-1">Registrar nueva etapa</p>
+                  <div className="btn-group btn-group-sm" role="group">
+                    {[
+                      ["NUEVO_INSUMO", "Agregar insumo"],
+                      ["CORRECCION_PH", "Corrección de pH"],
+                    ].map(([valor, label]) => {
+                      const deshabilitado =
+                        homogeneidadFalla || (valor === "NUEVO_INSUMO" && bloqueadoPorNoCumple) || (valor === "CORRECCION_PH" && ceSinCorregir);
+                      return (
+                        <button
+                          key={valor}
+                          type="button"
+                          className={`btn ${etapaForm.modo === valor ? "btn-brand" : "btn-outline-secondary"}`}
+                          disabled={deshabilitado}
+                          title={
+                            homogeneidadFalla
+                              ? "La mezcla no dio homogénea — hay que finalizar la prueba"
+                              : valor === "CORRECCION_PH" && ceSinCorregir
+                                ? "La CE no cumple — corregir el pH no la arregla, hay que finalizar la prueba"
+                                : deshabilitado
+                                  ? "La última medición no cumple — corrige el pH o finaliza la prueba"
+                                  : undefined
+                          }
+                          onClick={() =>
+                            setEtapaForm((f) => ({
+                              ...f,
+                              modo: valor,
+                              componenteUuid: "",
+                              articuloUuid: "",
+                              cantidad: "1",
+                              // Precarga la unidad más chica compatible con
+                              // el Regulador de pH (ej. gramo en vez de Kg)
+                              // — se dosifica en cantidades chicas.
+                              unidadUuid: valor === "CORRECCION_PH" ? unidadMasPequenaPara(reguladorPhUuid) : "",
+                            }))
+                          }
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {homogeneidadFalla ? (
+                    <p className="small mb-0 mt-2" style={{ color: "#b91c1c" }}>
+                      La mezcla no dio homogénea en la prueba de homogeneidad (se separó) — no hay forma de
+                      corregirlo ajustando pH o insumos. Finaliza la prueba (quedará como no válida).
+                    </p>
+                  ) : ceSinCorregir ? (
+                    <p className="small mb-0 mt-2" style={{ color: "#b91c1c" }}>
+                      La conductividad eléctrica (CE) no cumple — no hay forma de corregirla en esta prueba. Finaliza
+                      la prueba (quedará como no válida).
+                    </p>
+                  ) : (
+                    bloqueadoPorNoCumple && (
+                      <p className="small mb-0 mt-2" style={{ color: "#b91c1c" }}>
+                        La última medición no cumple los parámetros de pH/CE — corrige el pH o finaliza la prueba.
+                      </p>
+                    )
+                  )}
+                </div>
+                {!ceSinCorregir && !homogeneidadFalla && (
+                <div className="d-flex flex-wrap flex-md-nowrap align-items-end gap-2">
+                  {etapaForm.modo === "CORRECCION_PH" ? (
+                    <>
+                      <div style={{ minWidth: "8rem" }} className="flex-shrink-0">
+                        <label className="form-label small mb-1">Insumo usado</label>
+                        {/* Fijo: la corrección de pH siempre usa "Regulador
+                            de pH" — el backend lo resuelve/crea solo (ver
+                            mezcla.service.js#agregarEtapa), no se elige acá. */}
+                        <input type="text" disabled className="form-control form-control-sm rounded-3" value="Regulador de pH" />
+                      </div>
+                      <div style={{ width: "7rem" }} className="flex-shrink-0">
+                        <label className="form-label small mb-1">Unidad</label>
+                        <select
+                          className="form-select form-select-sm rounded-3"
+                          required
+                          value={etapaForm.unidadUuid}
+                          onChange={(e) => setEtapaForm((f) => ({ ...f, unidadUuid: e.target.value }))}
+                        >
+                          <option value="">—</option>
+                          {unidades.map((u) => (
+                            <option key={u.uuid} value={u.uuid}>
+                              {u.simbolo || u.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ width: "5.5rem" }} className="flex-shrink-0">
+                        <label className="form-label small mb-1">Cantidad</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          required
+                          className="form-control form-control-sm rounded-3"
+                          value={etapaForm.cantidad}
+                          onChange={(e) => setEtapaForm((f) => ({ ...f, cantidad: e.target.value }))}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-grow-1" style={{ minWidth: "10rem" }}>
+                        <label className="form-label small mb-1">Insumo a agregar</label>
+                        <select
+                          className="form-select form-select-sm rounded-3"
+                          required
+                          value={etapaForm.articuloUuid}
+                          onChange={(e) =>
+                            setEtapaForm((f) => ({ ...f, articuloUuid: e.target.value, unidadUuid: unidadMasPequenaPara(e.target.value) }))
+                          }
+                        >
+                          <option value="">Selecciona un insumo</option>
+                          {articulos
+                            .filter((a) => !componentesForm.some((c) => c.articuloUuid === a.uuid))
+                            .map((a) => (
+                              <option key={a.uuid} value={a.uuid}>
+                                {a.nombre}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <div style={{ width: "7rem" }} className="flex-shrink-0">
+                        <label className="form-label small mb-1">Unidad</label>
+                        <select
+                          className="form-select form-select-sm rounded-3"
+                          required
+                          value={etapaForm.unidadUuid}
+                          onChange={(e) => setEtapaForm((f) => ({ ...f, unidadUuid: e.target.value }))}
+                        >
+                          <option value="">—</option>
+                          {unidadesCompatiblesPara(etapaForm.articuloUuid).map((u) => (
+                            <option key={u.uuid} value={u.uuid}>
+                              {u.simbolo || u.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ width: "5.5rem" }} className="flex-shrink-0">
+                        <label className="form-label small mb-1">Cantidad</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          required
+                          className="form-control form-control-sm rounded-3"
+                          value={etapaForm.cantidad}
+                          onChange={(e) => setEtapaForm((f) => ({ ...f, cantidad: e.target.value }))}
+                        />
+                      </div>
+                    </>
+                  )}
+                  <div style={{ width: "5.5rem" }} className="flex-shrink-0">
+                    <label className="form-label small mb-1">pH</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="14"
+                      required
+                      className="form-control form-control-sm rounded-3"
+                      value={etapaForm.ph}
+                      onChange={(e) => setEtapaForm((f) => ({ ...f, ph: e.target.value }))}
+                    />
+                  </div>
+                  <div style={{ width: "5.5rem" }} className="flex-shrink-0">
+                    <label className="form-label small mb-1">CE</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      className="form-control form-control-sm rounded-3"
+                      value={etapaForm.ce}
+                      onChange={(e) => setEtapaForm((f) => ({ ...f, ce: e.target.value }))}
+                    />
+                  </div>
+                  <div className="flex-grow-1" style={{ minWidth: "10rem" }}>
+                    <label className="form-label small mb-1">Observaciones</label>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm rounded-3"
+                      value={etapaForm.observaciones}
+                      onChange={(e) => setEtapaForm((f) => ({ ...f, observaciones: e.target.value }))}
+                    />
+                  </div>
+                  <label
+                    className={`btn btn-sm rounded-3 d-inline-flex align-items-center justify-content-center gap-1 flex-shrink-0 px-2 mb-0 ${
+                      etapaFotos.length ? "btn-brand" : "btn-outline-secondary"
+                    }`}
+                    style={{ minHeight: 31 }}
+                    title={
+                      etapaFotos.length
+                        ? `${etapaFotos.length} evidencia(s) adjunta(s) — clic para quitar`
+                        : "Adjuntar evidencia fotográfica (galería o cámara, obligatoria)"
+                    }
+                    onClick={etapaFotos.length ? (e) => { e.preventDefault(); limpiarEtapaFotos(); } : undefined}
+                  >
+                    <FiCamera size={16} />
+                    {etapaFotos.length > 0 && (
+                      <span className="fw-bold" style={{ fontSize: 12, lineHeight: 1, color: "#fff" }}>
+                        {etapaFotos.length}
+                      </span>
+                    )}
+                    {!etapaFotos.length && (
+                      <input type="file" accept="image/*" multiple className="d-none" onChange={handleSelectEtapaFiles} />
+                    )}
+                  </label>
+                  <button
+                    type="submit"
+                    className="btn btn-brand btn-sm rounded-3 d-inline-flex align-items-center justify-content-center flex-shrink-0 p-0"
+                    style={{ width: 31, height: 31 }}
+                    disabled={savingEtapa || etapaFotos.length === 0}
+                    title={etapaFotos.length === 0 ? "Adjunta una foto antes de registrar" : "Registrar etapa"}
+                  >
+                    {savingEtapa ? <span className="spinner-border spinner-border-sm" /> : <FiPlus size={18} />}
+                  </button>
+                </div>
+                )}
+                {etapaError && <div className="alert alert-danger py-2 small mt-2">{etapaError}</div>}
+              </form>
+            )}
 
-        {/* ─── Etapas de medición ─── */}
-        <div className="card border-0 rounded-4 mb-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <div className="card-body p-3">
-            <h2 className="h6 fw-bold mb-2">Etapas de medición</h2>
             <div className="table-responsive mb-3">
               <table className="table table-sm align-middle mb-0">
                 <thead>
-                  <tr className="table-light small text-secondary">
-                    <th className="text-center">#</th>
-                    <th>Componente incorporado</th>
-                    <th className="text-center">pH</th>
-                    <th className="text-center">CE</th>
-                    <th className="text-center">Resultado</th>
-                    <th className="text-center">Fecha</th>
-                    <th>Observaciones</th>
-                    <th className="text-center">Evidencia</th>
-                    {editable && puedeCrear && <th style={{ width: "2.5rem" }} />}
+                  <tr className="small" style={{ backgroundColor: "#f0fdf4" }}>
+                    <th className="text-center" style={{ color: "#166534" }}>#</th>
+                    <th style={{ color: "#166534" }}>Componente incorporado</th>
+                    <th className="text-center" style={{ color: "#166534" }}>pH</th>
+                    <th className="text-center" style={{ color: "#166534" }}>CE</th>
+                    <th className="text-center" style={{ color: "#166534" }}>Resultado</th>
+                    <th className="text-center" style={{ color: "#166534" }}>Fecha</th>
+                    <th style={{ color: "#166534" }}>Observaciones</th>
+                    <th className="text-center" style={{ color: "#166534" }}>Evidencia</th>
+                    {editable && puedeCrear && <th style={{ width: "2.5rem", backgroundColor: "#f0fdf4" }} />}
                   </tr>
                 </thead>
                 <tbody>
@@ -899,7 +1166,36 @@ export default function MezclaPruebaDetallePage() {
                   {(version.etapas || []).map((et) => (
                     <tr key={et.uuid}>
                       <td className="small text-center">{et.numero}</td>
-                      <td className="small">{et.componente?.articulo?.nombre || "—"}</td>
+                      <td className="small">
+                        {et.tipoEtapa === "CORRECCION_PH" ? (
+                          <div className="d-flex align-items-center gap-1 flex-wrap">
+                            <span
+                              className="badge rounded-pill small"
+                              style={{ backgroundColor: "#fef3c7", color: "#b45309" }}
+                            >
+                              Corrección pH
+                            </span>
+                            <span className="text-secondary">
+                              {et.articuloCorreccion?.nombre}
+                              {et.cantidadCorreccion != null &&
+                                ` — ${Number(et.cantidadCorreccion).toLocaleString("es-CO", { maximumFractionDigits: 2 })} ${
+                                  et.unidadCorreccion?.simbolo || ""
+                                }`}
+                            </span>
+                          </div>
+                        ) : et.componente ? (
+                          <>
+                            {et.componente.articulo?.nombre}
+                            <span className="text-secondary">
+                              {" — "}
+                              {Number(et.componente.cantidad).toLocaleString("es-CO", { maximumFractionDigits: 2 })}{" "}
+                              {et.componente.unidad?.simbolo || ""}
+                            </span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="small text-center">{Number(et.ph).toFixed(2)}</td>
                       <td className="small text-center">{Number(et.ce).toFixed(2)}</td>
                       <td className="small text-center">
@@ -915,7 +1211,7 @@ export default function MezclaPruebaDetallePage() {
                         </span>
                       </td>
                       <td className="small text-secondary text-center">
-                        {et.medidoEn ? new Date(et.medidoEn).toLocaleString("es-CO", { timeZone: "America/Bogota" }) : "—"}
+                        {et.medidoEn ? parseFechaUTC(et.medidoEn).toLocaleString("es-CO", { timeZone: "America/Bogota" }) : "—"}
                       </td>
                       <td className="small text-secondary">{et.observaciones || "—"}</td>
                       <td className="text-center">
@@ -972,183 +1268,333 @@ export default function MezclaPruebaDetallePage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
 
-            {editable && puedeCrear && (
-              <form onSubmit={handleAgregarEtapa} className="border-top pt-3">
-                <p className="small fw-medium mb-2">Registrar nueva etapa</p>
-                <div className="d-flex flex-wrap flex-md-nowrap align-items-end gap-2">
-                  <div className="flex-grow-1" style={{ minWidth: "12rem" }}>
-                    <label className="form-label small mb-1">Componente incorporado</label>
-                    <select
-                      className="form-select form-select-sm rounded-3"
-                      value={etapaForm.componenteUuid}
-                      onChange={(e) => setEtapaForm((f) => ({ ...f, componenteUuid: e.target.value }))}
+        {/* ─── Receta actual ─── */}
+        <div className="card border-0 rounded-4 mb-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div className="px-3 py-1" style={{ backgroundColor: "#166534" }}>
+            <h2 className="h6 fw-bold mb-0 text-white text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "0.03em" }}>
+              Receta actual
+            </h2>
+          </div>
+          <div className="p-3">
+            <div className="table-responsive">
+              <table className="table table-sm align-middle mb-2">
+                <thead>
+                  <tr className="small" style={{ backgroundColor: "#f0fdf4" }}>
+                    <th className="text-start" style={{ minWidth: "14rem", color: "#166534" }}>Artículo</th>
+                    <th className="text-center" style={{ width: "8rem", color: "#166534" }}>Cantidad</th>
+                    <th className="text-center" style={{ minWidth: "8rem", color: "#166534" }}>Unidad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(editable ? componentesForm : version.componentes || []).map((c, idx) => {
+                    if (!editable) {
+                      // Conversión a la unidad BASE del artículo (para
+                      // consumirStockConReceta) — ya no se muestra en la
+                      // tabla (el PDF/reporte no la incluye), pero se sigue
+                      // calculando acá por si en el futuro hace falta.
+                      return (
+                        <tr key={c.uuid || idx}>
+                          <td className="small">{c.articulo?.nombre || "—"}</td>
+                          <td className="small text-center">{Number(c.cantidad).toFixed(2)}</td>
+                          <td className="small text-center text-secondary">{c.unidad?.simbolo || "—"}</td>
+                        </tr>
+                      );
+                    }
+                    const unidadesFila = unidadesCompatiblesPara(c.articuloUuid);
+                    // El artículo de una fila ya guardada no se cambia
+                    // (pedido explícito) — solo cantidad/unidad son
+                    // editables acá.
+                    const articuloFila = articulos.find((a) => a.uuid === c.articuloUuid);
+                    return (
+                      <tr key={idx}>
+                        <td className="small">{articuloFila ? (articuloFila.codigo ? `${articuloFila.codigo} — ${articuloFila.nombre}` : articuloFila.nombre) : "—"}</td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            className="form-control form-control-sm rounded-3 text-center"
+                            value={c.cantidad}
+                            onChange={(e) => updateComponente(idx, "cantidad", e.target.value)}
+                            onBlur={(e) => updateComponenteYGuardar(idx, "cantidad", e.target.value)}
+                          />
+                        </td>
+                        <td>
+                          <select className="form-select form-select-sm rounded-3" value={c.unidadUuid} onChange={(e) => updateComponenteYGuardar(idx, "unidadUuid", e.target.value)}>
+                            <option value="">Sin unidad</option>
+                            {unidadesFila.map((u) => (
+                              <option key={u.uuid} value={u.uuid}>
+                                {u.simbolo}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {(editable ? componentesForm : version.componentes || []).length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="text-center text-secondary small py-2">
+                        Sin insumos agregados todavía — agrégalos desde &quot;Registrar nueva etapa&quot;, arriba.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {componentesError && <div className="alert alert-danger py-2 small">{componentesError}</div>}
+            {savingComponentes && <p className="small text-secondary mb-0">Guardando...</p>}
+          </div>
+        </div>
+
+        {/* ─── Prueba de homogeneidad ───
+            A los 15 min, 30 min y 1 hora de mezclada se confirma que sigue
+            homogénea (no se separó), con foto de evidencia en cada punto. */}
+        <div className="card border-0 rounded-4 mb-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div className="px-3 py-1" style={{ backgroundColor: "#166534" }}>
+            <h2 className="h6 fw-bold mb-0 text-white text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "0.03em" }}>
+              Prueba de homogeneidad
+            </h2>
+          </div>
+          <div className="p-3">
+            <p className="text-secondary small mb-3">
+              Verifica, con foto, que la mezcla sigue homogénea (no se separó) a los 15 minutos, 30 minutos y 1 hora.
+            </p>
+            <div className="row g-3">
+              {INTERVALOS_HOMOGENEIDAD.map(([intervalo, label], idx) => {
+                const punto = (version.homogeneidad || []).find((h) => h.intervalo === intervalo);
+                const form = homogForm[intervalo] || { homogenea: "", fotos: [] };
+                // Se registra en orden: no se puede cargar 30 min sin
+                // haber registrado 15 min antes (y que haya dado
+                // homogénea) — evita que, como pasó, se cargue un punto
+                // posterior mientras uno anterior todavía no se guardó o
+                // ya falló (ver homogeneidadFalla, más arriba).
+                const anteriores = INTERVALOS_HOMOGENEIDAD.slice(0, idx).map(([i]) => i);
+                const faltaAnterior = anteriores.some((i) => {
+                  const p = (version.homogeneidad || []).find((h) => h.intervalo === i);
+                  return !p || p.homogenea !== true;
+                });
+                return (
+                  <div key={intervalo} className="col-12 col-md-4">
+                    <div
+                      className="rounded-4 p-3 h-100"
+                      style={{
+                        border: "1px solid #e5e7eb",
+                        backgroundColor: punto ? (punto.homogenea ? "#f0fdf4" : "#fef2f2") : "#fff",
+                      }}
                     >
-                      <option value="">Solo medición (sin componente nuevo)</option>
-                      {(version.componentes || []).map((c) => (
-                        <option key={c.uuid} value={c.uuid}>
-                          {c.articulo?.nombre}
-                        </option>
-                      ))}
-                    </select>
+                      <div className="d-flex align-items-center gap-2 mb-3">
+                        <div
+                          className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                          style={{ width: 30, height: 30, backgroundColor: "#f0fdf4", color: "#166534" }}
+                        >
+                          <FiClock size={15} />
+                        </div>
+                        <p className="small fw-bold mb-0">{label}</p>
+                      </div>
+
+                      {punto ? (
+                        <>
+                          <div
+                            className="d-inline-flex align-items-center gap-1 rounded-pill px-2 py-1 small fw-medium mb-2"
+                            style={
+                              punto.homogenea
+                                ? { backgroundColor: "#d1fae5", color: "#047857" }
+                                : { backgroundColor: "#fee2e2", color: "#b91c1c" }
+                            }
+                          >
+                            {punto.homogenea ? <FiCheckCircle size={13} /> : <FiXCircle size={13} />}
+                            {punto.homogenea ? "Homogénea" : "No homogénea"}
+                          </div>
+                          <div className="small text-secondary mb-2">
+                            {punto.medidoEn ? parseFechaUTC(punto.medidoEn).toLocaleString("es-CO", { timeZone: "America/Bogota" }) : "—"}
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            {(punto.fotos || []).map((foto) => (
+                              <div key={foto.uuid} className="position-relative" style={{ width: 64, height: 64 }}>
+                                {fotoUrls[foto.uuid] ? (
+                                  <img
+                                    src={fotoUrls[foto.uuid]}
+                                    alt={foto.nombreOriginal}
+                                    className="rounded-3 border"
+                                    style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
+                                    onClick={() =>
+                                      setFotoAmpliada({
+                                        fotos: (punto.fotos || []).map((f) => ({ src: fotoUrls[f.uuid], alt: f.nombreOriginal || "evidencia" })),
+                                        idx: (punto.fotos || []).findIndex((f) => f.uuid === foto.uuid),
+                                      })
+                                    }
+                                  />
+                                ) : (
+                                  <div className="rounded-3 border d-flex align-items-center justify-content-center small text-secondary" style={{ width: "100%", height: "100%" }}>
+                                    ...
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {(punto.fotos || []).length === 0 && <p className="text-secondary small mb-0">Sin foto adjunta.</p>}
+                          </div>
+                        </>
+                      ) : editable && puedeCrear && !homogeneidadFalla && !faltaAnterior ? (
+                        <>
+                          <div className="d-flex gap-2 mb-3">
+                            {[
+                              ["si", "Sí", FiCheckCircle, "#d1fae5", "#047857", "#a7f3d0"],
+                              ["no", "No", FiXCircle, "#fee2e2", "#b91c1c", "#fecaca"],
+                            ].map(([valor, texto, Icono, bg, color, borde]) => {
+                              const activo = form.homogenea === valor;
+                              return (
+                                <button
+                                  key={valor}
+                                  type="button"
+                                  className="btn btn-sm rounded-3 flex-fill d-flex align-items-center justify-content-center gap-1 fw-medium"
+                                  style={
+                                    activo
+                                      ? { backgroundColor: bg, color, border: `1px solid ${borde}` }
+                                      : { backgroundColor: "#fff", color: "#6b7280", border: "1px solid #d1d5db" }
+                                  }
+                                  onClick={() => setHomogForm((prev) => ({ ...prev, [intervalo]: { ...form, homogenea: valor } }))}
+                                >
+                                  <Icono size={14} /> {texto}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="d-flex flex-wrap gap-2 align-items-center mb-3">
+                            <label
+                              className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                              style={{ width: 40, height: 40, border: "1px dashed #9ca3af", color: "#6b7280", cursor: "pointer" }}
+                              title="Adjuntar foto"
+                            >
+                              <FiCamera size={16} />
+                              <input type="file" accept="image/*" multiple className="d-none" onChange={(e) => handleSelectHomogFiles(intervalo, e)} />
+                            </label>
+                            {form.fotos.map((p, idx) => (
+                              <img
+                                key={idx}
+                                src={p.previewUrl}
+                                alt=""
+                                className="rounded-3 border flex-shrink-0"
+                                style={{ width: 40, height: 40, objectFit: "cover" }}
+                              />
+                            ))}
+                            {form.fotos.length === 0 && <span className="small text-secondary">Sin foto todavía (obligatoria)</span>}
+                          </div>
+
+                          <button
+                            type="button"
+                            className="btn btn-brand btn-sm rounded-3 w-100 d-flex align-items-center justify-content-center gap-1"
+                            disabled={savingHomog === intervalo || form.fotos.length === 0}
+                            title={form.fotos.length === 0 ? "Adjunta una foto antes de registrar" : undefined}
+                            onClick={() => handleRegistrarHomogeneidad(intervalo)}
+                          >
+                            {savingHomog === intervalo ? (
+                              <span className="spinner-border spinner-border-sm" />
+                            ) : (
+                              <FiCheckCircle size={14} />
+                            )}
+                            {savingHomog === intervalo ? "Guardando..." : "Registrar"}
+                          </button>
+                          {homogError[intervalo] && <div className="alert alert-danger py-1 px-2 small mt-2 mb-0">{homogError[intervalo]}</div>}
+                        </>
+                      ) : homogeneidadFalla ? (
+                        <p className="small mb-0" style={{ color: "#b91c1c" }}>
+                          La prueba ya no dio homogénea — finaliza la prueba.
+                        </p>
+                      ) : faltaAnterior ? (
+                        <p className="text-secondary small mb-0">Registra primero el punto anterior.</p>
+                      ) : (
+                        <p className="text-secondary small mb-0">Sin registrar.</p>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ width: "5.5rem" }} className="flex-shrink-0">
-                    <label className="form-label small mb-1">pH</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="14"
-                      required
-                      className="form-control form-control-sm rounded-3"
-                      value={etapaForm.ph}
-                      onChange={(e) => setEtapaForm((f) => ({ ...f, ph: e.target.value }))}
-                    />
-                  </div>
-                  <div style={{ width: "5.5rem" }} className="flex-shrink-0">
-                    <label className="form-label small mb-1">CE</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      required
-                      className="form-control form-control-sm rounded-3"
-                      value={etapaForm.ce}
-                      onChange={(e) => setEtapaForm((f) => ({ ...f, ce: e.target.value }))}
-                    />
-                  </div>
-                  <div className="flex-grow-1" style={{ minWidth: "10rem" }}>
-                    <label className="form-label small mb-1">Observaciones</label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Información general ───
+            Al final: acá se asigna el nombre y, en el mismo paso, se
+            finaliza la prueba (antes eran dos acciones separadas). */}
+        <div className="card border-0 rounded-4 mb-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div className="px-3 py-2" style={{ backgroundColor: "#166534" }}>
+            <h2 className="h6 fw-bold mb-0 text-white text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "0.03em" }}>
+              Información general
+            </h2>
+          </div>
+          <div className="p-3">
+            {editable && puedeCrear ? (
+              <>
+                {!infoCompleta && (
+                  <p className="small text-secondary mb-2">
+                    Al completar el nombre y finalizar, se generará la salida de inventario por los componentes
+                    usados y la prueba ya no se podrá editar. El artículo elaborado (producto) todavía no existe: se
+                    crea más adelante, a partir de la prueba exitosa, al usar &quot;Crear elaborado&quot;.
+                  </p>
+                )}
+                <div className="row g-3 align-items-end mb-2">
+                  <div className="col-12 col-md-8">
+                    <label className="form-label small fw-medium">
+                      Nombre <span className="text-danger">*</span>
+                    </label>
                     <input
                       type="text"
-                      className="form-control form-control-sm rounded-3"
-                      value={etapaForm.observaciones}
-                      onChange={(e) => setEtapaForm((f) => ({ ...f, observaciones: e.target.value }))}
+                      className="form-control rounded-3"
+                      maxLength={150}
+                      value={infoForm.nombre}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, nombre: e.target.value }))}
                     />
                   </div>
-                  <label
-                    className={`btn btn-sm rounded-3 d-inline-flex align-items-center justify-content-center gap-1 flex-shrink-0 px-2 mb-0 ${
-                      etapaFotos.length ? "btn-brand" : "btn-outline-secondary"
-                    }`}
-                    style={{ minHeight: 31 }}
-                    title={
-                      etapaFotos.length
-                        ? `${etapaFotos.length} evidencia(s) adjunta(s) — clic para quitar`
-                        : "Adjuntar evidencia fotográfica (galería o cámara, opcional)"
-                    }
-                    onClick={etapaFotos.length ? (e) => { e.preventDefault(); limpiarEtapaFotos(); } : undefined}
-                  >
-                    <FiCamera size={16} />
-                    {etapaFotos.length > 0 && (
-                      <span className="fw-bold" style={{ fontSize: 12, lineHeight: 1, color: "#fff" }}>
-                        {etapaFotos.length}
-                      </span>
-                    )}
-                    {!etapaFotos.length && (
-                      <input type="file" accept="image/*" multiple className="d-none" onChange={handleSelectEtapaFiles} />
-                    )}
-                  </label>
-                  <button
-                    type="submit"
-                    className="btn btn-brand btn-sm rounded-3 d-inline-flex align-items-center justify-content-center flex-shrink-0 p-0"
-                    style={{ width: 31, height: 31 }}
-                    disabled={savingEtapa}
-                    title="Registrar etapa"
-                  >
-                    {savingEtapa ? <span className="spinner-border spinner-border-sm" /> : <FiPlus size={18} />}
-                  </button>
-                </div>
-                {etapaError && <div className="alert alert-danger py-2 small mt-2">{etapaError}</div>}
-              </form>
-            )}
-          </div>
-        </div>
-
-        {/* ─── Evidencia fotográfica ─── */}
-        <div className="card border-0 rounded-4 mb-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <div className="card-body p-3">
-            <h2 className="h6 fw-bold mb-1">Evidencia fotográfica general</h2>
-            <p className="text-secondary small mb-2">La evidencia por etapa se agrega en la tabla de arriba.</p>
-
-            <div className="d-flex flex-wrap gap-2 mb-3">
-              {(version.fotos || []).map((foto, idxFoto) => (
-                <div key={foto.uuid} className="position-relative" style={{ width: 96, height: 96 }}>
-                  {fotoUrls[foto.uuid] ? (
-                    <img
-                      src={fotoUrls[foto.uuid]}
-                      alt={foto.nombreOriginal}
-                      className="rounded-3 border"
-                      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
-                      onClick={() =>
-                        setFotoAmpliada({
-                          fotos: (version.fotos || []).map((f) => ({
-                            src: fotoUrls[f.uuid],
-                            alt: f.nombreOriginal || "evidencia",
-                          })),
-                          idx: idxFoto,
-                        })
-                      }
-                    />
-                  ) : (
-                    <div className="rounded-3 border d-flex align-items-center justify-content-center small text-secondary" style={{ width: "100%", height: "100%" }}>
-                      ...
-                    </div>
-                  )}
-                  {editable && puedeEditar && (
+                  <div className="col-12 col-md-4">
                     <button
                       type="button"
-                      className="btn btn-sm btn-danger rounded-circle position-absolute d-flex align-items-center justify-content-center p-0"
-                      style={{ width: 22, height: 22, top: -6, right: -6 }}
-                      title="Eliminar foto"
-                      onClick={() => handleEliminarFoto(foto.uuid)}
+                      className="btn btn-brand btn-sm rounded-3 w-100"
+                      disabled={savingInfo || finalizando}
+                      onClick={handleGuardarYFinalizar}
                     >
-                      <FiX size={13} />
+                      {savingInfo ? "Guardando..." : finalizando ? "Finalizando..." : "Guardar y finalizar prueba"}
                     </button>
-                  )}
-                </div>
-              ))}
-              {(version.fotos || []).length === 0 && pendingFotos.length === 0 && (
-                <p className="text-secondary small mb-0">Sin fotos registradas todavía.</p>
-              )}
-            </div>
-
-            {editable && puedeCrear && (
-              <>
-                {pendingFotos.length > 0 && (
-                  <div className="d-flex flex-wrap gap-2 mb-3">
-                    {pendingFotos.map((p, idx) => (
-                      <div key={idx} className="position-relative" style={{ width: 96, height: 96 }}>
-                        <img src={p.previewUrl} alt="" className="rounded-3 border" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.75 }} />
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-danger rounded-circle position-absolute d-flex align-items-center justify-content-center p-0"
-                          style={{ width: 22, height: 22, top: -6, right: -6 }}
-                          title="Quitar (todavía no se ha subido)"
-                          onClick={() => removePendingFoto(idx)}
-                        >
-                          <FiX size={13} />
-                        </button>
-                      </div>
-                    ))}
                   </div>
-                )}
-
-                <div className="d-flex flex-wrap gap-2 align-items-center">
-                  <label className="btn btn-outline-secondary btn-sm rounded-3 d-inline-flex align-items-center gap-1 mb-0">
-                    <FiCamera size={14} /> Cámara / Galería
-                    <input type="file" accept="image/*" multiple className="d-none" onChange={handleSelectFiles} />
-                  </label>
-                  {pendingFotos.length > 0 && (
-                    <button type="button" className="btn btn-brand btn-sm rounded-3" disabled={uploadingFotos} onClick={handleUploadFotos}>
-                      {uploadingFotos ? "Subiendo..." : `Subir ${pendingFotos.length} foto(s)`}
-                    </button>
-                  )}
                 </div>
-                {fotosError && <div className="alert alert-danger py-2 small mt-2">{fotosError}</div>}
+                {infoError && <div className="alert alert-danger py-2 small mb-0">{infoError}</div>}
+                {finalizarError && <div className="alert alert-danger py-2 small mb-0">{finalizarError}</div>}
               </>
+            ) : (
+              <p className="small text-secondary mb-0">
+                Producto elaborado:{" "}
+                <strong>{mezcla.articuloElaborado?.nombre || "Aún no generado"}</strong>
+              </p>
             )}
           </div>
         </div>
+
+        {/* ─── Trazabilidad ─── último contenedor visible de la página. */}
+        {(version.finalizadaEn || version.aprobadaEn || version.operador) && (
+          <div className="card border-0 rounded-4 mb-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            <div className="px-3 py-1" style={{ backgroundColor: "#166534" }}>
+              <h2 className="h6 fw-bold mb-0 text-white text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "0.03em" }}>
+                Trazabilidad
+              </h2>
+            </div>
+            <div className="p-3">
+              <div className="row g-3">
+                <TrazaItem titulo="Iniciado por" fecha={version.created_at} usuario={version.operador} />
+                <TrazaItem titulo="Finalizado" fecha={version.finalizadaEn} mostrarUsuario={false} />
+                <TrazaItem
+                  titulo="Aprobado por"
+                  fecha={version.aprobadaEn}
+                  usuario={version.aprobadaPor}
+                  pendiente={version.estadoPrueba === "PENDIENTE_APROBACION"}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {elaboradoModalOpen && (
           <ModalShell title="Crear elaborado desde esta prueba" onClose={() => setElaboradoModalOpen(false)} size="lg">
@@ -1181,7 +1627,10 @@ export default function MezclaPruebaDetallePage() {
                       />
                     </div>
                     <div className="col-4">
-                      <label className="form-label small fw-medium">Código</label>
+                      <label className="form-label small fw-medium d-flex align-items-center gap-1">
+                        Código
+                        <FiInfo size={13} className="text-secondary" title="Sugerido automáticamente a partir del código de la prueba — lo puedes editar." />
+                      </label>
                       <input
                         type="text"
                         maxLength={50}
@@ -1207,7 +1656,6 @@ export default function MezclaPruebaDetallePage() {
                           </option>
                         ))}
                       </select>
-                      <p className="form-text small mb-0">Solo categorías de tipo Elaborado.</p>
                     </div>
                     <div className="col-3">
                       <label className="form-label small fw-medium">Unidad</label>
@@ -1225,51 +1673,39 @@ export default function MezclaPruebaDetallePage() {
                       </select>
                     </div>
                     <div className="col-3">
-                      <label className="form-label small fw-medium">Precio de venta</label>
+                      <label className="form-label small fw-medium">Cantidad</label>
                       <input
                         type="number"
                         step="0.01"
-                        min="0"
+                        min="0.01"
+                        required
                         className="form-control rounded-3"
-                        value={elaboradoForm.articuloPrecioVenta}
-                        onChange={(e) => setElaboradoForm((f) => ({ ...f, articuloPrecioVenta: e.target.value }))}
+                        value={elaboradoForm.cantidadElaborada}
+                        onChange={(e) => setElaboradoForm((f) => ({ ...f, cantidadElaborada: e.target.value }))}
                       />
+                   
                     </div>
                   </div>
                   <hr />
                 </>
               )}
 
-              <div className="row g-3 mb-3">
-                <div className="col-6">
-                  <label className="form-label small fw-medium">Cantidad a elaborar</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    required
-                    className="form-control rounded-3"
-                    value={elaboradoForm.cantidadElaborada}
-                    onChange={(e) => setElaboradoForm((f) => ({ ...f, cantidadElaborada: e.target.value }))}
-                  />
-                  {!mezcla.articuloElaborado && (
-                    <p className="form-text small mb-0">
-                      Esta cantidad queda como el rendimiento de la receta — de acá en más, producir más se escala
-                      a partir de este número.
-                    </p>
-                  )}
+              {mezcla.articuloElaborado && (
+                <div className="row g-3 mb-3">
+                  <div className="col-6">
+                    <label className="form-label small fw-medium">Cantidad a elaborar</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      className="form-control rounded-3"
+                      value={elaboradoForm.cantidadElaborada}
+                      onChange={(e) => setElaboradoForm((f) => ({ ...f, cantidadElaborada: e.target.value }))}
+                    />
+                  </div>
                 </div>
-                <div className="col-6">
-                  <label className="form-label small fw-medium">Fecha</label>
-                  <input
-                    type="date"
-                    required
-                    className="form-control rounded-3"
-                    value={elaboradoForm.fecha}
-                    onChange={(e) => setElaboradoForm((f) => ({ ...f, fecha: e.target.value }))}
-                  />
-                </div>
-              </div>
+              )}
               <div className="mb-3">
                 <label className="form-label small fw-medium">Almacén</label>
                 <select

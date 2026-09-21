@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiKey, FiSave, FiX, FiEye } from "react-icons/fi";
+import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiKey, FiSave, FiX, FiEye, FiInfo } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 import PermisosGroupedPicker from "@/components/PermisosGroupedPicker";
@@ -16,6 +16,7 @@ export default function RolesPage() {
 
   const [roleModal, setRoleModal] = useState(null); // null | {} | rol
   const [permisosModal, setPermisosModal] = useState(null); // null | rol
+  const [infoOpen, setInfoOpen] = useState(false);
 
   async function loadRoles() {
     setLoading(true);
@@ -63,7 +64,17 @@ export default function RolesPage() {
     <RequirePermission code="menu.maestros.roles">
     <div className="p-4 p-md-5">
       <div className="mb-4">
-        <h1 className="fw-bold h3 mb-1">Roles</h1>
+        <h1 className="fw-bold h3 mb-1 d-flex align-items-center gap-2">
+          Roles
+          <button
+            type="button"
+            className="btn btn-sm btn-link p-1 d-inline-flex text-decoration-none text-secondary"
+            title="¿Cómo funciona este módulo?"
+            onClick={() => setInfoOpen(true)}
+          >
+            <FiInfo size={17} />
+          </button>
+        </h1>
         <p className="text-secondary mb-0">
           Crea roles y define qué permisos incluye cada uno. El rol <strong>Administrador</strong> ya tiene todos los
           permisos del sistema.
@@ -93,12 +104,12 @@ export default function RolesPage() {
 
       <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
         <div className="table-responsive">
-          <table className="table table-hover mb-0 align-middle">
-            <thead className="table-light">
-              <tr>
+          <table className="table table-sm table-hover mb-0 align-middle">
+            <thead>
+              <tr className="table-light small text-secondary">
                 <th>Rol</th>
                 <th>Descripción</th>
-                <th className="text-end">Acciones</th>
+                <th className="text-center" style={{ minWidth: "26rem" }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -119,47 +130,52 @@ export default function RolesPage() {
               {!loading &&
                 roles.map((rol) => (
                   <tr key={rol.uuid}>
-                    <td className="fw-medium">{rol.nombre}</td>
+                    <td className="small fw-medium">{rol.nombre}</td>
                     <td className="text-secondary small">{rol.descripcion || "—"}</td>
-                    <td>
-                      <div className="d-flex justify-content-end gap-2 flex-nowrap">
-                        {hasPermission("roles.editar") && (
+                    <td className="text-center">
+                      <div className="d-flex justify-content-around flex-nowrap">
+                        {rol.nombre === "Administrador" && <span className="small text-secondary">—</span>}
+                        {rol.nombre !== "Administrador" && hasPermission("roles.editar") && (
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-warning"
+                            className="btn btn-sm btn-link p-1 d-inline-flex align-items-center gap-1 text-nowrap text-decoration-none"
                             title="Editar"
+                            style={{ color: "#d97706" }}
                             onClick={() => setRoleModal(rol)}
                           >
-                            <FiEdit2 />
+                            <FiEdit2 size={15} /> Editar
                           </button>
                         )}
-                        {hasPermission("roles.asignar_permiso") && (
+                        {rol.nombre !== "Administrador" && hasPermission("roles.asignar_permiso") && (
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap"
+                            className="btn btn-sm btn-link p-1 d-inline-flex align-items-center gap-1 text-nowrap text-decoration-none"
+                            title="Permisos"
+                            style={{ color: "#16a34a" }}
                             onClick={() => setPermisosModal(rol)}
                           >
-                            <FiKey /> Permisos
+                            <FiKey size={15} /> Permisos
                           </button>
                         )}
-                        {hasPermission("roles.asignar_permiso") && (
+                        {rol.nombre !== "Administrador" && hasPermission("roles.asignar_permiso") && (
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 text-nowrap"
+                            className="btn btn-sm btn-link p-1 d-inline-flex align-items-center gap-1 text-nowrap text-decoration-none text-secondary"
                             title="Ver el menú y las pantallas como este rol"
                             onClick={() => handleVerComo(rol)}
                           >
-                            <FiEye /> Ver como
+                            <FiEye size={15} /> Ver como
                           </button>
                         )}
-                        {hasPermission("roles.eliminar") && (
+                        {rol.nombre !== "Administrador" && hasPermission("roles.eliminar") && (
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-danger"
+                            className="btn btn-sm btn-link p-1 d-inline-flex align-items-center gap-1 text-nowrap text-decoration-none"
                             title="Eliminar"
+                            style={{ color: "#dc2626" }}
                             onClick={() => handleDelete(rol.uuid)}
                           >
-                            <FiTrash2 />
+                            <FiTrash2 size={15} /> Eliminar
                           </button>
                         )}
                       </div>
@@ -183,8 +199,45 @@ export default function RolesPage() {
       )}
 
       {permisosModal && <PermisosModal rol={permisosModal} onClose={() => setPermisosModal(null)} />}
+
+      {infoOpen && <InfoModal onClose={() => setInfoOpen(false)} />}
     </div>
     </RequirePermission>
+  );
+}
+
+// ─── Modal: cómo funciona el módulo ───
+function InfoModal({ onClose }) {
+  return (
+    <ModalShell title="¿Cómo funciona este módulo?" onClose={onClose}>
+      <p className="small text-secondary">
+        Un <strong>rol</strong> agrupa permisos y se asigna a los usuarios — así se controla qué puede ver y hacer
+        cada uno en el sistema. El rol <strong>Administrador</strong> siempre tiene todos los permisos y no se puede
+        editar.
+      </p>
+      <ul className="list-unstyled d-flex flex-column gap-2 small mb-0">
+        <li className="d-flex align-items-start gap-2">
+          <FiPlus className="flex-shrink-0 mt-1" />
+          <span><strong>Nuevo Rol</strong>: crea un rol vacío, sin permisos — se le asignan después con &quot;Permisos&quot;.</span>
+        </li>
+        <li className="d-flex align-items-start gap-2">
+          <FiEdit2 className="flex-shrink-0 mt-1" style={{ color: "#d97706" }} />
+          <span><strong>Editar</strong>: cambia el nombre y la descripción del rol.</span>
+        </li>
+        <li className="d-flex align-items-start gap-2">
+          <FiKey className="flex-shrink-0 mt-1" style={{ color: "#16a34a" }} />
+          <span><strong>Permisos</strong>: elige qué menús, pantallas y acciones puede usar este rol.</span>
+        </li>
+        <li className="d-flex align-items-start gap-2">
+          <FiEye className="flex-shrink-0 mt-1 text-secondary" />
+          <span><strong>Ver como</strong>: muestra el menú y las pantallas tal como las vería un usuario con este rol, sin cerrar tu sesión.</span>
+        </li>
+        <li className="d-flex align-items-start gap-2">
+          <FiTrash2 className="flex-shrink-0 mt-1" style={{ color: "#dc2626" }} />
+          <span><strong>Eliminar</strong>: borra el rol. Los usuarios que lo tenían asignado quedan sin ese rol.</span>
+        </li>
+      </ul>
+    </ModalShell>
   );
 }
 

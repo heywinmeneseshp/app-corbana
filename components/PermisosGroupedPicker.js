@@ -42,7 +42,11 @@ const MENU_TREE = [
         nombre: "Movimientos",
         prefijos: ["racimo_movimiento.ver", "racimo_movimiento.editar", "racimo_movimiento.eliminar", "racimo_movimiento.editar_historico", "racimo_movimiento.eliminar_masivo"],
       },
-      { codigo: "menu.racimos.registrar", nombre: "Registrar Embolse/Repique/Corte", prefijos: ["racimo_movimiento.crear", "racimo_movimiento.forzar_saldo_negativo"] },
+      {
+        codigo: "menu.racimos.registrar",
+        nombre: "Registrar Embolse/Repique/Corte",
+        prefijos: ["racimo_movimiento.crear", "racimo_movimiento.forzar_saldo_negativo", "racimo_movimiento.ajustar"],
+      },
       { codigo: "menu.racimos.saldos_lotes_cintas", nombre: "Saldos × Lotes y Cintas", prefijos: [] },
       // Detalle Semanal / Gráfico de Embolses / Gráfico de Repiques viven acá
       // por su código de permiso histórico (racimos.*), pero en el sidebar
@@ -73,6 +77,11 @@ const MENU_TREE = [
       { codigo: "menu.sanidad_vegetal.labores", nombre: "Evaluación de Labores", prefijos: ["labor_evaluacion."] },
       { codigo: "menu.sanidad_vegetal.alertas", nombre: "Alertas", prefijos: [] },
       { codigo: "menu.sanidad_vegetal.objetivos", nombre: "Objetivos", prefijos: ["objetivo_evaluacion."] },
+      {
+        codigo: "menu.sanidad_vegetal.aspersiones",
+        nombre: "Programación de Aspersiones",
+        prefijos: ["sanidad_vegetal.aspersiones."],
+      },
     ],
   },
   {
@@ -110,7 +119,7 @@ const MENU_TREE = [
       { codigo: "menu.inventarios.motivos", nombre: "Motivos", prefijos: [] },
       { codigo: "menu.inventarios.movimientos", nombre: "Movimientos (incluye Existencias y Kardex)", prefijos: [] },
       { codigo: "menu.inventarios.mezclas", nombre: "Mezclas", prefijos: [] },
-      { codigo: "menu.inventarios.elaboraciones", nombre: "Elaboraciones", prefijos: [] },
+      { codigo: "menu.inventarios.elaboraciones", nombre: "Mezclas", prefijos: [] },
       { codigo: "menu.inventarios.proformas", nombre: "Proformas", prefijos: [] },
       { codigo: "menu.inventarios.equipos", nombre: "Equipos", prefijos: [] },
       { codigo: "menu.inventarios.proveedores", nombre: "Proveedores", prefijos: [] },

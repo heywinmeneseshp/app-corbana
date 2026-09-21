@@ -21,6 +21,7 @@ import {
   FiList,
   FiUser,
   FiCloudRain,
+  FiWind,
   FiFolder,
   FiCheckSquare,
   FiClipboard,
@@ -28,6 +29,7 @@ import {
   FiMapPin,
   FiPackage,
   FiAlertTriangle,
+  FiDroplet,
   FiSearch,
   FiX,
   FiSettings,
@@ -39,7 +41,6 @@ import {
   FiTruck,
   FiTarget,
   FiDownload,
-  FiDroplet,
 } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
@@ -91,6 +92,7 @@ const NAV = [
       { key: "racimoMovimientoCrear1", label: "Registrar Embolse", icon: GiBananaBunch, permKey: "racimoMovimientoCrear", href: "/racimos/embolses" },
       { key: "racimoMovimientoCrear2", label: "Registrar Repiques", icon: GiCancel, permKey: "racimoMovimientoCrear", href: "/racimos/repiques" },
       { key: "racimoMovimientoCrear3", label: "Registrar Corte", icon: GiScissors, permKey: "racimoMovimientoCrear", href: "/racimos/corte" },
+      { key: "racimoMovimientoAjustar", label: "Registrar Ajuste", icon: FiSettings, permKey: "racimoMovimientoAjustar", href: "/racimos/ajustes" },
       { key: "racimoSaldosLotesCintas", label: "Saldos × Lotes y Cintas", icon: FiBarChart2, permKey: "racimoSaldosLotesCintas", href: "/racimos/saldos-lotes-cintas" },
       { key: "racimoLiquidacion", label: "Liquidación", icon: FiCheckSquare, permKey: "racimoLiquidacion", href: "/racimos/liquidacion" },
     ],
@@ -112,6 +114,7 @@ const NAV = [
   { type: "link", key: "produccionSemanal", label: "Producción Semanal", icon: FiPackage, permKey: "produccionSemanal", href: "/produccion-semanal" },
   { type: "link", key: "estimaciones", label: "Estimaciones de Fincas", icon: FiTarget, permKey: "estimaciones", href: "/estimaciones" },
   { type: "link", key: "pronostico", label: "Pronóstico de Cajas", icon: FiActivity, permKey: "pronostico", href: "/pronostico" },
+  { type: "link", key: "estacionMeteorologica", label: "Estación Meteorológica", icon: FiWind, permKey: "estacionMeteorologica", href: "/estacion-meteorologica" },
   {
     type: "section",
     key: "sanidadVegetal",
@@ -125,6 +128,13 @@ const NAV = [
       { key: "laborEvaluacion", label: "Evaluación de Labores", icon: GiFarmTractor, permKey: "laborEvaluacion", href: "/sanidad-vegetal/labores" },
       { key: "sanidadAlertas", label: "Alertas", icon: FiAlertTriangle, permKey: "sanidadAlertas", href: "/sanidad-vegetal/alertas" },
       { key: "sanidadObjetivos", label: "Objetivos", icon: FiTarget, permKey: "sanidadObjetivos", href: "/sanidad-vegetal/objetivos" },
+      { key: "sanidadAspersiones", label: "Programación de Aspersiones", icon: FiDroplet, permKey: "sanidadAspersiones", href: "/sanidad-vegetal/aspersiones" },
+      // Antes vivía como "Mezclas" dentro de Inventarios — se movió acá y se
+      // renombró porque conceptualmente es una prueba de laboratorio, no un
+      // artículo de inventario. El permiso de menú (menu.inventarios.mezclas)
+      // y la ruta (/inventarios/mezclas) quedan igual, solo cambia dónde
+      // aparece en el sidebar.
+      { key: "inventariosMezclas", label: "Pruebas de laboratorio", icon: FiLayers, permKey: "inventariosMezclas", href: "/inventarios/mezclas" },
     ],
   },
   { type: "link", key: "programacionCorte", label: "Programación de Corte", icon: GiScissors, permKey: "programacionCorte", href: "/programacion-corte" },
@@ -161,8 +171,7 @@ const NAV = [
       { key: "inventariosMovimientos", label: "Movimientos", icon: FiShare2, permKey: "inventariosMovimientos", href: "/inventarios/movimientos" },
       { key: "inventariosExistencias", label: "Existencias", icon: FiBox, permKey: "inventariosMovimientos", href: "/inventarios/existencias" },
       { key: "inventariosKardex", label: "Kardex", icon: FiList, permKey: "inventariosMovimientos", href: "/inventarios/kardex" },
-      { key: "inventariosMezclas", label: "Mezclas", icon: FiLayers, permKey: "inventariosMezclas", href: "/inventarios/mezclas" },
-      { key: "inventariosElaboraciones", label: "Elaboraciones", icon: FiActivity, permKey: "inventariosElaboraciones", href: "/inventarios/elaboraciones" },
+      { key: "inventariosElaboraciones", label: "Mezclas", icon: FiActivity, permKey: "inventariosElaboraciones", href: "/inventarios/elaboraciones" },
       { key: "inventariosProformas", label: "Proformas", icon: FiClipboard, permKey: "inventariosProformas", href: "/inventarios/proformas" },
       { key: "inventariosEquipos", label: "Equipos", icon: GiFarmTractor, permKey: "inventariosEquipos", href: "/inventarios/equipos" },
       { key: "inventariosProveedores", label: "Proveedores", icon: FiTruck, permKey: "inventariosProveedores", href: "/inventarios/proveedores" },
@@ -280,6 +289,9 @@ export default function Sidebar() {
       racimosMenu: hasPermission("menu.racimos"),
       racimoMovimientoVer: hasPermission("menu.racimos.movimientos"),
       racimoMovimientoCrear: hasPermission("menu.racimos.registrar"),
+      // Permiso puntual (no de menú, mismo criterio que forzar_saldo_negativo):
+      // solo Administrador o quien lo tenga asignado ve/usa este ítem.
+      racimoMovimientoAjustar: hasPermission("racimo_movimiento.ajustar"),
       racimoSaldosLotesCintas: hasPermission("menu.racimos.saldos_lotes_cintas"),
       racimoMovimientosSemana: hasPermission("menu.racimos.movimientos_semana"),
       racimoReporteEmbolses: hasPermission("menu.racimos.reporte_embolses"),
@@ -295,8 +307,10 @@ export default function Sidebar() {
       laborEvaluacion: hasPermission("menu.sanidad_vegetal.labores"),
       sanidadAlertas: hasPermission("menu.sanidad_vegetal.alertas"),
       sanidadObjetivos: hasPermission("menu.sanidad_vegetal.objetivos"),
+      sanidadAspersiones: hasPermission("menu.sanidad_vegetal.aspersiones"),
 
       precipitacionDiaria: hasPermission("menu.precipitacion_diaria"),
+      estacionMeteorologica: hasPermission("menu.estacion_meteorologica"),
       produccionSemanal: hasPermission("menu.produccion_semanal"),
       estimaciones: hasPermission("menu.estimaciones"),
       pronostico: hasPermission("menu.pronostico"),

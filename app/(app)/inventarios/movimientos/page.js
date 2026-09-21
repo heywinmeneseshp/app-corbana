@@ -132,8 +132,8 @@ export default function MovimientosPage() {
     setter((f) => ({ ...f, articuloUuid: uuid, unidadUuid: prod?.unidadMedida?.uuid || f.unidadUuid }));
   }
 
-  async function handleSave(e) {
-    e.preventDefault();
+  async function handleSave(e, forzarSaldoNegativo = false) {
+    e?.preventDefault?.();
     setFormError("");
     setSaving(true);
     try {
@@ -146,8 +146,20 @@ export default function MovimientosPage() {
         fechaVencimiento: form.fechaVencimiento || null,
         motivoUuid: form.motivoUuid || null,
         observaciones: form.observaciones || null,
+        forzarSaldoNegativo,
       };
-      await apiFetch("/inventarios/movimientos", { method: "POST", body: JSON.stringify(body) });
+      const resultado = await apiFetch("/inventarios/movimientos", { method: "POST", body: JSON.stringify(body) });
+      if (resultado?.requiereConfirmacion) {
+        // Solo pasa al dar salida de un artículo elaborado y alguno de sus
+        // insumos queda insuficiente (el elaborado nunca tiene saldo
+        // propio, así que se descuentan sus insumos — ver
+        // movimiento.service.js#create).
+        const mensaje = resultado.advertencias.map((a) => a.mensaje).join("\n");
+        if (confirm(`${mensaje}\n\n¿Registrar de todas formas?`)) {
+          await handleSave(null, true);
+        }
+        return;
+      }
       setModalOpen(false);
       load();
     } catch (err) {
