@@ -124,7 +124,7 @@ export default function MezclasPage() {
   async function handleVerReporte(mezcla) {
     try {
       const detalle = await apiFetch(`/inventarios/mezclas/${mezcla.uuid}`);
-      verReporteMezclaPdf(detalle);
+      await verReporteMezclaPdf(detalle);
     } catch (err) {
       setError(err.message);
     }
@@ -133,7 +133,7 @@ export default function MezclasPage() {
   async function handleDescargarReporte(mezcla) {
     try {
       const detalle = await apiFetch(`/inventarios/mezclas/${mezcla.uuid}`);
-      descargarReporteMezclaPdf(detalle);
+      await descargarReporteMezclaPdf(detalle);
     } catch (err) {
       setError(err.message);
     }

@@ -8,6 +8,8 @@ import { hasPermission } from "@/lib/auth";
 import { calcularColorSemana, COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 import RequirePermission from "@/components/RequirePermission";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
+import ModalShell from "@/components/ModalShell";
+import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 
 const SEMANAS_DEFAULT = 8;
 
@@ -87,6 +89,10 @@ export default function EstimacionesPage() {
   const [guardado, setGuardado] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [msgError, setMsgError] = useState("");
+  // Observación de la finca para ESTA sesión de carga (semana de registro
+  // vigente) — una sola nota que cubre las 8 semanas que se están
+  // estimando ahora, no una por celda. { [fincaUuid]: texto }
+  const [observaciones, setObservaciones] = useState({});
 
   // Filtro de finca en la grilla de carga ("" = todas)
   const [filtroFincaUuid, setFiltroFincaUuid] = useState("");
@@ -103,6 +109,9 @@ export default function EstimacionesPage() {
   // Overrides manuales, celda por celda, de "Sugerido próximas semanas" —
   // { "semanaUuid:edad": valor } — igual que editar una celda de Excel.
   const [estimadoManual, setEstimadoManual] = useState({});
+
+  // Ver estimaciones: "escalera" (default) o "compacta" (pivote por finca).
+  const [verSubvista, setVerSubvista] = useState("escalera");
 
   // Escalera (ver)
   const [escaleraColumnas, setEscaleraColumnas] = useState([]);
@@ -121,6 +130,22 @@ export default function EstimacionesPage() {
   // Semana a enfocar (solo mueve el scroll, no vuelve a consultar el backend).
   const [filtroEscaleraSemanaUuid, setFiltroEscaleraSemanaUuid] = useState("");
   const [semanaActualEscalera, setSemanaActualEscalera] = useState(null);
+
+  // Vista pivote por finca (alternativa a la escalera): una fila por finca,
+  // columna "Sem" con el consecutivo de la semana vigente (Sww-aaaa) y una
+  // columna por cada una de las próximas 8 semanas — pedido explícito.
+  const [pivoteData, setPivoteData] = useState(null);
+  const [pivoteLoading, setPivoteLoading] = useState(false);
+  const [exportandoPivote, setExportandoPivote] = useState(false);
+  // Filtros propios de la vista compacta (independientes de los de la
+  // escalera) — finca puntual y rango de semanas (desde/hasta).
+  const [filtroCompactaFincaUuid, setFiltroCompactaFincaUuid] = useState("");
+  const [filtroCompactaSemanaDesdeUuid, setFiltroCompactaSemanaDesdeUuid] = useState("");
+  const [filtroCompactaSemanaHastaUuid, setFiltroCompactaSemanaHastaUuid] = useState("");
+  // Catálogo de semanas (año actual + siguiente) para los selects de rango.
+  const [semanasCompactaCatalogo, setSemanasCompactaCatalogo] = useState([]);
+  // Fila (finca) cuyo modal de observaciones está abierto, o null.
+  const [observacionModalFila, setObservacionModalFila] = useState(null);
 
   // Comparativo estimado vs. real
   const [comparativoItems, setComparativoItems] = useState([]);
@@ -233,6 +258,64 @@ export default function EstimacionesPage() {
       setEscaleraLoading(false);
     }
   }, [filtroEscaleraFincaUuid, filtroEscaleraAnio]);
+
+  function paramsPivote() {
+    const params = new URLSearchParams();
+    if (filtroCompactaFincaUuid) params.set("fincaUuid", filtroCompactaFincaUuid);
+    if (filtroCompactaSemanaDesdeUuid) params.set("semanaDesdeUuid", filtroCompactaSemanaDesdeUuid);
+    if (filtroCompactaSemanaHastaUuid) params.set("semanaHastaUuid", filtroCompactaSemanaHastaUuid);
+    return params;
+  }
+
+  const cargarPivote = useCallback(async () => {
+    setPivoteLoading(true);
+    setMsgError("");
+    try {
+      const qs = paramsPivote().toString();
+      const res = await apiFetch(`/estimaciones/pivote${qs ? `?${qs}` : ""}`);
+      setPivoteData(res);
+    } catch (err) {
+      setMsgError(err.message);
+    } finally {
+      setPivoteLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtroCompactaFincaUuid, filtroCompactaSemanaDesdeUuid, filtroCompactaSemanaHastaUuid]);
+
+  // Catálogo de semanas (año actual + siguiente) para los selects de rango
+  // de la vista compacta — se pide una sola vez, la primera vez que se abre.
+  const cargarSemanasCompactaCatalogo = useCallback(async () => {
+    if (semanasCompactaCatalogo.length > 0) return;
+    try {
+      const anioActual = new Date().getFullYear();
+      const [a1, a2] = await Promise.all([
+        apiFetch(`/semanas?limit=100&anio=${anioActual}`),
+        apiFetch(`/semanas?limit=100&anio=${anioActual + 1}`),
+      ]);
+      setSemanasCompactaCatalogo([...(a1.items || []), ...(a2.items || [])]);
+    } catch (err) {
+      setMsgError(err.message);
+    }
+  }, [semanasCompactaCatalogo.length]);
+
+  async function handleExportarPivote() {
+    setExportandoPivote(true);
+    setMsgError("");
+    try {
+      const qs = paramsPivote().toString();
+      const blob = await apiFetchBlob(`/estimaciones/pivote/exportar${qs ? `?${qs}` : ""}`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `estimaciones-por-finca-${pivoteData?.semanaActual?.codigo || ""}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setMsgError(err.message);
+    } finally {
+      setExportandoPivote(false);
+    }
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -471,12 +554,22 @@ export default function EstimacionesPage() {
     }
   }, [filtroComparativoFincaUuid]);
 
+  // Solo se pide al backend la sub-vista activa (escalera o compacta) —
+  // evita pedir la que no se está viendo.
   useEffect(() => {
-    if (vista === "ver") {
+    if (vista === "ver" && verSubvista === "escalera") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       cargarEscalera();
     }
-  }, [vista, cargarEscalera]);
+  }, [vista, verSubvista, cargarEscalera]);
+
+  useEffect(() => {
+    if (vista === "ver" && verSubvista === "compacta") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      cargarPivote();
+      cargarSemanasCompactaCatalogo();
+    }
+  }, [vista, verSubvista, cargarPivote, cargarSemanasCompactaCatalogo]);
 
   useEffect(() => {
     if (vista === "comparativo") {
@@ -557,50 +650,6 @@ export default function EstimacionesPage() {
       }),
     [escaleraFilas, escaleraColumnas],
   );
-
-  function cargarValoresExistentes() {
-    if (!filtroFincaUuid) return;
-    // Trae las estimaciones propias y las precarga en el grid para poder
-    // re-guardarlas / corregirlas (upsert). Puede haber varias "revisiones"
-    // guardadas para la misma finca+semana objetivo (una por cada semana en
-    // que se volvió a estimar — ver semana_registro_id), así que hay que
-    // quedarse con la más reciente (mayor updatedAt/createdAt) y no
-    // simplemente con la última que aparezca en la respuesta. Filtrado por
-    // la finca seleccionada — sin este filtro, el límite de 100 filas se
-    // reparte entre TODAS las fincas habilitadas y las semanas más viejas
-    // de la finca actual pueden quedar afuera antes de llegar a ellas.
-    apiFetch(`/estimaciones?limit=100&fincaUuid=${filtroFincaUuid}`)
-      .then((res) => {
-        const masReciente = new Map(); // `${fincaUuid}:${semanaUuid}` -> item
-        for (const r of res.items || []) {
-          const clave = `${r.finca?.uuid}:${r.semana?.uuid}`;
-          const anterior = masReciente.get(clave);
-          const fecha = new Date(r.updatedAt || r.createdAt || 0).getTime();
-          const fechaAnterior = anterior ? new Date(anterior.updatedAt || anterior.createdAt || 0).getTime() : -1;
-          if (!anterior || fecha >= fechaAnterior) {
-            masReciente.set(clave, r);
-          }
-        }
-        const nuevo = { ...valores };
-        const clavesCargadas = [];
-        for (const r of masReciente.values()) {
-          if (nuevo[r.finca?.uuid] && nuevo[r.finca?.uuid][r.semana?.uuid] !== undefined) {
-            nuevo[r.finca?.uuid][r.semana?.uuid] = r.cajas20kg;
-            clavesCargadas.push(`${r.finca.uuid}:${r.semana.uuid}`);
-          }
-        }
-        setValores(nuevo);
-        // Lo que se acaba de cargar es dato real guardado, no autocompletado
-        // — que deje de considerarse "auto" para que el efecto de arriba no
-        // lo vuelva a pisar si el ratio/% cambia después.
-        setCeldasAuto((prev) => {
-          const next = { ...prev };
-          for (const clave of clavesCargadas) delete next[clave];
-          return next;
-        });
-      })
-      .catch((err) => setMsgError(err.message));
-  }
 
   // Agrupa el comparativo por semana (ya viene ordenado por semana) para
   // mostrar un encabezado de sección por semana en vez de repetir la
@@ -782,6 +831,11 @@ export default function EstimacionesPage() {
     setGuardado(false);
   }
 
+  function setObservacionFinca(fincaUuid, texto) {
+    setObservaciones((prev) => ({ ...prev, [fincaUuid]: texto }));
+    setGuardado(false);
+  }
+
   // Precarga por defecto las cajas estimadas (Sugerido próximas semanas ×
   // ratio) en la grilla de "Cargar estimaciones" — solo para semanas donde
   // las 5 cintas de edad 8-12 tienen embolse real (dato completo) y solo
@@ -828,6 +882,10 @@ export default function EstimacionesPage() {
     }
     const itemsGuardar = [];
     const fincaUuid = filtroFincaUuid;
+    // Una sola observación para toda la sesión de carga de esta finca — se
+    // repite en cada fila (misma finca + semana de registro), no es por
+    // semana puntual.
+    const observacionFinca = observaciones[fincaUuid]?.trim() || null;
     for (const semanaUuid of Object.keys(valores[fincaUuid] || {})) {
       const raw = valores[fincaUuid][semanaUuid];
       if (raw === "" || raw === null || raw === undefined) continue;
@@ -836,7 +894,7 @@ export default function EstimacionesPage() {
         setMsgError("Todos los valores deben ser números mayores o iguales a 0.");
         return;
       }
-      itemsGuardar.push({ fincaUuid, semanaUuid, cajas20kg: cajas });
+      itemsGuardar.push({ fincaUuid, semanaUuid, cajas20kg: cajas, observaciones: observacionFinca });
     }
 
     if (itemsGuardar.length === 0) {
@@ -858,6 +916,10 @@ export default function EstimacionesPage() {
           .join("\n")}`);
       } else {
         setGuardado(true);
+        // Guardado sin errores — pedido explícito: llevar directo a "Ver
+        // estimaciones" para confirmar visualmente lo que se acaba de
+        // cargar, en vez de quedarse en el formulario.
+        setVista("ver");
       }
     } catch (err) {
       setMsgError(err.message);
@@ -1506,6 +1568,20 @@ export default function EstimacionesPage() {
                       </div>
                     </div>
 
+                    {puedeUsarGrillaBasica && (
+                      <div className="mb-3">
+                        <label className="form-label small fw-medium">Observación (opcional)</label>
+                        <textarea
+                          className="form-control rounded-3"
+                          rows={2}
+                          maxLength={500}
+                          placeholder="Ej. finca afectada por lluvias, atraso de corte, etc."
+                          value={observaciones[filtroFincaUuid] || ""}
+                          onChange={(e) => setObservacionFinca(filtroFincaUuid, e.target.value)}
+                        />
+                      </div>
+                    )}
+
                     <div className="d-flex align-items-center gap-2">
                       <button
                         type="button"
@@ -1514,14 +1590,6 @@ export default function EstimacionesPage() {
                         disabled={!puedeUsarGrillaBasica || guardando}
                       >
                         <FiSave /> {guardando ? "Guardando..." : "Guardar estimaciones"}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-outline-secondary rounded-3"
-                        onClick={cargarValoresExistentes}
-                        disabled={!puedeUsarGrillaBasica}
-                      >
-                        Cargar mis estimaciones guardadas
                       </button>
                     </div>
                   </>
@@ -1533,8 +1601,29 @@ export default function EstimacionesPage() {
 
         {vista === "ver" && (
           <div>
+            <ul className="nav nav-pills mb-3">
+              <li className="nav-item">
+                <button
+                  type="button"
+                  className={`nav-link rounded-3 ${verSubvista === "escalera" ? "active" : ""}`}
+                  onClick={() => setVerSubvista("escalera")}
+                >
+                  Escalera
+                </button>
+              </li>
+              <li className="nav-item">
+                <button
+                  type="button"
+                  className={`nav-link rounded-3 ${verSubvista === "compacta" ? "active" : ""}`}
+                  onClick={() => setVerSubvista("compacta")}
+                >
+                  Vista compacta
+                </button>
+              </li>
+            </ul>
+
             {/* Filtros de la escalera: finca, año y semana (enfoque) */}
-            {(fincas.length > 0 || escaleraAniosDisponibles.length > 0 || escaleraColumnas.length > 0) && (
+            {verSubvista === "escalera" && (fincas.length > 0 || escaleraAniosDisponibles.length > 0 || escaleraColumnas.length > 0) && (
               <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
                 <div className="row g-2 align-items-end">
                   {fincas.length > 0 && (
@@ -1576,18 +1665,13 @@ export default function EstimacionesPage() {
                   {escaleraColumnas.length > 0 && (
                     <div className="col-6 col-md-3 col-lg-2">
                       <label className="form-label small fw-medium">Semana (enfocar)</label>
-                      <select
-                        className="form-select rounded-3"
+                      <SemanaAutocomplete
+                        semanas={escaleraColumnas}
                         value={filtroEscaleraSemanaUuid}
-                        onChange={(e) => setFiltroEscaleraSemanaUuid(e.target.value)}
-                      >
-                        <option value="">Semana actual</option>
-                        {escaleraColumnas.map((c) => (
-                          <option key={c.uuid} value={c.uuid}>
-                            {c.codigo}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={setFiltroEscaleraSemanaUuid}
+                        placeholder="Semana actual"
+                        width="100%"
+                      />
                     </div>
                   )}
                   <div className="col-auto">
@@ -1600,6 +1684,169 @@ export default function EstimacionesPage() {
               </div>
             )}
 
+            {verSubvista === "compacta" && (
+            <>
+            <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+              <div className="row g-2 align-items-end">
+                {fincas.length > 0 && (
+                  <div className="col-12 col-md-4">
+                    <label className="form-label small fw-medium">Finca</label>
+                    <select
+                      className="form-select rounded-3"
+                      value={filtroCompactaFincaUuid}
+                      onChange={(e) => setFiltroCompactaFincaUuid(e.target.value)}
+                    >
+                      <option value="">Todas</option>
+                      {fincas.map((f) => (
+                        <option key={f.uuid} value={f.uuid}>
+                          {f.codigo} — {f.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="col-6 col-md-3">
+                  <label className="form-label small fw-medium">Semana desde</label>
+                  <SemanaAutocomplete
+                    semanas={semanasCompactaCatalogo}
+                    value={filtroCompactaSemanaDesdeUuid}
+                    onChange={setFiltroCompactaSemanaDesdeUuid}
+                    placeholder="Próximas (default)"
+                    width="100%"
+                  />
+                </div>
+                <div className="col-6 col-md-3">
+                  <label className="form-label small fw-medium">Semana hasta</label>
+                  <SemanaAutocomplete
+                    semanas={semanasCompactaCatalogo}
+                    value={filtroCompactaSemanaHastaUuid}
+                    onChange={setFiltroCompactaSemanaHastaUuid}
+                    placeholder="Próximas (default)"
+                    width="100%"
+                  />
+                </div>
+                <div className="col-auto">
+                  <label className="form-label small fw-medium invisible d-block">.</label>
+                  <button type="button" className="btn btn-outline-secondary rounded-3" onClick={cargarPivote} disabled={pivoteLoading}>
+                    {pivoteLoading ? "Cargando..." : "Actualizar"}
+                  </button>
+                </div>
+                {(filtroCompactaSemanaDesdeUuid || filtroCompactaSemanaHastaUuid) && (
+                  <div className="col-auto">
+                    <label className="form-label small fw-medium invisible d-block">.</label>
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm rounded-3"
+                      onClick={() => {
+                        setFiltroCompactaSemanaDesdeUuid("");
+                        setFiltroCompactaSemanaHastaUuid("");
+                      }}
+                    >
+                      Quitar rango
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+              <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                <div>
+                  <h3 className="h6 fw-bold mb-0">Estimaciones por finca — vista compacta</h3>
+                  <div className="small text-secondary">
+                    Una fila por finca y semana de registro
+                    {pivoteData?.semanasRegistro?.length === 1 ? (
+                      <> (<strong>{pivoteData.semanasRegistro[0].codigo}</strong>)</>
+                    ) : pivoteData?.semanasRegistro?.length > 1 ? (
+                      <> (<strong>{pivoteData.semanasRegistro[0].codigo}</strong> a <strong>{pivoteData.semanasRegistro[pivoteData.semanasRegistro.length - 1].codigo}</strong>)</>
+                    ) : (
+                      ""
+                    )}
+                    , cada una con sus propias {pivoteData?.maxColumnas || 8} semanas siguientes.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+                  onClick={handleExportarPivote}
+                  disabled={exportandoPivote || pivoteLoading || !pivoteData?.filas?.length}
+                >
+                  <FiDownload /> {exportandoPivote ? "Descargando..." : "Descargar Excel"}
+                </button>
+              </div>
+
+              {pivoteLoading && <div className="text-center text-secondary py-4 small">Cargando...</div>}
+              {!pivoteLoading && !pivoteData?.semanaActual && (
+                <div className="text-center text-secondary py-3 small">No hay una semana vigente configurada en el calendario.</div>
+              )}
+              {!pivoteLoading && pivoteData?.semanaActual && pivoteData.filas.length === 0 && (
+                <div className="text-center text-secondary py-3 small">No hay fincas habilitadas para mostrar.</div>
+              )}
+              {!pivoteLoading && pivoteData?.semanaActual && pivoteData.filas.length > 0 && (
+                <div className="table-responsive">
+                  <table className="table table-sm table-hover align-middle mb-0 small text-center">
+                    <thead className="table-light">
+                      <tr>
+                        <th className="text-start">Código</th>
+                        <th className="text-start">Nombre</th>
+                        <th>Sem</th>
+                        {Array.from({ length: pivoteData.maxColumnas }, (_, i) => (
+                          <th key={i}>Est {i + 1}</th>
+                        ))}
+                        <th>Observaciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pivoteData.filas.map((fila) => (
+                        <tr key={`${fila.finca.uuid}:${fila.semanaRegistro.uuid}`}>
+                          <td className="text-start fw-medium">{fila.finca.codigo}</td>
+                          <td className="text-start">{fila.finca.nombre}</td>
+                          <td className="fw-medium">{fila.semanaRegistro.codigo}</td>
+                          {Array.from({ length: pivoteData.maxColumnas }, (_, i) => {
+                            const c = fila.columnas[i];
+                            const valor = fila.valores[i];
+                            return (
+                              <td key={i} title={c?.codigo}>
+                                {!c ? "" : valor === null || valor === undefined ? "—" : Number(valor).toLocaleString("es")}
+                              </td>
+                            );
+                          })}
+                          <td>
+                            {fila.observaciones ? (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-secondary p-1 border-0"
+                                title="Ver observación"
+                                onClick={() => setObservacionModalFila(fila)}
+                              >
+                                <FiEye size={14} />
+                              </button>
+                            ) : (
+                              <span className="text-secondary">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {observacionModalFila && (
+              <ModalShell
+                title={`Observación — ${observacionModalFila.finca.codigo} ${observacionModalFila.finca.nombre}`}
+                onClose={() => setObservacionModalFila(null)}
+              >
+                <p className="small text-secondary mb-1">Semana de registro {observacionModalFila.semanaRegistro.codigo}</p>
+                <p className="mb-0" style={{ whiteSpace: "pre-line" }}>{observacionModalFila.observaciones}</p>
+              </ModalShell>
+            )}
+            </>
+            )}
+
+            {verSubvista === "escalera" && (
+            <>
             <div className="card shadow-sm rounded-4 overflow-hidden escalera-card">
               {escaleraLoading && <div className="text-center text-secondary py-4 small">Cargando escalera...</div>}
               {!escaleraLoading && escaleraColumnas.length === 0 && (
@@ -1674,6 +1921,8 @@ export default function EstimacionesPage() {
               <div className="small text-secondary mt-2">
                 Cada fila es la <strong>semana de registro</strong> (cuándo se cargó la estimación) y cada columna la <strong>semana objetivo</strong>. El valor es la suma de cajas (20&nbsp;kg eq.) estimada. La diagonal marca el registro de la misma semana.
               </div>
+            )}
+            </>
             )}
           </div>
         )}

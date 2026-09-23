@@ -53,6 +53,19 @@ body {
   color: #fff !important;
 }
 
+/* Pestañas tipo "pills" compactas en toda la app — pedido explícito: los
+   botones de sub-navegación (ej. "Cargar/Ver estimaciones",
+   "Escalera/Vista compacta") venían con el padding/tamaño grande por
+   defecto de Bootstrap. */
+.nav-pills .nav-link {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8125rem;
+}
+.nav-pills .nav-link svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
 .form-control:focus {
   border-color: var(--brand-700);
   box-shadow: 0 0 0 0.2rem rgba(21, 128, 61, 0.15);

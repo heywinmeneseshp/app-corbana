@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FiPlus, FiX, FiCamera, FiTrash2, FiArrowLeft, FiCheckCircle, FiXCircle, FiPackage, FiInfo, FiClock } from "react-icons/fi";
+import { FiPlus, FiX, FiCamera, FiTrash2, FiArrowLeft, FiCheckCircle, FiXCircle, FiInfo, FiClock } from "react-icons/fi";
 import { apiFetch, apiFetchFormData, apiFetchBlob } from "@/lib/api";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
 import { estadoPruebaInfo, ESTADOS_PRUEBA_EDITABLES } from "@/lib/mezclaEstados";
@@ -13,7 +13,7 @@ import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
 function emptyEtapaForm() {
-  return { modo: "NUEVO_INSUMO", componenteUuid: "", articuloUuid: "", cantidad: "1", unidadUuid: "", ph: "", ce: "", observaciones: "" };
+  return { modo: "NUEVO_INSUMO", articuloUuid: "", cantidad: "1", unidadUuid: "", ph: "", ce: "", observaciones: "" };
 }
 
 const INTERVALOS_HOMOGENEIDAD = [
@@ -111,6 +111,12 @@ export default function MezclaPruebaDetallePage() {
   const [savingInfo, setSavingInfo] = useState(false);
   const [infoError, setInfoError] = useState("");
   const infoCompleta = Boolean(mezcla?.nombre);
+  // Mientras el nombre no se haya tocado a mano, se sugiere solo
+  // concatenando los insumos de la receta (sin Agua ni Regulador de pH,
+  // que no son insumos "de fórmula") — pedido explícito. Igual criterio
+  // que dosis/cantidad en Aspersiones: se deja de auto-sugerir en cuanto
+  // el operador edita el campo.
+  const [nombreEditadoManualmente, setNombreEditadoManualmente] = useState(false);
 
   // ─── Componentes ───
   const [componentesForm, setComponentesForm] = useState([]);
@@ -120,13 +126,25 @@ export default function MezclaPruebaDetallePage() {
   // ─── Etapas ───
   // modo: "NUEVO_INSUMO" (agrega el insumo a la receta Y mide, en un solo
   // paso — antes había que guardarlo en "Componentes" aparte antes de
-  // poder elegirlo acá), "SOLO_MEDICION" (mide sin agregar insumo) o
-  // "CORRECCION_PH" (insumo puntual, ej. regulador de pH, que NO se agrega
-  // a la receta). articuloUuid/cantidad/unidadUuid se reutilizan para
-  // NUEVO_INSUMO y CORRECCION_PH — son el mismo tipo de campo, solo cambia
-  // a dónde va el insumo elegido.
+  // poder elegirlo acá) o "CORRECCION_PH" (insumo puntual, ej. regulador
+  // de pH, que NO se agrega a la receta). articuloUuid/cantidad/unidadUuid
+  // se reutilizan para los dos modos — son el mismo tipo de campo, solo
+  // cambia a dónde va el insumo elegido.
   const [etapaForm, setEtapaForm] = useState(emptyEtapaForm());
   const [etapaFotos, setEtapaFotos] = useState([]); // [{file, previewUrl}] — evidencia de la etapa que se está por registrar
+
+  // Nombre sugerido: insumos YA guardados en la receta + el que se está
+  // eligiendo ahora mismo en "Agregar insumo" (aunque todavía no se haya
+  // guardado la etapa) — pedido explícito: "debería mostrar desde el
+  // momento que ingreso el primer insumo", no recién cuando ya quedó
+  // registrado y la página se volvió a cargar.
+  const nombreSugerido = [
+    ...componentesForm.map((c) => c.articuloUuid),
+    ...(etapaForm.modo === "NUEVO_INSUMO" && etapaForm.articuloUuid ? [etapaForm.articuloUuid] : []),
+  ]
+    .map((articuloUuid) => articulos.find((a) => a.uuid === articuloUuid)?.nombre)
+    .filter((nombre) => nombre && nombre !== "Agua" && nombre !== "Regulador de pH")
+    .join(" + ");
   const [savingEtapa, setSavingEtapa] = useState(false);
   const [etapaError, setEtapaError] = useState("");
   // Subida de fotos a una etapa YA registrada — key: etapaUuid en curso
@@ -138,6 +156,7 @@ export default function MezclaPruebaDetallePage() {
 
   // ─── Fotos ───
   const [fotoUrls, setFotoUrls] = useState({}); // { [fotoUuid]: blobUrl }
+  const [fotoErrores, setFotoErrores] = useState({}); // { [fotoUuid]: true } — falló la descarga
 
   // ─── Prueba de homogeneidad (15/30/60 min) ───
   // Estado por intervalo: { [intervalo]: { homogenea: "si"|"no"|"", fotos: [{file, previewUrl}] } }
@@ -165,6 +184,36 @@ export default function MezclaPruebaDetallePage() {
   const [creandoElaborado, setCreandoElaborado] = useState(false);
   const [elaboradoError, setElaboradoError] = useState("");
 
+  // Mini-modal "Nueva categoría" — para crear una categoría de tipo
+  // Elaborado sin salir del modal de aprobar (antes había que ir a
+  // Inventarios → Categorías, perder el formulario que ya se estaba
+  // llenando, y volver a empezar).
+  const [categoriaModalOpen, setCategoriaModalOpen] = useState(false);
+  const [categoriaNombre, setCategoriaNombre] = useState("");
+  const [guardandoCategoria, setGuardandoCategoria] = useState(false);
+  const [categoriaError, setCategoriaError] = useState("");
+
+  async function handleCrearCategoriaRapida(e) {
+    e.preventDefault();
+    if (!categoriaNombre.trim()) return;
+    setCategoriaError("");
+    setGuardandoCategoria(true);
+    try {
+      const nueva = await apiFetch("/inventarios/categorias", {
+        method: "POST",
+        body: JSON.stringify({ nombre: categoriaNombre.trim(), descripcion: null, tipo: "ELABORADO", estado: true }),
+      });
+      setCategoriasElaborado((prev) => [...prev, nueva]);
+      setElaboradoForm((f) => ({ ...f, articuloCategoriaUuid: nueva.uuid }));
+      setCategoriaModalOpen(false);
+      setCategoriaNombre("");
+    } catch (err) {
+      setCategoriaError(err.message);
+    } finally {
+      setGuardandoCategoria(false);
+    }
+  }
+
   async function load() {
     setLoading(true);
     setError("");
@@ -172,6 +221,10 @@ export default function MezclaPruebaDetallePage() {
       const detalle = await apiFetch(`/inventarios/mezclas/${uuid}`);
       setMezcla(detalle);
       setInfoForm({ nombre: detalle.nombre || "" });
+      // Si ya tiene un nombre guardado, se respeta (no se pisa con la
+      // sugerencia automática) — solo se auto-sugiere mientras el campo
+      // sigue vacío/sin tocar.
+      setNombreEditadoManualmente(Boolean(detalle.nombre));
       const v = detalle.versiones?.[0];
       setComponentesForm(
         (v?.componentes || []).map((c) => ({
@@ -179,6 +232,7 @@ export default function MezclaPruebaDetallePage() {
           articuloUuid: c.articulo?.uuid || "",
           cantidad: String(c.cantidad ?? 1),
           unidadUuid: c.unidad?.uuid || "",
+          esPrincipal: Boolean(c.esPrincipal),
         })),
       );
     } catch (err) {
@@ -231,32 +285,100 @@ export default function MezclaPruebaDetallePage() {
   // pasa solo a "Corrección de pH".
   useEffect(() => {
     if (bloqueadoPorNoCumple && etapaForm.modo === "NUEVO_INSUMO") {
-      setEtapaForm((f) => ({ ...f, modo: "CORRECCION_PH", componenteUuid: "", articuloUuid: "", cantidad: "1", unidadUuid: "" }));
+      setEtapaForm((f) => ({ ...f, modo: "CORRECCION_PH", articuloUuid: "", cantidad: "1", unidadUuid: "" }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bloqueadoPorNoCumple]);
 
+  // Sugiere el nombre solo mientras el operador no lo haya tocado a mano
+  // (mismo criterio que dosis/cantidad en Aspersiones) — se recalcula cada
+  // vez que cambia la lista de insumos de la receta.
+  useEffect(() => {
+    if (!nombreEditadoManualmente) {
+      setInfoForm((f) => (f.nombre === nombreSugerido ? f : { ...f, nombre: nombreSugerido }));
+    }
+  }, [nombreSugerido, nombreEditadoManualmente]);
+
+  // Carga las fotos de forma INCREMENTAL — antes, cualquier acción que
+  // agregara una sola foto nueva (registrar una etapa, un punto de
+  // homogeneidad, etc.) volvía a descargar TODAS las fotos de la prueba
+  // desde cero (se armaba un objeto `urls` nuevo y se revocaban los blobs
+  // ya cargados), lo que se sentía lento a medida que la prueba acumulaba
+  // evidencia. Ahora solo se piden las fotos que todavía no están en
+  // `fotoUrls`, y las que ya se cargaron se conservan tal cual.
+  const fotoUrlsRef = useRef({});
+  useEffect(() => {
+    fotoUrlsRef.current = fotoUrls;
+  }, [fotoUrls]);
+
   useEffect(() => {
     if (!todasLasFotos.length) return;
+    const idsActuales = new Set(todasLasFotos.map((f) => f.uuid));
+    const pendientes = todasLasFotos.filter((f) => !fotoUrlsRef.current[f.uuid]);
+
+    // Suelta los blobs de fotos que ya no están en la prueba (ej. se
+    // eliminó una) — evita que `fotoUrls` crezca para siempre con URLs de
+    // objetos huérfanos.
+    setFotoUrls((prev) => {
+      const aEliminar = Object.keys(prev).filter((uuid) => !idsActuales.has(uuid));
+      if (!aEliminar.length) return prev;
+      const next = { ...prev };
+      aEliminar.forEach((uuid) => {
+        URL.revokeObjectURL(next[uuid]);
+        delete next[uuid];
+      });
+      return next;
+    });
+    setFotoErrores((prev) => {
+      const next = {};
+      idsActuales.forEach((uuid) => {
+        if (prev[uuid]) next[uuid] = true;
+      });
+      return next;
+    });
+
+    if (!pendientes.length) return;
+
     let cancelado = false;
-    const urls = {};
     Promise.all(
-      todasLasFotos.map((foto) =>
+      pendientes.map((foto) =>
         apiFetchBlob(`/inventarios/mezclas/fotos/${foto.uuid}/archivo`)
-          .then((blob) => {
-            urls[foto.uuid] = URL.createObjectURL(blob);
-          })
-          .catch(() => {}),
+          .then((blob) => ({ uuid: foto.uuid, url: URL.createObjectURL(blob), error: false }))
+          .catch(() => ({ uuid: foto.uuid, url: null, error: true })),
       ),
-    ).then(() => {
-      if (!cancelado) setFotoUrls(urls);
+    ).then((resultados) => {
+      if (cancelado) return;
+      setFotoUrls((prev) => {
+        const next = { ...prev };
+        resultados.forEach((r) => {
+          if (r.url) next[r.uuid] = r.url;
+        });
+        return next;
+      });
+      const fallidas = resultados.filter((r) => r.error);
+      if (fallidas.length) {
+        setFotoErrores((prev) => {
+          const next = { ...prev };
+          fallidas.forEach((r) => {
+            next[r.uuid] = true;
+          });
+          return next;
+        });
+      }
     });
     return () => {
       cancelado = true;
-      Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todasLasFotos.map((f) => f.uuid).join(",")]);
+
+  // Al desmontar la pantalla, sí hay que soltar todos los blobs cargados.
+  useEffect(
+    () => () => {
+      Object.values(fotoUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    },
+    [],
+  );
 
   // ─── Componentes ───
 
@@ -298,18 +420,12 @@ export default function MezclaPruebaDetallePage() {
     return mejor;
   }
 
+  // El artículo de una fila ya guardada no se edita (es de solo lectura en
+  // "Receta actual") — esta función solo recibe field="cantidad" o
+  // "unidadUuid".
   function computeNextComponentes(rows, idx, field, value) {
     const next = [...rows];
     next[idx] = { ...next[idx], [field]: value };
-    // Al cambiar el artículo, si la unidad ya elegida dejó de ser
-    // compatible con el nuevo artículo, se limpia en vez de dejar una
-    // combinación inválida seleccionada sin que se note.
-    if (field === "articuloUuid" && next[idx].unidadUuid) {
-      const compatibles = unidadesCompatiblesPara(value);
-      if (!compatibles.some((u) => u.uuid === next[idx].unidadUuid)) {
-        next[idx] = { ...next[idx], unidadUuid: "" };
-      }
-    }
     return next;
   }
 
@@ -351,6 +467,25 @@ export default function MezclaPruebaDetallePage() {
     }
   }
 
+  // Radio de selección única: marca este insumo como "principal" —
+  // desmarca cualquier otro automáticamente (lo resuelve el backend, ver
+  // mezcla.service.js#marcarComponentePrincipal).
+  async function handleMarcarPrincipal(componenteUuid) {
+    setComponentesError("");
+    setSavingComponentes(true);
+    try {
+      await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/componentes/${componenteUuid}/principal`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      await load();
+    } catch (err) {
+      setComponentesError(err.message);
+    } finally {
+      setSavingComponentes(false);
+    }
+  }
+
   // ─── Etapas ───
 
   async function handleAgregarEtapa(e) {
@@ -374,7 +509,11 @@ export default function MezclaPruebaDetallePage() {
     }
     setSavingEtapa(true);
     try {
-      let componenteUuid = etapaForm.componenteUuid || null;
+      // El modo NUEVO_INSUMO siempre resuelve componenteUuid abajo (recién
+      // creado); CORRECCION_PH nunca lo usa (va con articuloCorreccion
+      // fijo en el backend) — no hay ningún modo que llegue acá con un
+      // componente YA elegido de antes.
+      let componenteUuid = null;
 
       if (etapaForm.modo === "NUEVO_INSUMO") {
         // Agrega el insumo a la receta (componentes) y, en el mismo paso,
@@ -425,22 +564,29 @@ export default function MezclaPruebaDetallePage() {
         },
       );
 
-      // Sube la evidencia fotográfica adjunta a ESTA etapa recién creada
-      // (la de mayor `numero` en la versión devuelta).
-      if (etapaFotos.length) {
-        const nuevaEtapa = (versionActualizada.etapas || []).reduce(
-          (max, e) => (!max || e.numero > max.numero ? e : max),
-          null,
-        );
-        if (nuevaEtapa) {
-          const formData = new FormData();
-          formData.append("etapaUuid", nuevaEtapa.uuid);
-          etapaFotos.forEach(({ file }) => formData.append("fotos", file));
-          await apiFetchFormData(
-            `/inventarios/mezclas/${uuid}/versiones/${version.uuid}/fotos`,
-            formData,
+      // El insumo y la etapa YA quedaron creados en el servidor en este
+      // punto — si la subida de la foto falla de acá en adelante, igual
+      // hay que refrescar y limpiar el formulario (si no, el insumo recién
+      // agregado sigue apareciendo como "disponible para agregar" y un
+      // reintento del operador lo duplicaría).
+      try {
+        if (etapaFotos.length) {
+          const nuevaEtapa = (versionActualizada.etapas || []).reduce(
+            (max, e) => (!max || e.numero > max.numero ? e : max),
+            null,
           );
+          if (nuevaEtapa) {
+            const formData = new FormData();
+            formData.append("etapaUuid", nuevaEtapa.uuid);
+            etapaFotos.forEach(({ file }) => formData.append("fotos", file));
+            await apiFetchFormData(
+              `/inventarios/mezclas/${uuid}/versiones/${version.uuid}/fotos`,
+              formData,
+            );
+          }
         }
+      } catch (errFoto) {
+        setEtapaError(`La etapa se registró, pero falló la subida de la evidencia: ${errFoto.message}`);
       }
 
       etapaFotos.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
@@ -682,7 +828,18 @@ export default function MezclaPruebaDetallePage() {
     setElaboradoModalOpen(true);
   }
 
-  async function handleCrearElaborado(e) {
+  // Fusiona "Crear elaborado" + "Aprobar" en una sola acción (pedido
+  // explícito: antes eran dos botones/pasos separados). Al confirmar este
+  // modal se llama primero a crear-elaborado y, si sale bien, de inmediato
+  // a aprobar — ambos ya eran endpoints separados por diseño (el elaborado
+  // puede quedar creado-pero-inactivo mientras espera aprobación) así que
+  // acá solo se encadenan, sin tocar esa lógica de negocio. Si el segundo
+  // paso falla (ej. el usuario logueado no tiene un rol autorizado para
+  // aprobar), el elaborado igual queda creado y la prueba visible en
+  // PENDIENTE_APROBACION con el botón "Aprobar prueba" como reintento para
+  // que otro usuario autorizado la retome sin tener que rehacer el
+  // formulario.
+  async function handleCrearYAprobar(e) {
     e.preventDefault();
     setElaboradoError("");
     setCreandoElaborado(true);
@@ -714,10 +871,29 @@ export default function MezclaPruebaDetallePage() {
           body: JSON.stringify({ ...body, forzarSaldoNegativo: true }),
         });
       }
+
+      const resultadoAprobar = await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/aprobar`, { method: "POST" });
+      if (resultadoAprobar?.requiereConfirmacion) {
+        const detalleAprobar = resultadoAprobar.advertencias.map((a) => a.mensaje).join("\n\n");
+        const confirmarNegativoAprobar = confirm(
+          `${detalleAprobar}\n\n¿Aprobar de todas formas? El inventario quedará en negativo para el/los artículo(s) listados.`,
+        );
+        if (confirmarNegativoAprobar) {
+          await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/aprobar`, {
+            method: "POST",
+            body: JSON.stringify({ forzarSaldoNegativo: true }),
+          });
+        }
+      }
+
       setElaboradoModalOpen(false);
       await load();
     } catch (err) {
+      // El elaborado puede haber quedado creado igual (si el error vino del
+      // paso de aprobar) — se refresca para reflejar el estado real: la
+      // prueba queda en PENDIENTE_APROBACION con su botón de reintento.
       setElaboradoError(err.message);
+      await load();
     } finally {
       setCreandoElaborado(false);
     }
@@ -814,9 +990,14 @@ export default function MezclaPruebaDetallePage() {
         <div className="mb-4 d-flex justify-content-end gap-2">
             {version.estadoPrueba === "OPTIMA" && !version.elaboracionGenerada && puedeElaborar && (
               <button type="button" className="btn btn-success rounded-3 d-flex align-items-center gap-2" onClick={openElaboradoModal}>
-                <FiPackage /> Crear elaborado
+                <FiCheckCircle /> Aprobar
               </button>
             )}
+            {/* PENDIENTE_APROBACION: solo queda visible como reintento — pasa
+                por acá si "Aprobar" (arriba) ya creó el elaborado pero el
+                segundo paso (aprobar en sí) falló, ej. porque quien lo hizo
+                no tiene un rol autorizado para aprobar y hace falta que otro
+                usuario retome desde acá. */}
             {version.estadoPrueba === "PENDIENTE_APROBACION" && (
               <button
                 type="button"
@@ -944,7 +1125,6 @@ export default function MezclaPruebaDetallePage() {
                             setEtapaForm((f) => ({
                               ...f,
                               modo: valor,
-                              componenteUuid: "",
                               articuloUuid: "",
                               cantidad: "1",
                               // Precarga la unidad más chica compatible con
@@ -1283,6 +1463,7 @@ export default function MezclaPruebaDetallePage() {
               <table className="table table-sm align-middle mb-2">
                 <thead>
                   <tr className="small" style={{ backgroundColor: "#f0fdf4" }}>
+                    <th className="text-center" style={{ width: "3.5rem", color: "#166534" }}>Principal</th>
                     <th className="text-start" style={{ minWidth: "14rem", color: "#166534" }}>Artículo</th>
                     <th className="text-center" style={{ width: "8rem", color: "#166534" }}>Cantidad</th>
                     <th className="text-center" style={{ minWidth: "8rem", color: "#166534" }}>Unidad</th>
@@ -1297,6 +1478,9 @@ export default function MezclaPruebaDetallePage() {
                       // calculando acá por si en el futuro hace falta.
                       return (
                         <tr key={c.uuid || idx}>
+                          <td className="text-center">
+                            {c.esPrincipal && <FiCheckCircle size={14} style={{ color: "#166534" }} title="Insumo principal" />}
+                          </td>
                           <td className="small">{c.articulo?.nombre || "—"}</td>
                           <td className="small text-center">{Number(c.cantidad).toFixed(2)}</td>
                           <td className="small text-center text-secondary">{c.unidad?.simbolo || "—"}</td>
@@ -1310,6 +1494,18 @@ export default function MezclaPruebaDetallePage() {
                     const articuloFila = articulos.find((a) => a.uuid === c.articuloUuid);
                     return (
                       <tr key={idx}>
+                        <td className="text-center">
+                          {c.uuid && (
+                            <input
+                              type="radio"
+                              className="form-check-input"
+                              name="mezcla-componente-principal"
+                              checked={c.esPrincipal}
+                              onChange={() => handleMarcarPrincipal(c.uuid)}
+                              title="Marcar como insumo principal"
+                            />
+                          )}
+                        </td>
                         <td className="small">{articuloFila ? (articuloFila.codigo ? `${articuloFila.codigo} — ${articuloFila.nombre}` : articuloFila.nombre) : "—"}</td>
                         <td>
                           <input
@@ -1337,7 +1533,7 @@ export default function MezclaPruebaDetallePage() {
                   })}
                   {(editable ? componentesForm : version.componentes || []).length === 0 && (
                     <tr>
-                      <td colSpan={3} className="text-center text-secondary small py-2">
+                      <td colSpan={4} className="text-center text-secondary small py-2">
                         Sin insumos agregados todavía — agrégalos desde &quot;Registrar nueva etapa&quot;, arriba.
                       </td>
                     </tr>
@@ -1430,7 +1626,11 @@ export default function MezclaPruebaDetallePage() {
                                   />
                                 ) : (
                                   <div className="rounded-3 border d-flex align-items-center justify-content-center small text-secondary" style={{ width: "100%", height: "100%" }}>
-                                    ...
+                                    {fotoErrores[foto.uuid] ? (
+                                      <FiXCircle className="text-danger" title="No se pudo cargar la foto" />
+                                    ) : (
+                                      <span className="spinner-border spinner-border-sm text-secondary" role="status" aria-label="Cargando foto" />
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -1547,8 +1747,23 @@ export default function MezclaPruebaDetallePage() {
                       className="form-control rounded-3"
                       maxLength={150}
                       value={infoForm.nombre}
-                      onChange={(e) => setInfoForm((f) => ({ ...f, nombre: e.target.value }))}
+                      onChange={(e) => {
+                        setNombreEditadoManualmente(true);
+                        setInfoForm((f) => ({ ...f, nombre: e.target.value }));
+                      }}
                     />
+                    {nombreEditadoManualmente && nombreSugerido && infoForm.nombre !== nombreSugerido && (
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm p-0 mt-1"
+                        onClick={() => {
+                          setNombreEditadoManualmente(false);
+                          setInfoForm((f) => ({ ...f, nombre: nombreSugerido }));
+                        }}
+                      >
+                        usar sugerido: {nombreSugerido}
+                      </button>
+                    )}
                   </div>
                   <div className="col-12 col-md-4">
                     <button
@@ -1597,11 +1812,12 @@ export default function MezclaPruebaDetallePage() {
         )}
 
         {elaboradoModalOpen && (
-          <ModalShell title="Crear elaborado desde esta prueba" onClose={() => setElaboradoModalOpen(false)} size="lg">
-            <form onSubmit={handleCrearElaborado}>
+          <ModalShell title="Aprobar prueba y crear elaborado" onClose={() => setElaboradoModalOpen(false)} size="lg">
+            <form onSubmit={handleCrearYAprobar}>
               <p className="small text-secondary">
                 Se usan automáticamente los componentes, cantidades y unidades de esta prueba — no hace falta
-                volver a digitarlos.
+                volver a digitarlos. Al confirmar se crea el artículo elaborado y se aprueba la prueba en un
+                solo paso: queda activo y disponible para usarse de inmediato.
               </p>
 
               {mezcla.articuloElaborado ? (
@@ -1612,6 +1828,13 @@ export default function MezclaPruebaDetallePage() {
               ) : (
                 <>
                   <p className="small fw-medium mb-2">Artículo elaborado (producto nuevo)</p>
+                  {categoriasElaborado.length === 0 && (
+                    <div className="alert alert-warning py-2 small">
+                      Todavía no existe ninguna categoría de tipo <strong>Elaborado</strong> — hace falta crear
+                      al menos una antes de poder aprobar. Usa el enlace &quot;+ Nueva categoría&quot; junto al
+                      campo Categoría, acá abajo.
+                    </div>
+                  )}
                   <div className="row g-3 mb-3">
                     <div className="col-8">
                       <label className="form-label small fw-medium">
@@ -1640,8 +1863,21 @@ export default function MezclaPruebaDetallePage() {
                       />
                     </div>
                     <div className="col-6">
-                      <label className="form-label small fw-medium">
-                        Categoría <span className="text-danger">*</span>
+                      <label className="form-label small fw-medium d-flex align-items-center justify-content-between">
+                        <span>
+                          Categoría <span className="text-danger">*</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm p-0"
+                          onClick={() => {
+                            setCategoriaNombre("");
+                            setCategoriaError("");
+                            setCategoriaModalOpen(true);
+                          }}
+                        >
+                          + Nueva categoría
+                        </button>
                       </label>
                       <select
                         className="form-select rounded-3"
@@ -1736,8 +1972,46 @@ export default function MezclaPruebaDetallePage() {
                 <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setElaboradoModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={creandoElaborado}>
-                  {creandoElaborado ? "Creando..." : "Crear elaborado"}
+                <button
+                  type="submit"
+                  className="btn btn-brand rounded-3"
+                  disabled={creandoElaborado || (!mezcla.articuloElaborado && categoriasElaborado.length === 0)}
+                >
+                  {creandoElaborado ? "Aprobando..." : "Crear elaborado y aprobar"}
+                </button>
+              </div>
+            </form>
+          </ModalShell>
+        )}
+
+        {categoriaModalOpen && (
+          <ModalShell title="Nueva categoría (Elaborado)" onClose={() => setCategoriaModalOpen(false)}>
+            <form onSubmit={handleCrearCategoriaRapida}>
+              <div className="mb-3">
+                <label className="form-label small fw-medium">
+                  Nombre <span className="text-danger">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  maxLength={100}
+                  className="form-control rounded-3"
+                  value={categoriaNombre}
+                  onChange={(e) => setCategoriaNombre(e.target.value)}
+                />
+                <div className="form-text small">
+                  Se crea directamente con tipo &quot;Elaborado&quot; — queda disponible de inmediato en el
+                  campo Categoría de este formulario.
+                </div>
+              </div>
+              {categoriaError && <div className="alert alert-danger py-2 small">{categoriaError}</div>}
+              <div className="d-flex justify-content-end gap-2">
+                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setCategoriaModalOpen(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-brand rounded-3" disabled={guardandoCategoria}>
+                  {guardandoCategoria ? "Creando..." : "Crear categoría"}
                 </button>
               </div>
             </form>
@@ -1780,10 +2054,20 @@ export default function MezclaPruebaDetallePage() {
                       />
                     ) : (
                       <div
-                        className="rounded-3 border d-flex align-items-center justify-content-center text-secondary small"
+                        className="rounded-3 border d-flex align-items-center justify-content-center text-secondary small flex-column gap-1"
                         style={{ width: "100%", height: "100%" }}
                       >
-                        Cargando…
+                        {fotoErrores[foto.uuid] ? (
+                          <>
+                            <FiXCircle className="text-danger" />
+                            <span>Error</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="spinner-border spinner-border-sm text-secondary" role="status" aria-label="Cargando foto" />
+                            <span>Cargando…</span>
+                          </>
+                        )}
                       </div>
                     )}
                     {editable && puedeEditar && (
