@@ -41,8 +41,9 @@ import {
   FiTruck,
   FiTarget,
   FiDownload,
+  FiTag,
 } from "react-icons/fi";
-import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl } from "react-icons/gi";
+import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl, GiWeightScale } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import { useMarca } from "@/lib/marca";
@@ -129,6 +130,7 @@ const NAV = [
       { key: "sanidadAlertas", label: "Alertas", icon: FiAlertTriangle, permKey: "sanidadAlertas", href: "/sanidad-vegetal/alertas" },
       { key: "sanidadObjetivos", label: "Objetivos", icon: FiTarget, permKey: "sanidadObjetivos", href: "/sanidad-vegetal/objetivos" },
       { key: "sanidadAspersiones", label: "Programación de Aspersiones", icon: FiDroplet, permKey: "sanidadAspersiones", href: "/sanidad-vegetal/aspersiones" },
+      { key: "sanidadIngredientesActivos", label: "Ingredientes Activos", icon: FiTag, permKey: "sanidadIngredientesActivos", href: "/sanidad-vegetal/ingredientes-activos" },
       // Antes vivía como "Mezclas" dentro de Inventarios — se movió acá y se
       // renombró porque conceptualmente es una prueba de laboratorio, no un
       // artículo de inventario. El permiso de menú (menu.inventarios.mezclas)
@@ -138,6 +140,7 @@ const NAV = [
     ],
   },
   { type: "link", key: "programacionCorte", label: "Programación de Corte", icon: GiScissors, permKey: "programacionCorte", href: "/programacion-corte" },
+  { type: "link", key: "precalibracion", label: "Precalibración", icon: GiWeightScale, permKey: "precalibracion", href: "/precalibracion" },
   {
     type: "section",
     key: "reportes",
@@ -308,6 +311,7 @@ export default function Sidebar() {
       sanidadAlertas: hasPermission("menu.sanidad_vegetal.alertas"),
       sanidadObjetivos: hasPermission("menu.sanidad_vegetal.objetivos"),
       sanidadAspersiones: hasPermission("menu.sanidad_vegetal.aspersiones"),
+      sanidadIngredientesActivos: hasPermission("menu.sanidad_vegetal.ingredientes_activos"),
 
       precipitacionDiaria: hasPermission("menu.precipitacion_diaria"),
       estacionMeteorologica: hasPermission("menu.estacion_meteorologica"),
@@ -315,6 +319,7 @@ export default function Sidebar() {
       estimaciones: hasPermission("menu.estimaciones"),
       pronostico: hasPermission("menu.pronostico"),
       programacionCorte: hasPermission("menu.programacion_corte"),
+      precalibracion: hasPermission("menu.precalibracion"),
       // Sección Reportes: visible si el usuario tiene acceso a alguno de sus
       // items (Descargas, Detalle Semanal, Gráfico de Embolses o Gráfico de
       // Repiques, cada uno con su propio permiso).
