@@ -7,6 +7,7 @@ import { hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import TagPicker from "@/components/TagPicker";
 
 function emptyForm() {
   return {
@@ -23,6 +24,7 @@ function emptyForm() {
     dosisMaximaPorHectarea: "",
     dosisMaximaUnidadUuid: "",
     estado: true,
+    almacenes: [], // [{uuid, label, sublabel}] — ver TagPicker
   };
 }
 
@@ -30,6 +32,7 @@ export default function ArticulosInventarioPage() {
   const [items, setItems] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [unidades, setUnidades] = useState([]);
+  const [almacenesDisponibles, setAlmacenesDisponibles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -121,12 +124,14 @@ export default function ArticulosInventarioPage() {
 
   async function loadCombos() {
     try {
-      const [cat, uni] = await Promise.all([
+      const [cat, uni, alm] = await Promise.all([
         apiFetch("/inventarios/categorias?limit=100&estado=true"),
         apiFetch("/inventarios/unidades?limit=100&estado=true"),
+        apiFetch("/inventarios/almacenes?limit=100&estado=true"),
       ]);
       setCategorias(cat.items || []);
       setUnidades(uni.items || []);
+      setAlmacenesDisponibles(alm.items || []);
     } catch (err) {
       setError(err.message);
     }
@@ -164,6 +169,7 @@ export default function ArticulosInventarioPage() {
       dosisMaximaPorHectarea: articulo.dosisMaximaPorHectarea != null ? String(articulo.dosisMaximaPorHectarea) : "",
       dosisMaximaUnidadUuid: articulo.dosisMaximaUnidad?.uuid || "",
       estado: articulo.estado,
+      almacenes: (articulo.almacenes || []).map((a) => ({ uuid: a.uuid, label: a.nombre, sublabel: a.codigo })),
     });
     setFormError("");
     setModalOpen(true);
@@ -186,7 +192,9 @@ export default function ArticulosInventarioPage() {
         stockMaximo: form.stockMaximo === "" ? null : Number(form.stockMaximo),
         dosisMaximaPorHectarea: form.dosisMaximaPorHectarea === "" ? null : Number(form.dosisMaximaPorHectarea),
         dosisMaximaUnidadUuid: form.dosisMaximaUnidadUuid || null,
+        almacenUuids: form.almacenes.map((a) => a.uuid),
       };
+      delete body.almacenes;
       if (editing) {
         await apiFetch(`/inventarios/articulos/${editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       } else {
@@ -563,14 +571,8 @@ export default function ArticulosInventarioPage() {
 
               {categorias.find((c) => c.uuid === form.categoriaUuid)?.tipo === "INSUMO" && (
                 <div className="row g-3 mb-3 align-items-end">
-                  <div className="col-12">
-                    <p className="small fw-medium mb-1">Dosificación</p>
-                    <p className="form-text small mt-0 mb-2">
-                      Dosis máxima recomendada por hectárea para este insumo (solo de referencia, ej. &quot;4 L/ha&quot;).
-                    </p>
-                  </div>
                   <div className="col-6">
-                    <label className="form-label small fw-medium">Dosis máxima por hectárea</label>
+                    <label className="form-label small fw-medium">Dosis por hectárea</label>
                     <input
                       type="number"
                       step="0.0001"
@@ -597,6 +599,20 @@ export default function ArticulosInventarioPage() {
                   </div>
                 </div>
               )}
+
+              <div className="mb-3">
+                <label className="form-label small fw-medium">Almacenes</label>
+                <TagPicker
+                  items={almacenesDisponibles.map((a) => ({ uuid: a.uuid, label: a.nombre, sublabel: a.codigo }))}
+                  selected={form.almacenes}
+                  onChange={(almacenes) => setForm((f) => ({ ...f, almacenes }))}
+                  placeholder="Buscar almacén para agregar..."
+                />
+                <p className="form-text small mb-0">
+                  Sin ningún almacén seleccionado, el artículo es visible/seleccionable en todos. Asignarle uno o
+                  más lo restringe a que solo se vea/seleccione desde esos almacenes.
+                </p>
+              </div>
 
               <div className="form-check mb-3">
                 <input

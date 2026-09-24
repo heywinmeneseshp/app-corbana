@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiSearch, FiEdit2, FiShield, FiSave, FiX, FiMapPin, FiToggleLeft, FiToggleRight, FiCheck, FiRefreshCw, FiEye } from "react-icons/fi";
+import { FiPlus, FiSearch, FiEdit2, FiShield, FiSave, FiX, FiMapPin, FiToggleLeft, FiToggleRight, FiCheck, FiRefreshCw, FiEye, FiBox } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { startImpersonation, getCurrentUser } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
@@ -18,6 +18,7 @@ export default function UsuariosPage() {
   const [usuarioModal, setUsuarioModal] = useState(null); // null | {} | usuario
   const [rolesModal, setRolesModal] = useState(null); // null | usuario
   const [fincasModal, setFincasModal] = useState(null); // null | usuario
+  const [almacenesModal, setAlmacenesModal] = useState(null); // null | usuario
 
   const [selected, setSelected] = useState(new Set());
   const [resetModal, setResetModal] = useState(false);
@@ -173,6 +174,7 @@ export default function UsuariosPage() {
                 <th>Email</th>
                 <th>Roles</th>
                 <th>Fincas</th>
+                <th>Almacenes</th>
                 <th>Estado</th>
                 <th className="text-end">Acciones</th>
               </tr>
@@ -235,6 +237,17 @@ export default function UsuariosPage() {
                       )}
                     </td>
                     <td>
+                      {(usuario.almacenes || []).length > 0 ? (
+                        usuario.almacenes.map((a) => (
+                          <span key={a.uuid} className="badge rounded-pill text-bg-light border me-1 mb-1">
+                            {a.codigo || a.nombre}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-secondary small">Sin almacenes</span>
+                      )}
+                    </td>
+                    <td>
                       {usuario.estado ? (
                         <span className="badge rounded-pill" style={{ backgroundColor: "#d1fae5", color: "#047857" }}>
                           Activo
@@ -266,6 +279,13 @@ export default function UsuariosPage() {
                           onClick={() => setFincasModal(usuario)}
                         >
                           <FiMapPin /> Fincas
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 text-nowrap"
+                          onClick={() => setAlmacenesModal(usuario)}
+                        >
+                          <FiBox /> Almacenes
                         </button>
                         {esAdmin && usuario.uuid !== miUuid && usuario.estado && (
                           <button
@@ -399,6 +419,14 @@ export default function UsuariosPage() {
         <FincasModal
           usuario={fincasModal}
           onClose={() => setFincasModal(null)}
+          onChanged={loadUsuarios}
+        />
+      )}
+
+      {almacenesModal && (
+        <AlmacenesModal
+          usuario={almacenesModal}
+          onClose={() => setAlmacenesModal(null)}
           onChanged={loadUsuarios}
         />
       )}
@@ -708,6 +736,97 @@ function FincasModal({ usuario, onClose, onChanged }) {
         <p className="text-center text-secondary small py-4 mb-0">Cargando fincas...</p>
       ) : (
         <TagPicker items={allItems} selected={selected} onChange={setSelected} placeholder="Buscar finca para agregar..." />
+      )}
+
+      <div className="d-flex gap-2 mt-3">
+        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+          <FiX /> Cancelar
+        </button>
+        <button
+          type="button"
+          disabled={saving || loading}
+          className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+          onClick={handleGuardar}
+        >
+          <FiSave /> {saving ? "Guardando..." : "Guardar"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+// ─── Modal: almacenes asignados a un usuario ───
+function AlmacenesModal({ usuario, onClose, onChanged }) {
+  const [allItems, setAllItems] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [originalUuids, setOriginalUuids] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const [{ items: todosLosAlmacenes }, misAlmacenes] = await Promise.all([
+        apiFetch(`/inventarios/almacenes?limit=100`),
+        apiFetch(`/users/${usuario.uuid}/almacenes`),
+      ]);
+      setAllItems(todosLosAlmacenes.map((a) => ({ uuid: a.uuid, label: a.nombre, sublabel: a.codigo })));
+      const misItems = misAlmacenes.map((a) => ({ uuid: a.uuid, label: a.nombre, sublabel: a.codigo }));
+      setSelected(misItems);
+      setOriginalUuids(new Set(misItems.map((a) => a.uuid)));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleGuardar = async () => {
+    setError("");
+    setSaving(true);
+    const selectedUuids = new Set(selected.map((s) => s.uuid));
+    const aAgregar = [...selectedUuids].filter((uuid) => !originalUuids.has(uuid));
+    const aQuitar = [...originalUuids].filter((uuid) => !selectedUuids.has(uuid));
+
+    try {
+      await Promise.all([
+        ...aAgregar.map((almacenUuid) =>
+          apiFetch(`/users/${usuario.uuid}/almacenes`, { method: "POST", body: JSON.stringify({ almacenUuid }) }),
+        ),
+        ...aQuitar.map((almacenUuid) => apiFetch(`/users/${usuario.uuid}/almacenes/${almacenUuid}`, { method: "DELETE" })),
+      ]);
+      onChanged();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title={`Almacenes de ${usuario.nombre} ${usuario.apellido}`} onClose={onClose}>
+      <p className="small text-secondary mb-3">
+        Sin ningún almacén seleccionado aquí, el usuario ve todos (sin restricción) — incluidos los artículos
+        asignados a ellos. En cuanto le asignes al menos uno, queda restringido a ver y seleccionar solo esos
+        almacenes (y los artículos asignados a ellos, o sin ningún almacén asignado). El rol{" "}
+        <strong>Administrador</strong> siempre ve todos los almacenes sin restricción, sin importar lo que se elija
+        aquí.
+      </p>
+
+      {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+      {loading ? (
+        <p className="text-center text-secondary small py-4 mb-0">Cargando almacenes...</p>
+      ) : (
+        <TagPicker items={allItems} selected={selected} onChange={setSelected} placeholder="Buscar almacén para agregar..." />
       )}
 
       <div className="d-flex gap-2 mt-3">
