@@ -623,11 +623,11 @@ export default function ElaboracionesPage() {
                     <div className="d-flex align-items-end gap-2 mb-3">
                       <div>
                         <label className="form-label small fw-medium d-flex align-items-center gap-1 mb-1">
-                          Dosis por hectárea
+                          Volumen por hectárea
                           <FiInfo
                             size={13}
                             className="text-secondary"
-                            title="La usa Sanidad Vegetal → Programación de Aspersiones para calcular cuánto preparar según las hectáreas — elegí en qué unidad de volumen se mide (puede ser distinta a la del artículo elaborado, ej. dosis en Galones aunque la mezcla rinda en Litros). Vacío = esta mezcla no se puede usar en una aspersión todavía."
+                            title="La usa Sanidad Vegetal → Programación de Aspersiones para calcular cuánto preparar según las hectáreas — elegí en qué unidad de volumen se mide (puede ser distinta a la del artículo elaborado, ej. Galones aunque la mezcla rinda en Litros). Vacío = esta mezcla no se puede usar en una aspersión todavía."
                           />
                         </label>
                         <div className="input-group input-group-sm" style={{ width: "14rem" }}>
