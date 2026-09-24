@@ -1789,7 +1789,7 @@ export default function EstimacionesPage() {
                       <tr>
                         <th className="text-start">Código</th>
                         <th className="text-start">Nombre</th>
-                        <th>Sem</th>
+                        <th title="Semana en que se cargó la estimación — Est 1 corresponde a la semana siguiente">Semana de registro</th>
                         {Array.from({ length: pivoteData.maxColumnas }, (_, i) => (
                           <th key={i}>Est {i + 1}</th>
                         ))}
