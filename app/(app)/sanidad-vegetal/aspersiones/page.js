@@ -1427,12 +1427,12 @@ export default function AspersionesPage() {
                   </select>
                   {mezclas.length === 0 && (
                     <p className="form-text small text-warning mb-0">
-                      No hay mezclas con dosis por hectárea configurada — edítala en Mezclas.
+                      No hay mezclas con volumen por hectárea configurado — editalo en Mezclas.
                     </p>
                   )}
                 </div>
                 <div className="col-2">
-                  <label className="form-label small fw-medium mb-1">Dosis / ha</label>
+                  <label className="form-label small fw-medium mb-1">Volumen / ha</label>
                   <div className="input-group input-group-sm">
                     <input
                       type="number"
