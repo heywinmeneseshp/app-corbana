@@ -35,6 +35,16 @@ function Stat({ icon: Icon, label, value, unidad }) {
   );
 }
 
+function hoyIso() {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "America/Bogota" }); // AAAA-MM-DD
+}
+
+function haceUnMesIso() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  return d.toLocaleDateString("sv-SE", { timeZone: "America/Bogota" });
+}
+
 export default function EstacionMeteorologicaPage() {
   const [actual, setActual] = useState(null);
   const [historico, setHistorico] = useState([]);
@@ -42,6 +52,12 @@ export default function EstacionMeteorologicaPage() {
   const [error, setError] = useState("");
   const [sincronizando, setSincronizando] = useState(false);
   const [sincError, setSincError] = useState("");
+  const [rellenandoFaltantes, setRellenandoFaltantes] = useState(false);
+
+  // Rango para la sincronización manual — arranca en el último mes, mismo
+  // criterio que el auto-relleno de faltantes al abrir el módulo.
+  const [fechaDesde, setFechaDesde] = useState(haceUnMesIso());
+  const [fechaHasta, setFechaHasta] = useState(hoyIso());
 
   async function load() {
     setLoading(true);
@@ -63,13 +79,34 @@ export default function EstacionMeteorologicaPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
+
+    // Relleno automático, en segundo plano, de los días del último mes que
+    // todavía no tengan dato — no bloquea la carga inicial; si rellenó algo,
+    // recarga el histórico para mostrarlo. Pedido explícito: "sincronización
+    // automática cuando abra el módulo... un mes atrás".
+    (async () => {
+      setRellenandoFaltantes(true);
+      try {
+        const res = await apiFetch("/estacion-meteorologica/sincronizar-faltantes", { method: "POST", body: JSON.stringify({}) });
+        if (res?.sincronizados?.length) await load();
+      } catch {
+        // Silencioso: esto es un relleno en segundo plano, no se le muestra
+        // un error al usuario por esto — el botón de sincronizar manual
+        // sigue disponible si algo falló.
+      } finally {
+        setRellenandoFaltantes(false);
+      }
+    })();
   }, []);
 
   async function handleSincronizar() {
     setSincError("");
     setSincronizando(true);
     try {
-      await apiFetch("/estacion-meteorologica/sincronizar", { method: "POST", body: JSON.stringify({}) });
+      await apiFetch("/estacion-meteorologica/sincronizar", {
+        method: "POST",
+        body: JSON.stringify({ fechaDesde, fechaHasta }),
+      });
       await load();
     } catch (err) {
       setSincError(err.message);
@@ -86,11 +123,46 @@ export default function EstacionMeteorologicaPage() {
             <h1 className="h4 fw-bold mb-1">Estación Meteorológica</h1>
             <p className="text-secondary small mb-0">Pantoja 01 Norte — datos en vivo vía WeatherLink.</p>
           </div>
-          <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-inline-flex align-items-center gap-1" disabled={sincronizando} onClick={handleSincronizar}>
-            <FiRefreshCw size={14} className={sincronizando ? "spin" : ""} />
-            {sincronizando ? "Sincronizando..." : "Sincronizar ayer"}
-          </button>
+          <div className="d-flex align-items-end gap-2 flex-wrap">
+            <div>
+              <label className="form-label small text-secondary mb-1">Desde</label>
+              <input
+                type="date"
+                className="form-control form-control-sm rounded-3"
+                value={fechaDesde}
+                max={fechaHasta}
+                onChange={(e) => setFechaDesde(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="form-label small text-secondary mb-1">Hasta</label>
+              <input
+                type="date"
+                className="form-control form-control-sm rounded-3"
+                value={fechaHasta}
+                min={fechaDesde}
+                max={hoyIso()}
+                onChange={(e) => setFechaHasta(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm rounded-3 d-inline-flex align-items-center gap-1"
+              disabled={sincronizando || !fechaDesde || !fechaHasta}
+              onClick={handleSincronizar}
+            >
+              <FiRefreshCw size={14} className={sincronizando ? "spin" : ""} />
+              {sincronizando ? "Sincronizando..." : "Sincronizar rango"}
+            </button>
+          </div>
         </div>
+
+        {rellenandoFaltantes && (
+          <p className="text-secondary small mb-3">
+            <FiRefreshCw size={12} className="spin me-1" />
+            Revisando días del último mes sin datos...
+          </p>
+        )}
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
         {sincError && <div className="alert alert-danger py-2 small">{sincError}</div>}
