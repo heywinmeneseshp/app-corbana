@@ -213,13 +213,17 @@ export default function EstacionMeteorologicaPage() {
                         <th style={{ color: "#166534" }}>Fecha</th>
                         <th className="text-center" style={{ color: "#166534" }}>Lluvia (mm)</th>
                         <th className="text-center" style={{ color: "#166534" }}>Temperatura (°C)</th>
+                        <th className="text-center" style={{ color: "#166534" }}>Temp. máxima (°C)</th>
+                        <th className="text-center" style={{ color: "#166534" }}>Temp. mínima (°C)</th>
                         <th className="text-center" style={{ color: "#166534" }}>Humedad (%)</th>
+                        <th className="text-center" style={{ color: "#166534" }}>Viento (km/h)</th>
+                        <th className="text-center" style={{ color: "#166534" }}>Viento máx. (km/h)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {historico.length === 0 && (
                         <tr>
-                          <td colSpan={4} className="text-center text-secondary small py-3">
+                          <td colSpan={8} className="text-center text-secondary small py-3">
                             Sin registros todavía — se sincroniza solo, una vez al día.
                           </td>
                         </tr>
@@ -229,7 +233,11 @@ export default function EstacionMeteorologicaPage() {
                           <td className="small">{h.fecha}</td>
                           <td className="small text-center">{h.mm ?? "—"}</td>
                           <td className="small text-center">{h.temperatura ?? "—"}</td>
+                          <td className="small text-center">{h.temperaturaMaxima ?? "—"}</td>
+                          <td className="small text-center">{h.temperaturaMinima ?? "—"}</td>
                           <td className="small text-center">{h.humedadRelativa ?? "—"}</td>
+                          <td className="small text-center">{h.vientoVelocidad ?? "—"}</td>
+                          <td className="small text-center">{h.vientoMax ?? "—"}</td>
                         </tr>
                       ))}
                     </tbody>
