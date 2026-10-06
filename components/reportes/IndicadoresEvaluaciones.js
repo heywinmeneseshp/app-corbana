@@ -21,6 +21,7 @@ import ModalShell from "@/components/ModalShell";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 import { COLORES_CINTA } from "@/components/reportes/PromedioPorSemanaChart";
 import MapaEvaluacionesModal from "@/components/reportes/MapaEvaluacionesModal";
+import GraficoEmbolsesCompacto from "@/components/reportes/GraficoEmbolsesCompacto";
 
 const TIPOS_COLUMNA = ["Índice de infección", "Conteo de Hojas", "Suma Bruta"];
 const LABELS = {
@@ -167,7 +168,8 @@ export default function IndicadoresEvaluaciones() {
   const usuarioNombreCompleto = usuarioNombre
     ? `${usuarioNombre.nombre || ""} ${usuarioNombre.apellido || ""}`.trim() || usuarioNombre.usuario
     : "";
-  const semanaNombre = semanas.find((s) => s.uuid === semanaUuid)?.codigo || "";
+  const semanaSeleccionada = semanas.find((s) => s.uuid === semanaUuid);
+  const semanaNombre = semanaSeleccionada?.codigo || "";
   const loteActivo = (data?.porFinca || [])
     .flatMap((f) => f.lotes || [])
     .find((l) => l.uuid === loteUuid);
@@ -532,6 +534,16 @@ export default function IndicadoresEvaluaciones() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Esquina inferior derecha del panel — pedido explícito */}
+              <div className="mt-3">
+                <GraficoEmbolsesCompacto
+                  anio={anio}
+                  hastaSemana={semanaSeleccionada?.numeroSemana}
+                  fincaUuid={fincaUuid}
+                  fincaNombre={fincas.find((f) => f.uuid === fincaUuid)?.nombre}
+                />
               </div>
             </div>
           </div>

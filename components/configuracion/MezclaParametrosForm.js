@@ -15,6 +15,7 @@ export default function MezclaParametrosForm() {
   const [phMinimo, setPhMinimo] = useState("");
   const [phMaximo, setPhMaximo] = useState("");
   const [ceMaxima, setCeMaxima] = useState("");
+  const [reguladorPhDosisGL, setReguladorPhDosisGL] = useState("");
   const [roles, setRoles] = useState([]);
   const [aprobadores, setAprobadores] = useState([]); // uuids de rol
   const [loading, setLoading] = useState(true);
@@ -31,6 +32,7 @@ export default function MezclaParametrosForm() {
         setPhMinimo(String(data.phMinimo ?? ""));
         setPhMaximo(String(data.phMaximo ?? ""));
         setCeMaxima(String(data.ceMaxima ?? ""));
+        setReguladorPhDosisGL(String(data.reguladorPhDosisGL ?? "0.8"));
         setAprobadores(Array.isArray(data.aprobadoresRolesUuids) ? data.aprobadoresRolesUuids : []);
         setRoles(rolesData.items || []);
       })
@@ -59,12 +61,14 @@ export default function MezclaParametrosForm() {
           phMinimo: Number(phMinimo),
           phMaximo: Number(phMaximo),
           ceMaxima: Number(ceMaxima),
+          reguladorPhDosisGL: Number(reguladorPhDosisGL),
           aprobadoresRolesUuids: aprobadores,
         }),
       });
       setPhMinimo(String(data.phMinimo));
       setPhMaximo(String(data.phMaximo));
       setCeMaxima(String(data.ceMaxima));
+      setReguladorPhDosisGL(String(data.reguladorPhDosisGL ?? "0.8"));
       setAprobadores(Array.isArray(data.aprobadoresRolesUuids) ? data.aprobadoresRolesUuids : []);
       setOk("Parámetros guardados correctamente.");
     } catch (err) {
@@ -126,6 +130,26 @@ export default function MezclaParametrosForm() {
               (inclusive) <strong>y</strong> la CE final es <strong>menor</strong> que el máximo configurado. Cambiar
               estos valores no afecta pruebas ya finalizadas — cada una guarda los parámetros que estaban vigentes
               cuando se aprobó.
+            </p>
+
+            <hr className="my-3" />
+            <div className="row g-3 mb-2">
+              <div className="col-12 col-md-4">
+                <label className="form-label small fw-medium">ACONDICIONADOR — gramos por litro de agua</label>
+                <input
+                  type="number"
+                  required
+                  min={0.01}
+                  step="0.01"
+                  className="form-control rounded-3"
+                  value={reguladorPhDosisGL}
+                  onChange={(e) => setReguladorPhDosisGL(e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="form-text small mb-3">
+              Dosis por defecto (0.8 g/L) que se sugiere al registrar una etapa de Corrección de pH, según los litros
+              de agua indicados — el operador siempre puede editar la cantidad sugerida a mano.
             </p>
 
             <hr className="my-3" />

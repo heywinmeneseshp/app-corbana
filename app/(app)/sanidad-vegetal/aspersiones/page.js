@@ -2,12 +2,13 @@
 
 import { useEffect, useId, useMemo, useState, useRef } from "react";
 import ExcelJS from "exceljs";
-import { FiPlus, FiTrash2, FiX, FiCheck, FiMail, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSettings, FiSend, FiAlertTriangle, FiInfo } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSettings, FiSend, FiAlertTriangle, FiInfo } from "react-icons/fi";
 import { apiFetch, apiFetchFormData, apiUpload } from "@/lib/api";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import StockInsuficienteModal from "@/components/StockInsuficienteModal";
 import TagPicker from "@/components/TagPicker";
 import { generarAvisoAspersionPdfBlob, verAvisoAspersionPdf } from "@/lib/aspersionExport";
 import { ubicarSemana, formatRangoSemana } from "@/lib/laborCalendarBuilder";
@@ -128,6 +129,9 @@ function emptyForm() {
     mezclaUuid: "",
     almacenUuid: "",
     hectareas: "",
+    // Volumen por hectárea editable — vacío = usar el configurado en la
+    // mezcla. Se limpia al cambiar de mezcla.
+    volumenHaManual: "",
     // El "% Aumento" se sugiere solo (ver porcentajeAumentoAutomatico más
     // abajo), pero el operador lo puede subir/bajar a mano para esta
     // aspersión puntual — vacío = usar el sugerido automático. Se limpia
@@ -185,7 +189,7 @@ export default function AspersionesPage() {
   // operador vea siempre la misma unidad que prefiere (ej. Galones), con
   // conversión automática.
   const [unidadesVolumen, setUnidadesVolumen] = useState([]);
-  // Solo para resolver "Kilogramo" al recalcular el Regulador de pH (0.8 g
+  // Solo para resolver "Kilogramo" al recalcular el ACONDICIONADOR (0.8 g
   // por litro de Agua) — ver necesariaFinalNativa más abajo.
   const [unidadesPeso, setUnidadesPeso] = useState([]);
   // Preferencia guardada en ESTE computador (localStorage, no en el
@@ -221,6 +225,8 @@ export default function AspersionesPage() {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  // uuid de la aspersión que se está editando — null = "Programar" (crear).
+  const [editingUuid, setEditingUuid] = useState(null);
   const [usuariosFinca, setUsuariosFinca] = useState([]);
   const [cargandoUsuariosFinca, setCargandoUsuariosFinca] = useState(false);
   const [semanaPreview, setSemanaPreview] = useState(null);
@@ -229,9 +235,8 @@ export default function AspersionesPage() {
   const [enviandoSemana, setEnviandoSemana] = useState(false);
   const [procesandoTexto, setProcesandoTexto] = useState("");
 
-  // Cargue masivo de aspersiones desde Excel/CSV — cada fila busca sola la
-  // mezcla que incluya los productos listados (ver bulkCrear en el
-  // backend), no hace falta elegir una mezcla puntual por fila.
+  // Cargue masivo de aspersiones desde Excel/CSV — cada fila indica la
+  // mezcla por código o nombre (ver bulkCrear en el backend).
   const inputCargueRef = useRef(null);
   const [cargueModalOpen, setCargueModalOpen] = useState(false);
   const [cargueArchivo, setCargueArchivo] = useState(null);
@@ -281,7 +286,7 @@ export default function AspersionesPage() {
         apiFetch(`/semanas?anio=${anioActual}&limit=100`),
         apiFetch("/inventarios/unidades/conversiones"),
         apiFetch("/inventarios/unidades?tipo=VOLUMEN&estado=true&limit=100"),
-        // Solo para resolver "Kilogramo" al recalcular el Regulador de pH
+        // Solo para resolver "Kilogramo" al recalcular el ACONDICIONADOR
         // (0.8 g por litro de Agua) — el Regulador se mide en unidades de
         // MASA, no de volumen.
         apiFetch("/inventarios/unidades?tipo=MASA&estado=true&limit=100"),
@@ -422,6 +427,13 @@ export default function AspersionesPage() {
     if (semanaHoy) setSemanaActivaUuid(semanaHoy.uuid);
   }
 
+  // Administrador guardado que ya no aparece entre los usuarios de la finca
+  // (ej. le quitaron la asignación): se muestra igual para no perderlo.
+  const guardadoFueraDeLista =
+    Boolean(form.administradorFincaNombre) &&
+    !form.administradorFincaUuid &&
+    !usuariosFinca.some((u) => nombreUsuario(u) === form.administradorFincaNombre);
+
   function aplicarFiltros() {
     if (page === 1) load();
     else setPage(1);
@@ -454,8 +466,18 @@ export default function AspersionesPage() {
       .then(([usuarios, ultimas]) => {
         if (cancelado) return;
         setUsuariosFinca(usuarios || []);
+        // Al editar, se vuelve a seleccionar en la lista el administrador ya
+        // guardado (el formulario solo precarga su nombre).
+        if (editingUuid) {
+          setForm((f) => {
+            const guardado = (usuarios || []).find((u) => nombreUsuario(u) === f.administradorFincaNombre);
+            return guardado ? { ...f, administradorFincaUuid: guardado.uuid } : f;
+          });
+        }
         const anterior = ultimas.items?.[0];
-        if (anterior?.administradorFincaNombre) {
+        // Al editar se respeta el administrador ya guardado; la sugerencia
+        // del último usado solo aplica al programar una nueva.
+        if (!editingUuid && anterior?.administradorFincaNombre) {
           const sugerido = (usuarios || []).find(
             (u) => nombreUsuario(u) === anterior.administradorFincaNombre,
           );
@@ -473,6 +495,7 @@ export default function AspersionesPage() {
     return () => {
       cancelado = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.fincaUuid, modalOpen]);
 
   // Vista previa de la semana: mismo criterio que el backend
@@ -502,7 +525,58 @@ export default function AspersionesPage() {
     };
   }, [form.fecha, modalOpen]);
 
+  // Edita una aspersión PROGRAMADA: trae el detalle, precarga el formulario
+  // y deja como ajustes manuales las cantidades ya guardadas por insumo (así
+  // la tabla muestra lo guardado y no lo recalcula desde cero). El % de
+  // Aumento se deduce de la cantidad guardada cuando las unidades de dosis y
+  // rendimiento de la mezcla coinciden; si no, queda el sugerido automático.
+  async function openEdit(aspersion) {
+    try {
+      const d = await apiFetch(`/aspersiones/${aspersion.uuid}`);
+      const base = Number(d.mezcla?.dosisPorHectarea || 0) * Number(d.hectareas || 0);
+      const mismaUnidad =
+        d.mezcla?.dosisPorHectareaUnidad?.uuid &&
+        d.mezcla.dosisPorHectareaUnidad.uuid === d.mezcla?.unidadRendimiento?.uuid;
+      const aumento = mismaUnidad && base > 0 ? Math.max(0, Math.round(((Number(d.cantidadCalculada) / base) - 1) * 10000) / 100) : null;
+      const ajustados = {};
+      const textos = {};
+      for (const c of d.componentes || []) {
+        if (c.articulo?.uuid) {
+          ajustados[c.articulo.uuid] = String(Number(c.cantidad));
+          textos[c.articulo.uuid] = String(Number(c.cantidad));
+        }
+      }
+      setEditingUuid(d.uuid);
+      setForm({
+        ...emptyForm(),
+        fincaUuid: d.finca?.uuid || "",
+        fecha: String(d.fecha || "").slice(0, 10),
+        tipo: Array.isArray(d.tipo) ? d.tipo : d.tipo ? [d.tipo] : ["SIGATOKA_NEGRA"],
+        medio: d.medio || "",
+        mezclaUuid: d.mezcla?.uuid || "",
+        almacenUuid: d.almacen?.uuid || "",
+        hectareas: String(Number(d.hectareas)),
+        aumentoManual: aumento != null ? String(aumento) : "",
+        componentesAjustados: ajustados,
+        representanteCorbanaNombre: d.representanteCorbanaNombre || "",
+        administradorFincaNombre: d.administradorFincaNombre || "",
+        observaciones: d.observaciones || "",
+      });
+      setTextosCantidadAjustada(textos);
+      setUsuariosFinca([]);
+      setSemanaPreview(null);
+      setMezclaDetalle(null);
+      setExistenciasInsumos({});
+      setFormError("");
+      setModalOpen(true);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   function openCreate() {
+    setEditingUuid(null);
+    setTextosCantidadAjustada({});
     setForm(emptyForm());
     setUsuariosFinca([]);
     setSemanaPreview(null);
@@ -514,11 +588,11 @@ export default function AspersionesPage() {
 
   // Plantilla de cargue masivo — precargada con todas las fincas activas
   // (pedido explícito) para que el operador solo tenga que completar
-  // fecha/hectáreas/productos de cada una, sin escribir los nombres de
-  // finca a mano. Con estilo de marca (ExcelJS, ya usado en esta misma
-  // página vía lib/aspersionesExcelExport.js) + hoja de Instrucciones +
-  // hoja de Insumos (referencia de qué nombres escribir en producto1,
-  // producto2, ...).
+  // fecha/hectáreas/mezcla de cada una, sin escribir los nombres de finca a
+  // mano. Con estilo de marca (ExcelJS, ya usado en esta misma página vía
+  // lib/aspersionesExcelExport.js) + hoja de Instrucciones + hoja de
+  // Mezclas (cada mezcla con los insumos de su receta en formato
+  // "A | B | C", copiable directo a la columna "mezcla").
   async function descargarPlantillaAspersiones() {
     const BRAND_900 = "FF14532D";
     const BRAND_700 = "FF15803D";
@@ -526,17 +600,19 @@ export default function AspersionesPage() {
     const WHITE = "FFFFFFFF";
     const BORDER_LIGHT = "FFE2E8F0";
 
-    let insumos = [];
+    let mezclasRef = [];
     try {
-      // Endpoint propio de Aspersiones (no /inventarios/articulos, que
-      // exige un permiso que solo tiene Administrador) — así cualquiera
-      // con permiso de programar aspersiones ve esta lista de referencia.
-      const res = await apiFetch("/aspersiones/insumos-referencia");
-      insumos = (Array.isArray(res) ? res : []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
+      // Endpoint propio de Aspersiones (no /inventarios/mezclas) — así
+      // cualquiera con permiso de programar aspersiones ve esta lista de
+      // referencia con la receta de cada mezcla.
+      const res = await apiFetch("/aspersiones/mezclas-referencia");
+      mezclasRef = Array.isArray(res) ? res : [];
     } catch {}
 
-    const headers = ["medio", "almacen", "fecha", "finca", "observaciones", "hectareas", "tipo", "producto1", "producto2", "producto3"];
-    const anchos = [10, 10, 13, 18, 26, 12, 16, 18, 18, 18];
+    const headers = ["medio", "almacen", "fecha", "finca", "observaciones", "hectareas", "tipo", "mezcla"];
+    // mezcla va ancha (60): además del código cabe la lista
+    // "INSUMO1 | INSUMO2 | ..." de la receta.
+    const anchos = [10, 10, 13, 18, 26, 12, 20, 60];
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Corbana";
@@ -563,9 +639,7 @@ export default function AspersionesPage() {
         observaciones: "",
         hectareas: "",
         tipo: "",
-        producto1: "",
-        producto2: "",
-        producto3: "",
+        mezcla: "",
       });
       row.eachCell((cell, colNumber) => {
         cell.border = {
@@ -585,6 +659,14 @@ export default function AspersionesPage() {
       ws.getCell(`A${r}`).dataValidation = { type: "list", allowBlank: true, formulae: ['"AVION,DRON"'] };
       ws.getCell(`G${r}`).dataValidation = { type: "list", allowBlank: true, formulae: ['"SIGATOKA_NEGRA,DEFOLIADOR,FERTILIZACION"'] };
     }
+    // Desplegable de mezclas por código (siempre existe y es corto); Excel
+    // limita la lista literal a 255 caracteres, si no cabe se omite.
+    const listaCodigos = mezclasRef.map((m) => m.codigo).filter(Boolean).join(",");
+    if (listaCodigos && listaCodigos.length <= 250) {
+      for (let r = 2; r <= fincas.length + 1; r++) {
+        ws.getCell(`H${r}`).dataValidation = { type: "list", allowBlank: true, formulae: [`"${listaCodigos}"`] };
+      }
+    }
 
     // Hoja de instrucciones.
     const wsInfo = wb.addWorksheet("Instrucciones");
@@ -599,11 +681,11 @@ export default function AspersionesPage() {
       ["hectareas", "Área a tratar (sin sobregalonaje)"],
       ["tipo", "SIGATOKA_NEGRA, DEFOLIADOR o FERTILIZACION — vacío = Sigatoka Negra"],
       [
-        "producto1, producto2, ...",
-        "Nombre de cada insumo de la mezcla (fungicidas y/o fertilización juntos, ver hoja \"Insumos\"). Agrega las columnas que hagan falta (producto4, producto5, ...) — deja en blanco las que no uses. El sistema busca la mezcla activa que incluya TODOS los productos listados en la fila; si hay varias que coinciden, usa la que se haya usado más recientemente en una aspersión.",
+        "mezcla",
+        "Código (ej. MEZ-0017) o nombre exacto de una mezcla activa, O la lista de insumos de su receta en el MISMO formato de la hoja \"Mezclas\" (ej. \"PALADIUM 250 EC | MANCOL 430 SC | ACEITE BANOLE | HIPOTENSOR SYS | ADHERENTE SYS | Agua | ACONDICIONADOR\") — puedes copiar la celda \"Insumos de la receta\" y pegarla acá. Con la lista se usa la mezcla activa cuya receta incluya TODOS esos insumos (si varias califican, la usada más recientemente). La mezcla debe tener volumen por hectárea configurado.",
       ],
       ["", ""],
-      ["Filas sin ningún producto", "se ignoran al cargar (déjalas vacías si esa finca no tiene aspersión programada esta semana)"],
+      ["Filas sin mezcla ni hectáreas", "se ignoran al cargar (déjalas vacías si esa finca no tiene aspersión programada esta semana)"],
     ];
     filasInfo.forEach((fila, i) => {
       const row = wsInfo.addRow(fila);
@@ -618,17 +700,38 @@ export default function AspersionesPage() {
       }
     });
 
-    // Hoja de referencia: insumos disponibles para escribir en producto1/2/3.
-    const wsInsumos = wb.addWorksheet("Insumos");
-    wsInsumos.columns = [{ width: 32 }, { width: 14 }];
-    const headerInsumos = wsInsumos.addRow(["Nombre (escribe esto en producto1/2/3...)", "Código"]);
-    headerInsumos.eachCell((cell) => {
+    // Hoja de referencia: una fila por mezcla activa, con los insumos de su
+    // receta unidos por " | " — el principal primero y el resto en el orden
+    // en que se agregaron a la receta, sin cantidades.
+    const wsMezclas = wb.addWorksheet("Mezclas", { views: [{ state: "frozen", ySplit: 1 }] });
+    wsMezclas.columns = [{ width: 12 }, { width: 38 }, { width: 14 }, { width: 100 }];
+    const headerMezclas = wsMezclas.addRow(["Código", "Mezcla", "Volumen / ha", "Insumos de la receta"]);
+    headerMezclas.height = 22;
+    headerMezclas.eachCell((cell) => {
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND_900 } };
       cell.font = { color: { argb: WHITE }, bold: true };
+      cell.alignment = { vertical: "middle" };
     });
-    insumos.forEach((a, i) => {
-      const row = wsInsumos.addRow([a.nombre, a.codigo || ""]);
-      if (i % 2 === 1) row.eachCell((cell) => (cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT } }));
+    const posicionInsumo = (ins) => (ins.esPrincipal ? 0 : 1);
+    mezclasRef.forEach((m, idx) => {
+      const insumosTexto = m.insumos
+        .map((ins, i) => ({ ins, i }))
+        .sort((a, b) => posicionInsumo(a.ins) - posicionInsumo(b.ins) || a.i - b.i)
+        .map(({ ins }) => ins.nombre)
+        .join(" | ");
+      const row = wsMezclas.addRow([
+        m.codigo,
+        m.nombre || "(sin nombre)",
+        m.volumenPorHectarea != null ? `${m.volumenPorHectarea} ${m.volumenPorHectareaUnidad}/ha` : "sin volumen/ha",
+        insumosTexto || "(sin receta)",
+      ]);
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.border = { top: { style: "thin", color: { argb: BORDER_LIGHT } }, bottom: { style: "thin", color: { argb: BORDER_LIGHT } } };
+        cell.alignment = { vertical: "middle", wrapText: true };
+        if (idx % 2 === 1) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT } };
+      });
+      row.getCell(1).font = { bold: true };
+      row.getCell(2).font = { bold: true };
     });
 
     const buffer = await wb.xlsx.writeBuffer();
@@ -673,9 +776,11 @@ export default function AspersionesPage() {
 
   const mezclaSeleccionada = mezclas.find((m) => m.uuid === form.mezclaUuid);
   const hectareasNum = Number(form.hectareas) || 0;
-  // "Volumen / ha" ya no lo edita el operador — siempre es el configurado
-  // en la mezcla.
-  const dosisPorHectareaNum = Number(mezclaSeleccionada?.dosisPorHectarea || 0);
+  // "Volumen / ha" lo puede editar el operador — vacío = el configurado
+  // en la mezcla (pedido explícito). Todo lo demás (cantidad a preparar,
+  // % aumento automático, tabla, agua de relleno) se recalcula solo.
+  const dosisPorHectareaNum =
+    form.volumenHaManual !== "" ? Number(form.volumenHaManual) || 0 : Number(mezclaSeleccionada?.dosisPorHectarea || 0);
   const unidadDosisUuid = mezclaSeleccionada?.dosisPorHectareaUnidad?.uuid;
   const unidadRendimientoUuid = mezclaSeleccionada?.unidadRendimiento?.uuid;
 
@@ -696,13 +801,53 @@ export default function AspersionesPage() {
     mezclaSeleccionada?.unidadRendimiento?.simbolo ||
     mezclaSeleccionada?.dosisPorHectareaUnidad?.simbolo;
 
-  // Redondea al múltiplo de 0.5 más cercano (0, 0.5, 1, 1.5...) — si daría
-  // 0 (ej. 0.2), NO redondea: dejar un insumo en cero no tiene sentido
-  // práctico, se prefiere el valor teórico sin redondear antes que perder
-  // el insumo entero de la mezcla.
+  // Redondeo al 0.5 MÁS CERCANO (no hacia arriba) — pedido explícito tanto
+  // para el cálculo real de "cantidad necesaria" por insumo (y la dosis del
+  // principal que decide el % de Aumento automático) como para lo que se
+  // muestra en pantalla al convertir a la unidad que el operador elija por
+  // fila (ver aUnidadFila, más abajo, que usa este mismo criterio con paso
+  // 0.1 para el ACONDICIONADOR).
   function redondearAMedios(valor) {
-    const redondeado = Math.round(valor * 2) / 2;
-    return redondeado > 0 ? redondeado : valor;
+    if (!(valor > 0)) return valor;
+    return Math.round(valor / 0.5) * 0.5;
+  }
+
+  // Unidad en la que se MUESTRA y se REDONDEA la "Cantidad necesaria" de un
+  // insumo: la propia del artículo (L, Gal, Kg) y no la de la receta — tras
+  // llevar una receta a 1 litro (Mezclas → Prueba de laboratorio) sus
+  // cantidades quedan en ml/g, y aquí se necesitan en la unidad del insumo.
+  // Si no hay conversión desde la unidad de la receta, se usa la de la receta.
+  function unidadPropiaDe(componente) {
+    const recetaUuid = componente.unidad?.uuid;
+    if (!recetaUuid) return recetaUuid;
+    // Prioridad: la unidad configurada en el insumo para su dosis (ej. Gal
+    // para ACEITE BANOLE), luego su unidad de medida. Solo cuenta si es una
+    // unidad que la pantalla sabe listar (volumen/peso) y hay conversión.
+    const candidatas = [componente.articulo?.dosisUnidad?.uuid, componente.articulo?.unidadMedida?.uuid];
+    for (const uuid of candidatas) {
+      if (!uuid) continue;
+      if (uuid === recetaUuid) return recetaUuid;
+      const listable = unidadesVolumen.some((u) => u.uuid === uuid) || unidadesPeso.some((u) => u.uuid === uuid);
+      if (listable && convertirCantidad(grafoUnidades, recetaUuid, uuid, 1) !== null) return uuid;
+    }
+    return recetaUuid;
+  }
+
+  // Redondea al 0.5 más cercano EN LA UNIDAD PROPIA del insumo y devuelve el
+  // resultado en la unidad de la receta (la "nativa", que es la que se guarda).
+  function redondearEnUnidadPropia(componente, cantidadNativa) {
+    if (!(cantidadNativa > 0)) return cantidadNativa;
+    const recetaUuid = componente.unidad?.uuid;
+    const propiaUuid = unidadPropiaDe(componente);
+    if (!recetaUuid || !propiaUuid || propiaUuid === recetaUuid) return redondearAMedios(cantidadNativa);
+    const enPropia = convertirCantidad(grafoUnidades, recetaUuid, propiaUuid, cantidadNativa);
+    if (enPropia === null) return redondearAMedios(cantidadNativa);
+    // Un insumo diminuto (ej. 15 ml en una unidad propia de Gal) se
+    // redondearía a 0 y el backend rechaza cantidades no positivas: en ese
+    // caso se conserva la cantidad exacta.
+    const redondeada = redondearAMedios(enPropia);
+    if (!(redondeada > 0)) return cantidadNativa;
+    return convertirCantidad(grafoUnidades, propiaUuid, recetaUuid, redondeada) ?? cantidadNativa;
   }
 
   // Convierte una cantidad NATIVA (unidad propia de ese insumo) a la
@@ -721,6 +866,16 @@ export default function AspersionesPage() {
       return cantidadMostrada;
     }
     return convertirCantidad(grafoUnidades, unidadMostradaUuid, unidadDestinoUuid, cantidadMostrada) ?? cantidadMostrada;
+  }
+  // Variante estricta SOLO para sumar lo que completa el Agua: si el
+  // insumo no se puede convertir a la unidad mostrada (otra magnitud
+  // física, ej. ANTIFOAM en gramos cuando se prepara en Galones), se
+  // EXCLUYE de la suma en vez de sumar el número nativo tal cual — eso
+  // sumaba 343 g como 343 Gal y dejaba el Agua en 0.
+  function aUnidadMostradaSumable(cantidadNativa, unidadOrigenUuid) {
+    if (cantidadNativa == null) return null;
+    if (!unidadOrigenUuid || !unidadMostradaUuid || unidadOrigenUuid === unidadMostradaUuid) return cantidadNativa;
+    return convertirCantidad(grafoUnidades, unidadOrigenUuid, unidadMostradaUuid, cantidadNativa);
   }
 
   // Al elegir una mezcla se trae su detalle completo (con los componentes
@@ -746,63 +901,256 @@ export default function AspersionesPage() {
   const componentesRecetaSeleccionada = mezclaDetalle?.versiones?.[0]?.componentes || [];
   const rendimientoSeleccionado = Number(mezclaDetalle?.rendimiento || 1) || 1;
   // Insumo principal (selección única, ver marcarComponentePrincipal en
-  // mezcla.service.js) — gobierna tanto el redondeo del resto de insumos
-  // (ratioRedondeoPrincipal más abajo) como el límite del "% Aumento"
-  // automático (no debe superar el 110% de su dosis máxima por hectárea).
+  // mezcla.service.js) — gobierna el tope del "% Aumento" automático (SOLO
+  // él no debe superar el 110% de su dosis máxima por hectárea) y el % de
+  // dosis resultante (principalPctSobreDosis, ver calcularEscenario) que
+  // luego se aplica a TODOS los demás insumos que tengan su propia dosis
+  // configurada — pedido explícito: "todos trabajan con ese mismo %".
   const componentePrincipal = componentesRecetaSeleccionada.find((c) => c.esPrincipal);
+  // Dosis de referencia de un componente de la receta: la del RENGLÓN si
+  // está configurada en la mezcla (manda sobre la del artículo — ej. ACEITE
+  // a 2.0/ha en una mezcla y 1.5/ha en la mayoría), si no la del artículo.
+  // Sin dosis no hay % sobre dosis.
+  function dosisRefComponente(componente) {
+    if (!componente) return null;
+    if (componente.dosisPorHectarea != null && componente.dosisUnidadId) {
+      const unidad = [...unidadesVolumen, ...unidadesPeso].find((u) => u.id === componente.dosisUnidadId);
+      if (unidad) {
+        return { dosisMaxima: Number(componente.dosisPorHectarea), unidadUuid: unidad.uuid, simbolo: unidad.simbolo, esDelRenglon: true };
+      }
+    }
+    const dosisMaxima = componente.articulo?.dosisPorHectarea != null ? Number(componente.articulo.dosisPorHectarea) : null;
+    if (dosisMaxima == null) return null;
+    return {
+      dosisMaxima,
+      unidadUuid: componente.articulo?.dosisUnidad?.uuid,
+      simbolo: componente.articulo?.dosisUnidad?.simbolo || "",
+      esDelRenglon: false,
+    };
+  }
+  const componenteAgua = componentesRecetaSeleccionada.find((c) => c.articulo?.nombre === "Agua");
+  const componenteRegulador = componentesRecetaSeleccionada.find((c) => c.articulo?.nombre === "ACONDICIONADOR");
+  const componenteDiluyente =
+    componenteAgua ||
+    componentesRecetaSeleccionada
+      .filter((c) => c !== componentePrincipal && c !== componenteRegulador)
+      .reduce((max, c) => (max == null || Number(c.cantidad) > Number(max.cantidad) ? c : max), null);
 
-  // El "% Aumento" ya no lo edita el operador — pedido explícito: intenta
-  // que el insumo PRINCIPAL quede entre 100% y 110% de su dosis máxima por
-  // hectárea (considerando el mismo redondeo a 0.5 que se le aplica en la
-  // tabla). Con insumos de cantidad chica, el redondeo a 0.5 puede saltar
-  // en pasos más anchos que esa ventana de 10 puntos — cuando eso pasa (no
-  // existe ningún % de aumento entre 0 y 10 que caiga en la ventana), se
-  // prioriza NUNCA quedar por debajo de 100% aunque eso implique pasarse
-  // un poco de 110% (pedido explícito: preferible sobre-dosificar un poco
-  // antes que sub-dosificar).
+  // El "% Aumento" ya no lo edita el operador — pedido explícito: se parte
+  // de 10% y, si el insumo PRINCIPAL se pasa de 110% de su dosis máxima
+  // por hectárea (redondeando su cantidad al 0.5 más cercano), se prueba
+  // bajando de a 1 punto (9%, 8%, ... 1%) hasta encontrar el más alto que
+  // no se pase. Los DEMÁS insumos van en proporción al principal y NO
+  // tienen tope propio — solo el principal no debe pasarse.
   const LIMITE_AUMENTO_MAX = 10;
-  const LIMITE_PORCENTAJE_DOSIS_PRINCIPAL_MIN = 100;
   const LIMITE_PORCENTAJE_DOSIS_PRINCIPAL_MAX = 110;
-  function factorTeoricoParaAumento(aumentoPct) {
-    const factor = 1 + aumentoPct / 100;
-    const cantidadDosis = mezclaSeleccionada ? dosisPorHectareaNum * hectareasNum * factor : 0;
-    const cantidadRendimiento =
+  // Simula TODA la cadena real de cálculo (factorReceta, el % de dosis del
+  // principal que se replica en el resto de insumos con dosis propia, y el
+  // reparto final de Agua/ACONDICIONADOR) para un % de aumento
+  // hipotético. Es la ÚNICA fuente de verdad: tanto la búsqueda del %
+  // automático de abajo como el cálculo real que ve el operador (más
+  // abajo, llamada con porcentajeAumentoEfectivo) pasan por acá.
+  // ACONDICIONADOR: 0.8 gramos por cada litro de Agua (ver
+  // configuracion.service.js#MEZCLA_PARAMETROS_DEFAULT) — extraído a función
+  // porque se calcula dos veces: una dentro de cada escenario hipotético y
+  // otra al final con el Agua REAL (ver necesariaRealNativa más abajo).
+  function calcularReguladorNativa(aguaNativa, diluyenteUnidadUuid, reguladorUnidadUuid) {
+    if (aguaNativa == null || !diluyenteUnidadUuid || !reguladorUnidadUuid) return null;
+    const litro = unidadesVolumen.find((u) => u.nombre === "Litro");
+    const kilogramo = unidadesPeso.find((u) => u.nombre === "Kilogramo");
+    if (!litro || !kilogramo) return null;
+    const aguaLitros =
+      diluyenteUnidadUuid === litro.uuid
+        ? aguaNativa
+        : convertirCantidad(grafoUnidades, diluyenteUnidadUuid, litro.uuid, aguaNativa);
+    if (aguaLitros == null) return null;
+    const reguladorKg = (0.8 * aguaLitros) / 1000;
+    const reguladorNativo =
+      reguladorUnidadUuid === kilogramo.uuid
+        ? reguladorKg
+        : convertirCantidad(grafoUnidades, kilogramo.uuid, reguladorUnidadUuid, reguladorKg);
+    // Siempre a un decimal en la unidad propia del insumo (pedido
+    // explícito) — es el valor que se muestra Y el que se guarda/descuenta.
+    return reguladorNativo === null ? null : Math.round(reguladorNativo * 10) / 10;
+  }
+  function calcularEscenario(aumentoPct) {
+    const factorAumento = 1 + aumentoPct / 100;
+    const cantidadEnUnidadDosis = mezclaSeleccionada ? dosisPorHectareaNum * hectareasNum * factorAumento : 0;
+    const cantidadSugeridaEnRendimiento =
       mezclaSeleccionada && unidadDosisUuid && unidadRendimientoUuid && unidadDosisUuid !== unidadRendimientoUuid
-        ? convertirCantidad(grafoUnidades, unidadDosisUuid, unidadRendimientoUuid, cantidadDosis) ?? cantidadDosis
-        : cantidadDosis;
-    return rendimientoSeleccionado > 0 ? cantidadRendimiento / rendimientoSeleccionado : 0;
-  }
-  // Igual que `factorTeoricoParaAumento`, pero simulando TAMBIÉN el
-  // redondeo a entero de "Cantidad a preparar" (Math.round) — sin esto, la
-  // búsqueda de abajo subestimaba la dosis real (el redondeo a entero por
-  // sí solo puede empujar al principal por encima del 110%, aunque el
-  // cálculo sin redondear diera un margen aparente).
-  function factorRecetaParaAumento(aumentoPct) {
-    const factorTeorico = factorTeoricoParaAumento(aumentoPct);
-    const cantidadEnRendimiento = factorTeorico * rendimientoSeleccionado;
-    const cantidadEnMostrada =
+        ? convertirCantidad(grafoUnidades, unidadDosisUuid, unidadRendimientoUuid, cantidadEnUnidadDosis) ?? cantidadEnUnidadDosis
+        : cantidadEnUnidadDosis;
+    const cantidadSugerida =
       unidadMostradaUuid && unidadRendimientoUuid && unidadMostradaUuid !== unidadRendimientoUuid
-        ? convertirCantidad(grafoUnidades, unidadRendimientoUuid, unidadMostradaUuid, cantidadEnRendimiento) ?? cantidadEnRendimiento
-        : cantidadEnRendimiento;
-    const cantidadRedondeada = Math.round(cantidadEnMostrada);
-    const cantidadRedondeadaEnRendimiento =
+        ? convertirCantidad(grafoUnidades, unidadRendimientoUuid, unidadMostradaUuid, cantidadSugeridaEnRendimiento) ?? cantidadSugeridaEnRendimiento
+        : cantidadSugeridaEnRendimiento;
+    const cantidadAPrepararRedondeada = mezclaSeleccionada ? Math.round(cantidadSugerida) : 0;
+    const cantidadAPrepararEnRendimiento =
       unidadMostradaUuid && unidadRendimientoUuid && unidadMostradaUuid !== unidadRendimientoUuid
-        ? convertirCantidad(grafoUnidades, unidadMostradaUuid, unidadRendimientoUuid, cantidadRedondeada) ?? cantidadRedondeada
-        : cantidadRedondeada;
-    return rendimientoSeleccionado > 0 ? cantidadRedondeadaEnRendimiento / rendimientoSeleccionado : 0;
+        ? convertirCantidad(grafoUnidades, unidadMostradaUuid, unidadRendimientoUuid, cantidadAPrepararRedondeada) ?? cantidadAPrepararRedondeada
+        : cantidadAPrepararRedondeada;
+    const factorReceta = rendimientoSeleccionado > 0 ? cantidadAPrepararEnRendimiento / rendimientoSeleccionado : 0;
+
+    // El redondeo a pasos de 0.5 se hace en la unidad PROPIA de cada
+    // insumo (no en la unidad global de "Cantidad a preparar") — así cada
+    // uno redondea con la granularidad que le corresponde (ej. 0.5 L para
+    // un insumo en Litros, no 0.5 Gal, que es un salto ~3.8x más grueso y
+    // dejaba muy pocas opciones de % Aumento entre 100% y 110%).
+    //
+    // Convierte la dosis de referencia (del renglón o del artículo, ver
+    // dosisRefComponente) a la unidad de RECETA del componente, para poder
+    // calcular cantidades nativas a partir de ella.
+    function dosisEnUnidadComponente(componente) {
+      const ref = dosisRefComponente(componente);
+      if (!ref || ref.dosisMaxima == null) return null;
+      const miUnidadUuid = componente.unidad?.uuid;
+      return ref.unidadUuid && miUnidadUuid && ref.unidadUuid !== miUnidadUuid
+        ? convertirCantidad(grafoUnidades, ref.unidadUuid, miUnidadUuid, ref.dosisMaxima) ?? ref.dosisMaxima
+        : ref.dosisMaxima;
+    }
+
+    // La cantidad del PRINCIPAL se calcula respecto a su DOSIS
+    // (articulo.dosisPorHectarea × hectáreas × aumento), redondeada al 0.5
+    // más cercano — pedido explícito: la dosis es la referencia real de
+    // cuánto debe aplicarse por hectárea. El % sobre dosis que resulta de
+    // esa cantidad YA redondeada (ej. 108.42%) es el que se le aplica
+    // también a TODOS los demás insumos que tengan su propia dosis
+    // configurada — pedido explícito: "si el principal queda en 108.42%,
+    // todos deben trabajar con ese mismo % sobre su propia dosis", en vez
+    // de arrastrarlos proporcionalmente a como se armó la receta.
+    let principalPctSobreDosis = null;
+    if (componentePrincipal) {
+      const dosisEnUnidadPrincipal = dosisEnUnidadComponente(componentePrincipal);
+      if (dosisEnUnidadPrincipal != null && hectareasNum > 0) {
+        const necesariaDesdeDosis = dosisEnUnidadPrincipal * hectareasNum * factorAumento;
+        if (necesariaDesdeDosis > 0) {
+          const redondeadaDesdeDosis = redondearEnUnidadPropia(componentePrincipal, necesariaDesdeDosis);
+          const dosisAplicada = redondeadaDesdeDosis / hectareasNum;
+          // Ambas en la unidad de la RECETA (dosisEnUnidadPrincipal): comparar
+          // contra la dosis en la unidad del artículo inflaba el % por el
+          // factor de conversión (ej. ml vs L = x1000).
+          principalPctSobreDosis = (dosisAplicada / dosisEnUnidadPrincipal) * 100;
+        }
+      }
+    }
+
+    // Cantidad necesaria por insumo — redondeada al 0.5 MÁS CERCANO en su
+    // propia unidad (pedido explícito):
+    // 0. Tasa por volumen (tipoDosis POR_VOLUMEN, ej. ANTIFOAM = 1 g/Gal):
+    //    tasa × total a preparar llevado a la unidad de la tasa.
+    // 1. Insumos con "dosis relativa" (referenciaArticuloId/
+    //    porcentajeReferencia, ej. HIPOTENSOR = 1% de ACEITE BANOLE): el
+    //    X% de la cantidad YA resuelta del insumo de referencia
+    //    (recursivo, por si hay cadenas).
+    // 2. Insumos con dosis propia configurada (articulo.dosisPorHectarea):
+    //    se calculan al MISMO % sobre dosis que terminó teniendo el
+    //    principal (principalPctSobreDosis) — así todos "trabajan con el
+    //    mismo aumento real". Si no hay principal con dosis, cada uno usa
+    //    directamente su propia dosis × hectáreas × aumento.
+    // 3. Sin dosis ni referencia (ej. Adherente sin dosis configurada):
+    //    se mantiene la proporción de la receta escalada por factorReceta.
+    // Agua y ACONDICIONADOR no pasan por acá (se resuelven aparte, más
+    // abajo).
+    const necesariaCache = new Map();
+    // Tasa por volumen (tipoDosis POR_VOLUMEN, ej. ANTIFOAM = 1 g/Gal):
+    // tasa × total a preparar llevado a la unidad de la tasa. La tasa va
+    // en la unidad de la fila, así el resultado ya es nativo (en la unidad
+    // de receta del componente).
+    function basePorVolumenNativa(componente) {
+      if (componente.tipoDosis !== 'POR_VOLUMEN') return null;
+      const tasa = Number(componente.tasa);
+      if (!(tasa > 0) || !componente.tasaUnidadId) return null;
+      const tasaUnidad = [...unidadesVolumen, ...unidadesPeso].find((u) => u.id === componente.tasaUnidadId);
+      const tasaUuid = tasaUnidad?.uuid;
+      if (!tasaUuid || !mezclaSeleccionada || !unidadMostradaUuid) return null;
+      const totalEnTasa =
+        tasaUuid === unidadMostradaUuid
+          ? cantidadAPrepararRedondeada
+          : convertirCantidad(grafoUnidades, unidadMostradaUuid, tasaUuid, cantidadAPrepararRedondeada);
+      if (totalEnTasa == null) return null;
+      return totalEnTasa * tasa;
+    }
+    function necesariaSugeridaNativa(componente) {
+      const au = componente.articulo?.uuid;
+      if (au && necesariaCache.has(au)) return necesariaCache.get(au);
+      let resultado;
+      const baseVolumen = basePorVolumenNativa(componente);
+      if (baseVolumen != null) {
+        resultado = baseVolumen > 0 ? redondearEnUnidadPropia(componente, baseVolumen) : baseVolumen;
+      }
+      if (resultado === undefined && componente.referenciaArticuloId && componente.porcentajeReferencia != null) {
+        const refComponente = componentesRecetaSeleccionada.find((x) => x.articulo?.id === componente.referenciaArticuloId);
+        if (refComponente && refComponente !== componente) {
+          const refNativa = necesariaSugeridaNativa(refComponente);
+          const refUnidadUuid = refComponente.unidad?.uuid;
+          const miUnidadUuid = componente.unidad?.uuid;
+          const refEnMiUnidad =
+            refUnidadUuid && miUnidadUuid && refUnidadUuid !== miUnidadUuid
+              ? convertirCantidad(grafoUnidades, refUnidadUuid, miUnidadUuid, refNativa) ?? refNativa
+              : refNativa;
+          const valor = (refEnMiUnidad * Number(componente.porcentajeReferencia)) / 100;
+          resultado = valor > 0 ? redondearEnUnidadPropia(componente, valor) : valor;
+        }
+      }
+      if (resultado === undefined) {
+        const dosisEnUnidadPropia = dosisEnUnidadComponente(componente);
+        if (dosisEnUnidadPropia != null && hectareasNum > 0) {
+          const pctObjetivo = principalPctSobreDosis != null ? principalPctSobreDosis : factorAumento * 100;
+          const valor = (dosisEnUnidadPropia * hectareasNum * pctObjetivo) / 100;
+          resultado = valor > 0 ? redondearEnUnidadPropia(componente, valor) : valor;
+        } else {
+          const escalada = Number(componente.cantidad) * factorReceta;
+          resultado = escalada > 0 ? redondearEnUnidadPropia(componente, escalada) : escalada;
+        }
+      }
+      if (au) necesariaCache.set(au, resultado);
+      return resultado;
+    }
+
+    const sumaSinDiluyente = componentesRecetaSeleccionada
+      .filter((c) => c !== componenteDiluyente && c !== componenteRegulador)
+      .reduce((suma, c) => {
+        const v = aUnidadMostradaSumable(necesariaSugeridaNativa(c), c.unidad?.uuid);
+        return v == null ? suma : suma + v;
+      }, 0);
+    const cantidadDiluyenteEnMostrada = componenteDiluyente ? Math.max(0, cantidadAPrepararRedondeada - sumaSinDiluyente) : 0;
+    const cantidadAguaNativa = componenteDiluyente ? deUnidadMostrada(cantidadDiluyenteEnMostrada, componenteDiluyente.unidad?.uuid) : 0;
+
+    let cantidadReguladorNativa = null;
+    if (componenteRegulador?.unidad?.uuid && componenteDiluyente) {
+      cantidadReguladorNativa = calcularReguladorNativa(
+        cantidadAguaNativa,
+        componenteDiluyente.unidad?.uuid,
+        componenteRegulador.unidad.uuid,
+      );
+    }
+
+    function necesariaFinalNativa(componente) {
+      if (componenteDiluyente && componente === componenteDiluyente) return cantidadAguaNativa;
+      if (componenteRegulador && componente === componenteRegulador && cantidadReguladorNativa != null) return cantidadReguladorNativa;
+      return necesariaSugeridaNativa(componente);
+    }
+
+    return {
+      cantidadSugeridaEnRendimiento,
+      cantidadAPrepararRedondeada,
+      cantidadAPrepararEnRendimiento,
+      necesariaFinalNativa,
+    };
   }
-  function porcentajeSobreDosisPrincipalParaAumento(aumentoPct) {
-    if (!componentePrincipal || hectareasNum <= 0) return 0;
-    const dosisMaxima =
-      componentePrincipal.articulo?.dosisPorHectarea != null ? Number(componentePrincipal.articulo.dosisPorHectarea) : null;
-    if (dosisMaxima == null || dosisMaxima <= 0) return 0;
-    const unidadDosisMaximaUuid = componentePrincipal.articulo?.dosisUnidad?.uuid;
-    const unidadRecetaUuid = componentePrincipal.unidad?.uuid;
-    const necesariaTeorica = Number(componentePrincipal.cantidad) * factorRecetaParaAumento(aumentoPct);
-    if (necesariaTeorica <= 0) return 0;
-    const enUnidadMostrada = aUnidadMostrada(necesariaTeorica, unidadRecetaUuid);
-    const redondeada = enUnidadMostrada > 0 ? redondearAMedios(enUnidadMostrada) : necesariaTeorica;
-    const necesariaFinal = deUnidadMostrada(redondeada, unidadRecetaUuid);
+  // % real sobre dosis máxima de UN insumo cualquiera, dado un escenario ya
+  // calculado (ver calcularEscenario) — parametrizada por componente porque
+  // la búsqueda del % automático la evalúa en el principal (el tope de
+  // 110% rige SOLO para él — pedido explícito) y la tabla la usa para
+  // mostrar la columna "% sobre dosis" de cada fila.
+  function porcentajeSobreDosisConEscenario(componente, escenario) {
+    if (!componente || hectareasNum <= 0) return 0;
+    const ref = dosisRefComponente(componente);
+    if (!ref || ref.dosisMaxima == null || ref.dosisMaxima <= 0) return 0;
+    const dosisMaxima = ref.dosisMaxima;
+    const unidadDosisMaximaUuid = ref.unidadUuid;
+    const unidadRecetaUuid = componente.unidad?.uuid;
+    const necesariaFinal = escenario.necesariaFinalNativa(componente);
     const dosisAplicadaEnUnidadReceta = necesariaFinal / hectareasNum;
     const dosisAplicada =
       unidadDosisMaximaUuid && unidadRecetaUuid && unidadDosisMaximaUuid !== unidadRecetaUuid
@@ -810,35 +1158,50 @@ export default function AspersionesPage() {
         : dosisAplicadaEnUnidadReceta;
     return (dosisAplicada / dosisMaxima) * 100;
   }
+  // % de dosis para un aumento candidato (principal, y el peor caso entre
+  // TODOS los insumos con dosis máxima — este último solo se usa cuando la
+  // mezcla NO tiene principal), calculados sobre el MISMO escenario (una
+  // sola vez) para no desalinear ambos números.
+  function evaluarCandidato(aumentoPct) {
+    const escenario = calcularEscenario(aumentoPct);
+    const porcentajes = componentesRecetaSeleccionada
+      .filter((c) => dosisRefComponente(c) !== null)
+      .map((c) => porcentajeSobreDosisConEscenario(c, escenario));
+    return {
+      maxPct: porcentajes.length ? Math.max(...porcentajes) : 0,
+      principalPct: porcentajeSobreDosisConEscenario(componentePrincipal, escenario),
+    };
+  }
   let porcentajeAumentoAutomatico = LIMITE_AUMENTO_MAX;
-  if (mezclaSeleccionada && componentePrincipal && hectareasNum > 0) {
-    // 1) El mayor % (más cercano a 10) que no supere 110% — si con ese ya
-    // se llega a 100% o más, es la mejor opción (cae dentro de la
-    // ventana).
-    let mejorDentroDeLimite = null;
-    for (let pasos = 1000; pasos >= 0; pasos--) {
-      const candidato = (pasos / 1000) * LIMITE_AUMENTO_MAX;
-      if (porcentajeSobreDosisPrincipalParaAumento(candidato) <= LIMITE_PORCENTAJE_DOSIS_PRINCIPAL_MAX) {
-        mejorDentroDeLimite = candidato;
+  // Pedido explícito: se parte de 10% de aumento; si con eso el insumo
+  // PRINCIPAL ya supera el 110% de su dosis por hectárea (redondeando su
+  // cantidad al 0.5 más cercano, ver calcularEscenario), se va probando
+  // 9%, 8%, ... hasta 1%, y se usa el porcentaje más alto (más óptimo) de
+  // ese rango que SÍ deje al principal en ≤110%. Si no hay insumo
+  // principal, se aplica el mismo criterio sobre el insumo más exigente
+  // (el de mayor % sobre su propia dosis) entre todos los que tengan dosis
+  // configurada.
+  if (mezclaSeleccionada && hectareasNum > 0) {
+    let mejorValido = null; // mayor aumento entero (10→1) que cumple ≤110%
+    let mejorFallback = null; // si ninguno cumple: el que menos se pasa de 110%
+    for (let candidato = LIMITE_AUMENTO_MAX; candidato >= 1; candidato--) {
+      const { principalPct, maxPct } = evaluarCandidato(candidato);
+      const pctRelevante = componentePrincipal ? principalPct : maxPct;
+      if (pctRelevante <= LIMITE_PORCENTAJE_DOSIS_PRINCIPAL_MAX) {
+        mejorValido = candidato;
         break;
       }
-    }
-    if (mejorDentroDeLimite !== null && porcentajeSobreDosisPrincipalParaAumento(mejorDentroDeLimite) >= LIMITE_PORCENTAJE_DOSIS_PRINCIPAL_MIN) {
-      porcentajeAumentoAutomatico = Math.round(mejorDentroDeLimite * 100) / 100;
-    } else {
-      // 2) Ninguna opción entre 0 y 10 cae en la ventana [100,110] — se
-      // busca el % MÁS CHICO que ya llegue a 100% (aunque se pase de
-      // 110%), para minimizar el exceso; si ni con 10% se llega a 100%,
-      // se usa 10% (lo máximo posible).
-      let menorQueLlegaA100 = null;
-      for (let pasos = 0; pasos <= 1000; pasos++) {
-        const candidato = (pasos / 1000) * LIMITE_AUMENTO_MAX;
-        if (porcentajeSobreDosisPrincipalParaAumento(candidato) >= LIMITE_PORCENTAJE_DOSIS_PRINCIPAL_MIN) {
-          menorQueLlegaA100 = candidato;
-          break;
-        }
+      if (mejorFallback == null || pctRelevante < mejorFallback.pct) {
+        mejorFallback = { candidato, pct: pctRelevante };
       }
-      porcentajeAumentoAutomatico = Math.round((menorQueLlegaA100 ?? LIMITE_AUMENTO_MAX) * 100) / 100;
+    }
+    if (mejorValido !== null) {
+      porcentajeAumentoAutomatico = mejorValido;
+    } else if (mejorFallback !== null) {
+      // Ni con 1% de aumento se cumple ≤110% (el principal ya parte muy
+      // sobredosificado) — se usa 1%, el que menos se pasa dentro del
+      // rango pedido.
+      porcentajeAumentoAutomatico = mejorFallback.candidato;
     }
   }
 
@@ -846,135 +1209,186 @@ export default function AspersionesPage() {
   // no lo toque, se usa el automático (ver búsqueda arriba).
   const porcentajeAumentoEfectivo = form.aumentoManual !== "" ? Number(form.aumentoManual) || 0 : porcentajeAumentoAutomatico;
 
-  // La cantidad "real" que espera el backend (y con la que se escala la
-  // receta) va SIEMPRE en la unidad de RENDIMIENTO de la mezcla — es la
-  // misma que usa aspersionProgramacion.service.js#ejecutar
-  // (factor = cantidadCalculada / rendimiento). Acá se calcula esa base
-  // (convirtiendo desde la unidad de la dosis si hace falta, igual que el
-  // backend en #calcularCantidad), usando el % de aumento efectivo
-  // (automático o el que haya ajustado el operador).
-  const factorAumentoEfectivo = 1 + porcentajeAumentoEfectivo / 100;
-  const cantidadEnUnidadDosis = mezclaSeleccionada ? dosisPorHectareaNum * hectareasNum * factorAumentoEfectivo : 0;
-  const cantidadSugeridaEnRendimiento =
-    mezclaSeleccionada && unidadDosisUuid && unidadRendimientoUuid && unidadDosisUuid !== unidadRendimientoUuid
-      ? convertirCantidad(grafoUnidades, unidadDosisUuid, unidadRendimientoUuid, cantidadEnUnidadDosis) ?? cantidadEnUnidadDosis
-      : cantidadEnUnidadDosis;
+  // Escenario REAL (el que ve el operador) — usa el mismo cálculo exacto
+  // (calcularEscenario, ver arriba) que ya usó la búsqueda del % automático
+  // para probar candidatos, así la tabla y el % mostrado por fila nunca se
+  // desalinean de lo que la búsqueda consideró "seguro".
+  const escenarioReal = calcularEscenario(porcentajeAumentoEfectivo);
+  const {
+    cantidadSugeridaEnRendimiento,
+    cantidadAPrepararRedondeada,
+    cantidadAPrepararEnRendimiento,
+  } = escenarioReal;
 
-  const cantidadSugerida =
-    unidadMostradaUuid && unidadRendimientoUuid && unidadMostradaUuid !== unidadRendimientoUuid
-      ? convertirCantidad(grafoUnidades, unidadRendimientoUuid, unidadMostradaUuid, cantidadSugeridaEnRendimiento) ?? cantidadSugeridaEnRendimiento
-      : cantidadSugeridaEnRendimiento;
-
-  // "Cantidad a preparar" ya no la edita el operador — pedido explícito:
-  // siempre es una cifra redondeada (entero), en la unidad mostrada.
-  const cantidadAPrepararRedondeada = mezclaSeleccionada ? Math.round(cantidadSugerida) : 0;
-  // Para escalar la receta y para mandarla al backend hace falta
-  // reconvertirla a la unidad de rendimiento.
-  const cantidadAPrepararEnRendimiento =
-    unidadMostradaUuid && unidadRendimientoUuid && unidadMostradaUuid !== unidadRendimientoUuid
-      ? convertirCantidad(grafoUnidades, unidadMostradaUuid, unidadRendimientoUuid, cantidadAPrepararRedondeada) ?? cantidadAPrepararRedondeada
-      : cantidadAPrepararRedondeada;
-
-  // Factor de escala: siempre a partir de la "Cantidad a preparar" ya
-  // redondeada — el desglose de insumos refleja lo que realmente se va a
-  // preparar.
-  const factorReceta = rendimientoSeleccionado > 0 ? cantidadAPrepararEnRendimiento / rendimientoSeleccionado : 0;
-
-  // Su "Cantidad necesaria" sugerida se redondea a 0.5 (en la unidad que
-  // se está mostrando), y esa misma proporción (redondeado ÷ teórico) se
-  // aplica al resto de los insumos para no romper las proporciones de la
-  // receta — pedido explícito. Se calcula UNA sola vez acá (no en la
-  // tabla ni al enviar por separado) para que ambos usen siempre el mismo
-  // número — si se duplicara el cálculo, un desajuste entre los dos
-  // dejaría la tabla mostrando una cosa y descontando otra del inventario.
-  let ratioRedondeoPrincipal = 1;
-  if (componentePrincipal) {
-    const necesariaSugeridaPrincipal = Number(componentePrincipal.cantidad) * factorReceta;
-    if (necesariaSugeridaPrincipal > 0) {
-      const principalEnUnidadMostrada = aUnidadMostrada(necesariaSugeridaPrincipal, componentePrincipal.unidad?.uuid);
-      if (principalEnUnidadMostrada > 0) {
-        ratioRedondeoPrincipal = redondearAMedios(principalEnUnidadMostrada) / principalEnUnidadMostrada;
-      }
-    }
+  // Cantidad REAL por insumo (la que ve el operador y la que se guarda): el
+  // override manual de esa fila si lo hay, si no la sugerida del escenario.
+  // El Agua se recalcula AL FINAL a partir de estos valores reales (no de
+  // los sugeridos) para que el total siempre complete "Cantidad a preparar"
+  // — pedido explícito: lo último que se hace es rellenar con agua. El
+  // ACONDICIONADOR sigue al Agua real con la misma fórmula de siempre.
+  function actualNoAutoNativa(componente) {
+    const ajuste = form.componentesAjustados[componente.articulo?.uuid];
+    if (ajuste !== undefined && ajuste !== "") return Number(ajuste);
+    return escenarioReal.necesariaFinalNativa(componente);
   }
-
-  // Cantidad NATIVA (unidad propia de cada insumo) sugerida por defecto
-  // para un artículo — receta × factor, con el ajuste del redondeo del
-  // principal aplicado (mantiene la proporción de la receta) y, encima,
-  // redondeada ELLA MISMA a 0.5 en la unidad mostrada — pedido explícito:
-  // "al resto también los vas a redondear de 0.5". Es el único lugar que
-  // calcula este número (salvo el diluyente, ver necesariaFinalNativa más
-  // abajo): lo usan tanto la tabla en pantalla como el payload que se
-  // manda al guardar.
-  function necesariaSugeridaNativa(componente) {
-    const escalada = Number(componente.cantidad) * factorReceta * ratioRedondeoPrincipal;
-    const unidadUuid = componente.unidad?.uuid;
-    const enUnidadMostrada = aUnidadMostrada(escalada, unidadUuid);
-    if (enUnidadMostrada <= 0) return escalada;
-    const redondeada = redondearAMedios(enUnidadMostrada);
-    return deUnidadMostrada(redondeada, unidadUuid);
-  }
-
-  // El redondeo a 0.5 de cada insumo (arriba) deja un pequeño residuo entre
-  // la suma de todos ellos y "Cantidad a preparar" — ese residuo se
-  // absorbe SIEMPRE en el insumo "Agua" (si la receta no tiene un insumo
-  // con ese nombre exacto, se cae al criterio anterior: el de MAYOR
-  // cantidad de receta, excluyendo al principal), para que la suma de
-  // "Cantidad necesaria" quede exactamente igual a "Cantidad a preparar".
-  // "Regulador de pH" NUNCA sigue el escalado normal de receta: su
-  // cantidad se recalcula SIEMPRE a partir del Agua ya resuelta (0.8 g
-  // por litro de agua, mismo criterio que reguladorPhDosisGL en
-  // configuracion.service.js) — pedido explícito: "cada vez que exista un
-  // cambio siempre debe recalcularse el agua y el ph".
-  const componenteAgua = componentesRecetaSeleccionada.find((c) => c.articulo?.nombre === "Agua");
-  const componenteRegulador = componentesRecetaSeleccionada.find((c) => c.articulo?.nombre === "Regulador de pH");
-  const componenteDiluyente =
-    componenteAgua ||
-    componentesRecetaSeleccionada
-      .filter((c) => c !== componentePrincipal && c !== componenteRegulador)
-      .reduce((max, c) => (max == null || Number(c.cantidad) > Number(max.cantidad) ? c : max), null);
-  const sumaSinDiluyente = componentesRecetaSeleccionada
+  const sumaRealesEnMostrada = componentesRecetaSeleccionada
     .filter((c) => c !== componenteDiluyente && c !== componenteRegulador)
-    .reduce((suma, c) => suma + aUnidadMostrada(necesariaSugeridaNativa(c), c.unidad?.uuid), 0);
-  const cantidadDiluyenteEnMostrada = componenteDiluyente ? Math.max(0, cantidadAPrepararRedondeada - sumaSinDiluyente) : 0;
-  const cantidadAguaNativa = componenteDiluyente ? deUnidadMostrada(cantidadDiluyenteEnMostrada, componenteDiluyente.unidad?.uuid) : 0;
-
-  // Cantidad de Regulador de pH derivada del Agua final: 0.8 g por cada
-  // litro de agua, convertida a la unidad nativa del componente (Kg).
-  let cantidadReguladorNativa = null;
-  if (componenteRegulador?.unidad?.uuid && componenteDiluyente) {
+    .reduce((suma, c) => {
+      const v = aUnidadMostradaSumable(actualNoAutoNativa(c), c.unidad?.uuid);
+      return v == null ? suma : suma + v;
+    }, 0);
+  const aguaRealEnMostrada = componenteDiluyente ? Math.max(0, cantidadAPrepararRedondeada - sumaRealesEnMostrada) : 0;
+  const aguaRealNativa = componenteDiluyente ? deUnidadMostrada(aguaRealEnMostrada, componenteDiluyente.unidad?.uuid) : 0;
+  // Litros de agua reales (para renglones POR_LITRO_AGUA) — null si no hay
+  // cómo convertir.
+  const aguaRealLitros = (() => {
+    if (!componenteDiluyente) return null;
     const litro = unidadesVolumen.find((u) => u.nombre === "Litro");
-    const kilogramo = unidadesPeso.find((u) => u.nombre === "Kilogramo");
-    if (litro && kilogramo) {
-      const aguaLitros =
-        componenteDiluyente.unidad?.uuid === litro.uuid
-          ? cantidadAguaNativa
-          : convertirCantidad(grafoUnidades, componenteDiluyente.unidad?.uuid, litro.uuid, cantidadAguaNativa);
-      if (aguaLitros != null) {
-        const reguladorKg = (0.8 * aguaLitros) / 1000;
-        cantidadReguladorNativa =
-          componenteRegulador.unidad.uuid === kilogramo.uuid
-            ? reguladorKg
-            : convertirCantidad(grafoUnidades, kilogramo.uuid, componenteRegulador.unidad.uuid, reguladorKg);
+    if (!litro) return null;
+    const dilUuid = componenteDiluyente.unidad?.uuid;
+    if (!dilUuid) return null;
+    return dilUuid === litro.uuid ? aguaRealNativa : convertirCantidad(grafoUnidades, dilUuid, litro.uuid, aguaRealNativa);
+  })();
+  // Renglón POR_LITRO_AGUA (ej. ACONDICIONADOR = 0.3 g/L): tasa (en la
+  // unidad de la fila) × litros de agua reales, con el redondeo de siempre.
+  function porLitroResueltaNativa(componente) {
+    if (componente.tipoDosis !== "POR_LITRO_AGUA") return null;
+    const tasa = Number(componente.tasa);
+    if (!(tasa > 0) || aguaRealLitros == null) return null;
+    const valor = tasa * aguaRealLitros;
+    return valor > 0 ? redondearEnUnidadPropia(componente, valor) : valor;
+  }
+  const reguladorRealNativa =
+    componenteRegulador && componenteDiluyente
+      ? (() => {
+          // Si el regulador trae su propia tasa por litro se usa esa; si
+          // no, el 0.8 legacy de siempre.
+          const propia = porLitroResueltaNativa(componenteRegulador);
+          if (propia != null) return propia;
+          return calcularReguladorNativa(aguaRealNativa, componenteDiluyente.unidad?.uuid, componenteRegulador.unidad?.uuid);
+        })()
+      : null;
+  function necesariaRealNativa(componente) {
+    if (componenteDiluyente && componente === componenteDiluyente) return aguaRealNativa;
+    if (componenteRegulador && componente === componenteRegulador) {
+      // Editado a mano manda; si no, la tasa de la receta o el 0.8 legacy.
+      const ajuste = form.componentesAjustados[componente.articulo?.uuid];
+      if (ajuste !== undefined && ajuste !== "") return Number(ajuste);
+      if (reguladorRealNativa != null) return reguladorRealNativa;
+      return actualNoAutoNativa(componente);
+    }
+    if (componente.tipoDosis === "POR_LITRO_AGUA") {
+      const ajuste = form.componentesAjustados[componente.articulo?.uuid];
+      if (ajuste !== undefined && ajuste !== "") return Number(ajuste);
+      const propia = porLitroResueltaNativa(componente);
+      if (propia != null) return propia;
+    }
+    return actualNoAutoNativa(componente);
+  }
+
+  // Dosis relativas configuradas en la receta (ej. HIPOTENSOR = 1% del
+  // ACEITE): seguidorUuid -> { refUuid, pct }. Al editar la referencia a
+  // mano, los seguidores se recalculan solos en proporción — pedido
+  // explícito. La cantidad ya viene resuelta desde el backend, así que sin
+  // ediciones manuales no hay nada que propagar.
+  const reglaDosisRef = new Map();
+  const unidadNativaPorArticulo = new Map();
+  for (const comp of componentesRecetaSeleccionada) {
+    const au = comp.articulo?.uuid;
+    if (au) unidadNativaPorArticulo.set(au, comp.unidad?.uuid);
+    if (comp.referenciaArticuloId && comp.porcentajeReferencia != null) {
+      const refArt = componentesRecetaSeleccionada.find((x) => x.articulo?.id === comp.referenciaArticuloId)?.articulo;
+      if (refArt?.uuid && au) reglaDosisRef.set(au, { refUuid: refArt.uuid, pct: Number(comp.porcentajeReferencia) });
+    }
+  }
+  // Valor base (sugerido, sin overrides) por artículo — punto de partida
+  // para resolver reglas. Agua/PH usan sus valores reales.
+  const basePorArticulo = new Map(
+    componentesRecetaSeleccionada.map((c) => [c.articulo?.uuid, escenarioReal.necesariaFinalNativa(c)]),
+  );
+  const diluyenteArticuloUuid = componenteDiluyente?.articulo?.uuid;
+  const reguladorArticuloUuid = componenteRegulador?.articulo?.uuid;
+  if (diluyenteArticuloUuid) basePorArticulo.set(diluyenteArticuloUuid, aguaRealNativa);
+  if (reguladorArticuloUuid && reguladorRealNativa != null) basePorArticulo.set(reguladorArticuloUuid, reguladorRealNativa);
+  function valorFinalArticulo(articuloUuid, overrides) {
+    const ov = overrides[articuloUuid];
+    if (ov !== undefined && ov !== "") return Number(ov);
+    return basePorArticulo.get(articuloUuid);
+  }
+  // Aplica las reglas transitivamente sobre el borrador de overrides (lo
+  // muta) y devuelve las uuids tocadas. `excepto` = fila editada directo
+  // que es seguidora: conserva su valor, pero sus seguidores sí se mueven.
+  // Agua/PH nunca son seguidores (se recalculan solos por su propia
+  // lógica). Si lo recalculado coincide con la sugerida, se borra el
+  // override en vez de fijarlo (queda limpio y el enlace "usar dosis" no
+  // estorba).
+  function propagarReglasDosis(overrides, excepto) {
+    const tocadas = new Set();
+    let cambio = true;
+    let guard = 0;
+    while (cambio && guard++ < 12) {
+      cambio = false;
+      for (const [fol, { refUuid, pct }] of reglaDosisRef) {
+        if (fol === excepto) continue;
+        if (fol === diluyenteArticuloUuid || fol === reguladorArticuloUuid) continue;
+        const refVal = valorFinalArticulo(refUuid, overrides);
+        if (refVal == null || !Number.isFinite(refVal)) continue;
+        const deUuid = unidadNativaPorArticulo.get(refUuid);
+        const aUuid = unidadNativaPorArticulo.get(fol);
+        const conv =
+          deUuid && aUuid && deUuid !== aUuid
+            ? convertirCantidad(grafoUnidades, deUuid, aUuid, refVal) ?? refVal
+            : refVal;
+        if (conv == null || !Number.isFinite(conv)) continue;
+        const nuevo = (conv * pct) / 100;
+        if (!Number.isFinite(nuevo)) continue;
+        const base = basePorArticulo.get(fol);
+        if (base != null && Number.isFinite(base) && Math.abs(nuevo - base) < 1e-9) {
+          if (overrides[fol] !== undefined) {
+            delete overrides[fol];
+            tocadas.add(fol);
+            cambio = true;
+          }
+          continue;
+        }
+        const str = String(Number(nuevo.toFixed(4)));
+        if (overrides[fol] !== str) {
+          overrides[fol] = str;
+          tocadas.add(fol);
+          cambio = true;
+        }
       }
     }
+    return tocadas;
   }
-
-  // Cantidad NATIVA final de cada insumo — igual a `necesariaSugeridaNativa`
-  // salvo Agua (absorbe el residuo exacto, ver arriba) y Regulador de pH
-  // (siempre 0.8 g/L de esa agua) — estos dos IGNORAN cualquier ajuste
-  // manual por fila, siempre se recalculan. Reemplaza a
-  // `necesariaSugeridaNativa` tanto en la tabla como en el payload que se
-  // manda al guardar.
-  function necesariaFinalNativa(componente) {
-    if (componenteDiluyente && componente === componenteDiluyente) {
-      return cantidadAguaNativa;
+  // Seguidores transitivos de una fila (para limpiar sus textos/overrides
+  // cuando cambia su referencia).
+  function seguidoresTransitivos(articuloUuid) {
+    const inverso = new Map();
+    for (const [fol, { refUuid }] of reglaDosisRef) {
+      if (!inverso.has(refUuid)) inverso.set(refUuid, []);
+      inverso.get(refUuid).push(fol);
     }
-    if (componenteRegulador && componente === componenteRegulador && cantidadReguladorNativa != null) {
-      return cantidadReguladorNativa;
+    const out = new Set();
+    const pila = [articuloUuid];
+    while (pila.length) {
+      for (const f of inverso.get(pila.pop()) || []) {
+        if (!out.has(f)) {
+          out.add(f);
+          pila.push(f);
+        }
+      }
     }
-    return necesariaSugeridaNativa(componente);
+    return out;
   }
+  // Overrides que el sistema derivó solo por reglas (no el operador) — a
+  // esas filas no se les muestra el enlace "usar dosis" como si las
+  // hubieran editado a mano.
+  const derivadosRegla = (() => {
+    const copia = { ...form.componentesAjustados };
+    propagarReglasDosis(copia, null);
+    return copia;
+  })();
 
   // Existencias de cada insumo en el almacén elegido, para mostrar junto a
   // la cantidad que hace falta (mismo patrón que Elaboraciones).
@@ -1009,22 +1423,17 @@ export default function AspersionesPage() {
     }
     setSaving(true);
     try {
-      // Cada insumo se manda con la cantidad que realmente se va a
-      // consumir: la que el operador ajustó a mano en esa línea, o si no
-      // tocó nada, la sugerida (receta × lo que se va a preparar,
-      // incluido el ajuste del diluyente que hace cuadrar el total) —
-      // mismo criterio que "Cantidad a preparar", nunca queda desalineado
-      // con lo que se ve en pantalla (ver componentesRecetaSeleccionada).
+      // Cada insumo se manda con la cantidad REAL (ver necesariaRealNativa:
+      // override manual o sugerida, con agua/PH recalculados al final para
+      // que el total complete "Cantidad a preparar") — nunca queda
+      // desalineado con lo que se ve en pantalla.
       const componentesPayload = componentesRecetaSeleccionada
         .filter((c) => c.articulo?.uuid)
-        .map((c) => {
-          const ajusteStr = form.componentesAjustados[c.articulo.uuid];
-          const cantidadInsumo = ajusteStr !== undefined && ajusteStr !== "" ? Number(ajusteStr) : necesariaFinalNativa(c);
-          return { articuloUuid: c.articulo.uuid, cantidad: cantidadInsumo };
-        });
+        .map((c) => ({ articuloUuid: c.articulo.uuid, cantidad: necesariaRealNativa(c) }))
+        .filter((c) => c.cantidad > 0);
 
-      await apiFetch("/aspersiones", {
-        method: "POST",
+      await apiFetch(editingUuid ? `/aspersiones/${editingUuid}` : "/aspersiones", {
+        method: editingUuid ? "PUT" : "POST",
         body: JSON.stringify({
           fincaUuid: form.fincaUuid,
           fecha: form.fecha,
@@ -1095,23 +1504,66 @@ export default function AspersionesPage() {
   // Ejecutar: mismo patrón warn+force que el resto del módulo de inventario
   // (stock insuficiente no bloquea de una, se confirma y se reenvía con
   // forzarSaldoNegativo:true).
-  async function handleEjecutar(aspersion, forzarSaldoNegativo = false) {
+  // Ejecutar abre un modal para completar los datos del comprobante de
+  // aplicación (piloto, hectáreas aplicadas, galones) — al confirmar se
+  // ejecuta la aspersión y se guarda el comprobante en BORRADOR (ver
+  // Sanidad Vegetal → Comprobante de aspersiones).
+  const [ejecutarModal, setEjecutarModal] = useState(null);
+  const [stockModal, setStockModal] = useState(null);
+
+  function abrirEjecutar(aspersion) {
+    setEjecutarModal({
+      aspersion,
+      piloto: "",
+      hectareasAplicadas: String(Number(aspersion.hectareas)),
+      // Galones de la programación (cantidad a preparar llevada a galones),
+      // editables si en la aplicación real fueron otros.
+      galonesTotales: aspersion.galonesProgramados !== null && aspersion.galonesProgramados !== undefined ? String(aspersion.galonesProgramados) : "",
+      observaciones: "",
+      error: "",
+    });
+  }
+
+  async function confirmarEjecutar(e) {
+    e.preventDefault();
+    const m = ejecutarModal;
+    if (!m.piloto.trim()) {
+      setEjecutarModal({ ...m, error: "Escribe el nombre del piloto." });
+      return;
+    }
+    const aplicadas = Number(m.hectareasAplicadas);
+    if (!(aplicadas > 0)) {
+      setEjecutarModal({ ...m, error: "Las hectáreas aplicadas deben ser mayores a 0." });
+      return;
+    }
+    const comprobante = {
+      piloto: m.piloto.trim(),
+      hectareasAplicadas: aplicadas,
+      ...(m.galonesTotales !== "" ? { galonesTotales: Number(m.galonesTotales) } : {}),
+      ...(m.observaciones.trim() ? { observaciones: m.observaciones.trim() } : {}),
+    };
+    setEjecutarModal(null);
+    await handleEjecutar(m.aspersion, false, comprobante);
+  }
+
+  async function handleEjecutar(aspersion, forzarSaldoNegativo = false, comprobante) {
     setProcesandoTexto("Ejecutando y descontando insumos...");
     try {
       const resultado = await apiFetch(`/aspersiones/${aspersion.uuid}/ejecutar`, {
         method: "POST",
-        body: JSON.stringify({ forzarSaldoNegativo }),
+        body: JSON.stringify({ forzarSaldoNegativo, ...(comprobante ? { comprobante } : {}) }),
       });
       if (resultado.requiereConfirmacion) {
         setProcesandoTexto("");
-        const mensaje = resultado.advertencias.map((a) => a.mensaje).join("\n");
-        if (confirm(`${mensaje}\n\n¿Continuar de todas formas y dejar el saldo en negativo?`)) {
-          await handleEjecutar(aspersion, true);
-        }
+        // Modal amigable (tabla por insumo) en vez del texto crudo.
+        setStockModal({ advertencias: resultado.advertencias, aspersion, comprobante });
         return;
       }
       actualizarFila(resultado.aspersion);
       recargarCalendario();
+      if (resultado.comprobante?.numero) {
+        alert(`Aspersión ejecutada. Se guardó el comprobante ${resultado.comprobante.numero} en borrador (Sanidad Vegetal → Comprobante de aspersiones).`);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1298,7 +1750,15 @@ export default function AspersionesPage() {
           <>
         <div className="card border-0 rounded-4 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="card-body p-3">
-            <div className="row g-2">
+            {/* <form>: Enter en cualquier filtro hace lo mismo que el botón
+                Filtrar. */}
+            <form
+              className="row g-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                aplicarFiltros();
+              }}
+            >
               <div className="col-6 col-md">
                 <label className="form-label small mb-1">Semana</label>
                 <BuscadorSemana
@@ -1360,7 +1820,7 @@ export default function AspersionesPage() {
                     <option value="EJECUTADA">Ejecutada</option>
                     <option value="CANCELADA">Cancelada</option>
                   </select>
-                  <button type="button" className="btn btn-brand btn-sm rounded-3 flex-shrink-0" onClick={aplicarFiltros}>
+                  <button type="submit" className="btn btn-brand btn-sm rounded-3 flex-shrink-0">
                     Filtrar
                   </button>
                   {(filtros.fincaUuid || filtros.semanaUuid || filtros.mezclaUuid || filtros.estado || filtros.fecha) && (
@@ -1370,7 +1830,7 @@ export default function AspersionesPage() {
                   )}
                 </div>
               </div>
-            </div>
+            </form>
             <div className="d-flex justify-content-end gap-2 mt-3">
               <div className="d-flex gap-2">
                 <button
@@ -1479,13 +1939,23 @@ export default function AspersionesPage() {
                                 <FiMail size={15} className={a.correoEnviadoEn ? "" : "text-secondary"} />
                               </button>
                             )}
+                            {a.estado === "PROGRAMADA" && hasPermission("sanidad_vegetal.aspersiones.editar") && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
+                                title="Editar"
+                                onClick={() => openEdit(a)}
+                              >
+                                <FiEdit2 size={15} />
+                              </button>
+                            )}
                             {a.estado === "PROGRAMADA" && hasPermission("sanidad_vegetal.aspersiones.ejecutar") && (
                               <button
                                 type="button"
                                 className="btn btn-sm btn-link p-1 d-inline-flex"
                                 style={{ color: "#166534" }}
                                 title="Marcar como ejecutada (descuenta insumos)"
-                                onClick={() => handleEjecutar(a)}
+                                onClick={() => abrirEjecutar(a)}
                               >
                                 <FiCheck size={15} />
                               </button>
@@ -1753,7 +2223,7 @@ export default function AspersionesPage() {
         )}
 
         {modalOpen && (
-          <ModalShell title="Programar aspersión" onClose={() => setModalOpen(false)} width="90vw">
+          <ModalShell title={editingUuid ? "Editar aspersión" : "Programar aspersión"} onClose={() => setModalOpen(false)} width="90vw">
             <form onSubmit={handleCrear}>
               <div className="row g-2 mb-2">
                 <div className="col-3">
@@ -1833,7 +2303,7 @@ export default function AspersionesPage() {
                     required
                     value={form.mezclaUuid}
                     onChange={(e) => {
-                      setForm((f) => ({ ...f, mezclaUuid: e.target.value, aumentoManual: "", componentesAjustados: {} }));
+                      setForm((f) => ({ ...f, mezclaUuid: e.target.value, aumentoManual: "", volumenHaManual: "", componentesAjustados: {} }));
                       setTextosCantidadAjustada({});
                     }}
                   >
@@ -1854,16 +2324,41 @@ export default function AspersionesPage() {
                   <label className="form-label small fw-medium mb-1">Volumen / ha</label>
                   <div className="input-group input-group-sm">
                     <input
-                      type="text"
-                      disabled
+                      type="number"
+                      step="0.01"
+                      min="0.01"
                       className="form-control rounded-start-3"
-                      value={mezclaSeleccionada ? Number(mezclaSeleccionada.dosisPorHectarea || 0).toFixed(2) : ""}
-                      readOnly
+                      disabled={!mezclaSeleccionada}
+                      placeholder={mezclaSeleccionada ? Number(mezclaSeleccionada.dosisPorHectarea || 0).toFixed(2) : ""}
+                      value={form.volumenHaManual}
+                      onChange={(e) => {
+                        // Igual que con hectáreas: las cantidades por fila son
+                        // absolutas — al cambiar el volumen se vuelve a la
+                        // receta en vez de dejar valores viejos.
+                        setTextosCantidadAjustada((t) => (Object.keys(t).length ? {} : t));
+                        setForm((f) => ({
+                          ...f,
+                          volumenHaManual: e.target.value,
+                          componentesAjustados: Object.keys(f.componentesAjustados).length ? {} : f.componentesAjustados,
+                        }));
+                      }}
                     />
                     {mezclaSeleccionada && (
                       <span className="input-group-text small">{mezclaSeleccionada.dosisPorHectareaUnidad?.simbolo}</span>
                     )}
                   </div>
+                  {mezclaSeleccionada && form.volumenHaManual !== "" && (
+                    <p className="form-text small mb-0">
+                      De mezcla: {Number(mezclaSeleccionada.dosisPorHectarea || 0).toFixed(2)}{" "}
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm p-0 align-baseline"
+                        onClick={() => setForm((f) => ({ ...f, volumenHaManual: "" }))}
+                      >
+                        usar de mezcla
+                      </button>
+                    </p>
+                  )}
                 </div>
                 <div className="col-2">
                   <label className="form-label small fw-medium mb-1">
@@ -1876,7 +2371,21 @@ export default function AspersionesPage() {
                     required
                     className="form-control form-control-sm rounded-3"
                     value={form.hectareas}
-                    onChange={(e) => setForm((f) => ({ ...f, hectareas: e.target.value }))}
+                    onChange={(e) => {
+                      // Al cambiar hectáreas se vuelve a la receta: los
+                      // ajustes manuales por fila son cantidades ABSOLUTAS
+                      // para las hectáreas anteriores y quedarían congelados
+                      // (obligando a ir fila por fila a "usar dosis") —
+                      // pedido explícito: cada insumo (salvo agua/PH, que se
+                      // recalculan solos) sigue la receta de una vez, con el
+                      // redondeo de siempre.
+                      setTextosCantidadAjustada((t) => (Object.keys(t).length ? {} : t));
+                      setForm((f) => ({
+                        ...f,
+                        hectareas: e.target.value,
+                        componentesAjustados: Object.keys(f.componentesAjustados).length ? {} : f.componentesAjustados,
+                      }));
+                    }}
                   />
                 </div>
                 <div className="col-2">
@@ -1885,7 +2394,7 @@ export default function AspersionesPage() {
                     <FiInfo
                       size={13}
                       className="text-secondary"
-                      title="Se sugiere solo: busca que el insumo principal quede entre 100% y 110% de su dosis máxima por hectárea (hasta un máximo de 10% de aumento). Si el redondeo no permite caer en ese rango, prioriza no quedar por debajo de 100%. El operador lo puede subir o bajar a mano."
+                      title="Se sugiere solo: busca que el insumo principal quede lo más cerca posible de 110% de su dosis máxima por hectárea sin pasarse (mínimo 100%, hasta un máximo de 10% de aumento); los demás insumos van en proporción al principal, sin tope. Si el redondeo no permite caer en ese rango, prioriza no quedar por debajo de 100%. El operador lo puede subir o bajar a mano."
                     />
                   </label>
                   <div className="input-group input-group-sm">
@@ -1897,7 +2406,17 @@ export default function AspersionesPage() {
                       disabled={!mezclaSeleccionada}
                       placeholder={mezclaSeleccionada ? Number(porcentajeAumentoAutomatico || 0).toFixed(2) : ""}
                       value={form.aumentoManual}
-                      onChange={(e) => setForm((f) => ({ ...f, aumentoManual: e.target.value }))}
+                      onChange={(e) => {
+                        // Igual que con hectáreas: el % es relativo y los
+                        // ajustes por fila son absolutos — al re-sugerir se
+                        // vuelve a la receta en vez de dejar valores viejos.
+                        setTextosCantidadAjustada((t) => (Object.keys(t).length ? {} : t));
+                        setForm((f) => ({
+                          ...f,
+                          aumentoManual: e.target.value,
+                          componentesAjustados: Object.keys(f.componentesAjustados).length ? {} : f.componentesAjustados,
+                        }));
+                      }}
                     />
                     <span className="input-group-text small">%</span>
                   </div>
@@ -1969,30 +2488,60 @@ export default function AspersionesPage() {
                   );
                 }
 
-                // El redondeo por el insumo principal (ratioRedondeoPrincipal,
-                // calculado una sola vez más arriba junto con factorReceta —
-                // lo comparte con lo que se manda al guardar, para que la
-                // tabla y el descuento de inventario nunca queden
-                // desalineados) ya viene incluido en necesariaFinalNativa()
-                // (que además ajusta el diluyente para que la suma total
-                // cuadre exactamente con "Cantidad a preparar").
+                // El % de dosis del principal (calculado una sola vez más
+                // arriba) ya viene incluido en necesariaFinalNativa() para
+                // todos los insumos con dosis propia — se comparte con lo
+                // que se manda al guardar, para que la tabla y el descuento
+                // de inventario nunca queden desalineados (y además ajusta
+                // el diluyente para que la suma total cuadre exactamente
+                // con "Cantidad a preparar").
                 const filas = componentesRecetaSeleccionada.map((c) => {
                   const articuloUuid = c.articulo?.uuid;
                   const necesariaTeorica = Number(c.cantidad) * factorTeorico;
-                  const necesariaSugeridaRedondeada = necesariaFinalNativa(c);
-                  // Agua y Regulador de pH ignoran cualquier ajuste manual
-                  // por fila — siempre se recalculan solos (pedido
-                  // explícito), no tiene sentido "usar receta"/editar a
-                  // mano un valor que de todos modos se va a recalcular.
-                  const esAutomatico = c === componenteDiluyente || c === componenteRegulador;
-                  const ajusteStr = esAutomatico ? undefined : form.componentesAjustados[articuloUuid];
-                  const necesaria = ajusteStr !== undefined && ajusteStr !== "" ? Number(ajusteStr) : necesariaSugeridaRedondeada;
+                  // Dosis relativa configurada en la receta (ej. "1% de
+                  // ACEITE BANOLE") — la cantidad ya viene resuelta desde el
+                  // backend; acá solo se informa con insignia.
+                  const refArticuloDosisRelativa = c.referenciaArticuloId
+                    ? componentesRecetaSeleccionada.find((x) => x.articulo?.id === c.referenciaArticuloId)?.articulo
+                    : null;
+                  const dosisRelativaTexto =
+                    c.porcentajeReferencia != null && refArticuloDosisRelativa
+                      ? `${Number(c.porcentajeReferencia)}% de ${refArticuloDosisRelativa.nombre}`
+                      : null;
+                  // Tasa por volumen configurada en la receta (ej. "1 g/Gal"):
+                  // la cantidad se calcula con el total a preparar.
+                  const dosisVolumenTexto = (() => {
+                    if (c.tipoDosis !== "POR_VOLUMEN" || c.tasa == null) return null;
+                    const tasaUnidad = [...unidadesVolumen, ...unidadesPeso].find((u) => u.id === c.tasaUnidadId);
+                    if (!tasaUnidad) return null;
+                    return `${Number(c.tasa)} ${c.unidad?.simbolo || ""}/${tasaUnidad.simbolo}`;
+                  })();
+                  // Tasa por litro de agua configurada en la receta (ej.
+                  // "0,3 g/L"): la cantidad se calcula con el agua real.
+                  const dosisLitroAguaTexto =
+                    c.tipoDosis === "POR_LITRO_AGUA" && c.tasa != null
+                      ? `${Number(c.tasa)} ${c.unidad?.simbolo || ""}/L`
+                      : null;
+                  // Sugerida (base de proporción, sin overrides) y REAL (con
+                  // override si lo hay; agua/PH recalculados al final para
+                  // que el total complete "Cantidad a preparar").
+                  const necesariaSugeridaRedondeada = escenarioReal.necesariaFinalNativa(c);
+                  const necesaria = necesariaRealNativa(c);
+                  // Solo el Agua es intocable (rellena el total). El
+                  // ACONDICIONADOR se calcula solo (tasa de la receta o 0.8
+                  // g/L del agua) pero SE PUEDE editar a mano — pedido
+                  // explícito; "usar dosis" lo devuelve al automático.
+                  const esAutomatico = c === componenteDiluyente;
+                  const esRegulador = c === componenteRegulador;
 
                   const disponible = existenciasInsumos[articuloUuid];
                   const insuficiente = disponible != null && disponible < necesaria;
 
-                  const dosisMaxima = c.articulo?.dosisPorHectarea != null ? Number(c.articulo.dosisPorHectarea) : null;
-                  const unidadDosisMaximaUuid = c.articulo?.dosisUnidad?.uuid;
+                  const dosisRef = dosisRefComponente(c);
+                  const dosisMaxima = dosisRef?.dosisMaxima ?? null;
+                  const dosisEsDelRenglon = dosisRef?.esDelRenglon === true;
+                  const unidadDosisMaximaUuid = dosisRef?.unidadUuid;
+                  const unidadDosisMaximaSimbolo = dosisRef?.simbolo || "";
                   const unidadRecetaUuid = c.unidad?.uuid;
                   const dosisAplicadaEnUnidadReceta = hectareasNum > 0 ? necesaria / hectareasNum : 0;
                   const dosisAplicada =
@@ -2009,10 +2558,32 @@ export default function AspersionesPage() {
                   // elegido otra unidad para esta fila en particular. El
                   // número que realmente se guarda/manda (`necesaria`,
                   // `necesariaTeorica`) sigue siempre en la unidad nativa.
-                  const unidadFilaUuid = unidadesPorFila[articuloUuid] || unidadRecetaUuid;
-                  function aUnidadFila(cantidadNativa) {
+                  // El Agua se muestra por defecto en galones (si hay conversión).
+                  const galonAgua = c === componenteAgua ? unidadesVolumen.find((u) => u.nombre === "Galón") : null;
+                  const aguaEnGalones =
+                    galonAgua && unidadRecetaUuid && convertirCantidad(grafoUnidades, unidadRecetaUuid, galonAgua.uuid, 1) !== null
+                      ? galonAgua.uuid
+                      : null;
+                  const unidadFilaUuid = unidadesPorFila[articuloUuid] || aguaEnGalones || unidadPropiaDe(c) || unidadRecetaUuid;
+                  // Convierte a la unidad elegida para esta fila SIN redondear —
+                  // se usa para la columna Receta (exacta con dos decimales,
+                  // pedido explícito) y para que los TOTALES cuadren con
+                  // "Cantidad a preparar".
+                  function aUnidadFilaExacta(cantidadNativa) {
                     if (!unidadRecetaUuid || !unidadFilaUuid || unidadFilaUuid === unidadRecetaUuid) return cantidadNativa;
                     return convertirCantidad(grafoUnidades, unidadRecetaUuid, unidadFilaUuid, cantidadNativa) ?? cantidadNativa;
+                  }
+                  // Cantidad necesaria: misma conversión pero redondeada al
+                  // paso MÁS CERCANO (0.5, 0.1 para ACONDICIONADOR) — no
+                  // siempre hacia arriba (pedido explícito: 0,81 Kg no debe
+                  // mostrarse como 0,90 Kg). Sin redondeo, un valor ya
+                  // limpio en la unidad global dejaba de verse "limpio" al
+                  // convertirlo a la unidad propia de la fila (ej. 105 Gal
+                  // -> 397.47 L en vez de 397.5 L).
+                  function aUnidadFila(cantidadNativa) {
+                    const convertida = aUnidadFilaExacta(cantidadNativa);
+                    if (!(convertida > 0)) return convertida;
+                    return c === componenteRegulador ? Math.round(convertida * 10) / 10 : Math.round(convertida / 0.5) * 0.5;
                   }
                   const simboloDisplay =
                     unidadesVolumen.find((u) => u.uuid === unidadFilaUuid)?.simbolo ||
@@ -2024,17 +2595,30 @@ export default function AspersionesPage() {
                     c,
                     articuloUuid,
                     necesaria,
-                    necesariaTeorica,
                     necesariaSugeridaRedondeada,
                     esAutomatico,
+                    esRegulador,
                     disponible,
                     insuficiente,
                     dosisMaxima,
-                    unidadDosisMaximaSimbolo: c.articulo?.dosisUnidad?.simbolo,
+                    unidadDosisMaximaSimbolo: dosisRef?.simbolo || "",
+                    dosisEsDelRenglon,
                     dosisAplicada,
                     excedeDosis,
-                    teoricaDisplayValor: aUnidadFila(necesariaTeorica),
+                    // Columna Receta: valor teórico EXACTO con dos decimales
+                    // (pedido explícito) — sin el redondeo a 0.5, que solo
+                    // aplica a "Cantidad necesaria".
+                    teoricaDisplayValor: aUnidadFilaExacta(necesariaTeorica),
                     necesariaDisplayValor: aUnidadFila(necesaria),
+                    // Valor exacto (sin redondeo de pantalla) en la unidad de
+                    // la fila — solo para que los TOTALES cuadren con
+                    // "Cantidad a preparar" (sumar los mostrados, ya
+                    // redondeados a 0.5 por fila, dejaba descuadres como
+                    // 99.96 vs 100).
+                    necesariaExactaFilaValor: aUnidadFilaExacta(necesaria),
+                    dosisRelativaTexto,
+                    dosisVolumenTexto,
+                    dosisLitroAguaTexto,
                     simboloDisplay,
                     unidadRecetaUuid,
                     unidadFilaUuid,
@@ -2042,16 +2626,36 @@ export default function AspersionesPage() {
                   };
                 });
 
-                // Totales de "Receta" y "Cantidad necesaria" — agrupados por
-                // la unidad MOSTRADA de cada fila (ya convertida cuando se
-                // pudo), para no sumar litros con kilos por error.
+                // Totales de "Receta" y "Cantidad necesaria" — pedido
+                // explícito: los insumos de VOLUMEN (Litros, Galones...) se
+                // suman TODOS juntos en una sola fila, convertidos a la
+                // unidad de "Cantidad a preparar" (sin importar en qué
+                // unidad esté mostrada cada fila individualmente), porque
+                // son la misma magnitud física. Los de PESO (Kg) son una
+                // magnitud distinta — no se pueden sumar con volumen — así
+                // que se agrupan aparte, por su propio símbolo.
+                const simboloVolumenTotal =
+                  unidadesVolumen.find((u) => u.uuid === unidadMostradaUuid)?.simbolo || unidadCantidadSimbolo || "";
+                const totalVolumen = { teorica: 0, ajustada: 0 };
+                let hayFilasVolumen = false;
                 const totalesPorUnidad = new Map();
                 for (const f of filas) {
-                  const simbolo = f.simboloDisplay;
-                  const acc = totalesPorUnidad.get(simbolo) || { teorica: 0, ajustada: 0 };
-                  acc.teorica += f.teoricaDisplayValor;
-                  acc.ajustada += f.necesariaDisplayValor;
-                  totalesPorUnidad.set(simbolo, acc);
+                  const esVolumen = unidadesVolumen.some((u) => u.uuid === f.unidadFilaUuid);
+                  if (esVolumen && unidadMostradaUuid) {
+                    hayFilasVolumen = true;
+                    const aVolumenTotal = (valor) =>
+                      f.unidadFilaUuid === unidadMostradaUuid
+                        ? valor
+                        : convertirCantidad(grafoUnidades, f.unidadFilaUuid, unidadMostradaUuid, valor) ?? valor;
+                    totalVolumen.teorica += aVolumenTotal(f.teoricaDisplayValor);
+                    totalVolumen.ajustada += aVolumenTotal(f.necesariaExactaFilaValor);
+                  } else {
+                    const simbolo = f.simboloDisplay;
+                    const acc = totalesPorUnidad.get(simbolo) || { teorica: 0, ajustada: 0 };
+                    acc.teorica += f.teoricaDisplayValor;
+                    acc.ajustada += f.necesariaExactaFilaValor;
+                    totalesPorUnidad.set(simbolo, acc);
+                  }
                 }
 
                 return (
@@ -2078,7 +2682,6 @@ export default function AspersionesPage() {
                             ({
                               c,
                               articuloUuid,
-                              necesariaTeorica,
                               disponible,
                               insuficiente,
                               dosisMaxima,
@@ -2087,11 +2690,16 @@ export default function AspersionesPage() {
                               excedeDosis,
                               teoricaDisplayValor,
                               necesariaDisplayValor,
+                              dosisRelativaTexto,
+                              dosisVolumenTexto,
+                              dosisLitroAguaTexto,
+                              dosisEsDelRenglon,
                               simboloDisplay,
                               unidadRecetaUuid,
                               unidadFilaUuid,
                               unidadesCompatiblesFila,
                               esAutomatico,
+                              esRegulador,
                             }) => (
                               <tr key={c.uuid}>
                                 <td className="small">
@@ -2101,49 +2709,159 @@ export default function AspersionesPage() {
                                       Principal
                                     </span>
                                   )}
+                                  {dosisRelativaTexto && (
+                                    <span className="badge bg-info rounded-pill ms-2" style={{ fontSize: "0.65rem" }} title="Dosis relativa configurada en la receta: este insumo es el X% del insumo de referencia">
+                                      {dosisRelativaTexto}
+                                    </span>
+                                  )}
+                                  {dosisVolumenTexto && (
+                                    <span className="badge bg-info rounded-pill ms-2" style={{ fontSize: "0.65rem" }} title="Dosis por volumen configurada en la receta: se calcula con el total a preparar">
+                                      {dosisVolumenTexto}
+                                    </span>
+                                  )}
+                                  {dosisLitroAguaTexto && (
+                                    <span className="badge bg-info rounded-pill ms-2" style={{ fontSize: "0.65rem" }} title="Dosis por litro de agua configurada en la receta: se calcula con el agua real">
+                                      {dosisLitroAguaTexto}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="small text-secondary">
-                                  {teoricaDisplayValor.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {simboloDisplay}
-                                  {!esAutomatico && Number(necesariaDisplayValor.toFixed(2)) !== Number(teoricaDisplayValor.toFixed(2)) && (
+                                  {teoricaDisplayValor.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {simboloDisplay}
+                                  {/* El enlace solo sale si ESTA fila se editó a
+                                      mano (tiene override) — antes salía siempre
+                                      que el sugerido (con % aumento y redondeo)
+                                      difiriera de la receta, así que cambiar
+                                      hectáreas lo prendía en todas las filas
+                                      aunque nadie hubiera tocado nada. */}
+                                  {!esAutomatico &&
+                                    form.componentesAjustados[articuloUuid] !== undefined &&
+                                    form.componentesAjustados[articuloUuid] !== "" &&
+                                    (!reglaDosisRef.has(articuloUuid) ||
+                                      derivadosRegla[articuloUuid] !== form.componentesAjustados[articuloUuid]) && (
                                     <>
                                       {" "}
                                       <button
                                         type="button"
                                         className="btn btn-link btn-sm p-0 align-baseline"
                                         onClick={() => {
-                                          setForm((f) => ({
-                                            ...f,
-                                            // El override se guarda SIEMPRE en la
-                                            // unidad nativa del insumo (igual que
-                                            // antes) — solo la pantalla se ve
-                                            // convertida.
-                                            componentesAjustados: { ...f.componentesAjustados, [articuloUuid]: necesariaTeorica.toFixed(4) },
-                                          }));
+                                          // "usar dosis": descarta el ajuste manual
+                                          // de la fila y vuelve a la dosis
+                                          // sugerida (receta + % aumento +
+                                          // redondeo). Si es el principal, se
+                                          // resetea toda la tabla para no dejar
+                                          // proporciones viejas colgadas. Los
+                                          // seguidores de dosis relativa se
+                                          // re-derivan de su referencia (si la
+                                          // fila era seguidora, vuelve al X%
+                                          // de su referencia actual).
+                                          setForm((f) => {
+                                            const next = { ...f.componentesAjustados };
+                                            delete next[articuloUuid];
+                                            if (c.esPrincipal) {
+                                              for (const ff of filas) {
+                                                if (!ff.esAutomatico) delete next[ff.articuloUuid];
+                                              }
+                                            }
+                                            propagarReglasDosis(next, null);
+                                            return { ...f, componentesAjustados: next };
+                                          });
                                           setTextosCantidadAjustada((t) => {
                                             const next = { ...t };
                                             delete next[articuloUuid];
+                                            if (c.esPrincipal) {
+                                              for (const ff of filas) {
+                                                if (ff.articuloUuid !== articuloUuid && !ff.esAutomatico) {
+                                                  delete next[ff.articuloUuid];
+                                                }
+                                              }
+                                            } else {
+                                              for (const u of seguidoresTransitivos(articuloUuid)) delete next[u];
+                                            }
                                             return next;
                                           });
                                         }}
                                       >
-                                        usar receta
+                                        usar dosis
                                       </button>
                                     </>
                                   )}
                                 </td>
                                 <td className="small">
-                                  <div className="input-group input-group-sm" style={{ width: "5.5rem" }}>
+                                  <div className="input-group input-group-sm" style={{ width: "9rem" }}>
                                     <input
                                       type="number"
                                       step="0.01"
                                       min="0.01"
                                       disabled={esAutomatico}
-                                      title={esAutomatico ? "Se recalcula solo (Agua completa la cantidad a preparar; Regulador de pH sigue al Agua)" : undefined}
+                                      title={
+                                        esAutomatico
+                                          ? "Se recalcula solo (Agua completa la cantidad a preparar)"
+                                          : esRegulador
+                                            ? "Se calcula solo (tasa de la receta o 0.8 g por litro de agua); editable a mano"
+                                            : undefined
+                                      }
                                       className="form-control rounded-start-3 px-1"
-                                      style={{ minWidth: 0 }}
+                                      style={{ minWidth: "4.5rem" }}
                                       value={textosCantidadAjustada[articuloUuid] ?? necesariaDisplayValor.toFixed(2)}
                                       onChange={(e) => {
                                         const escrito = e.target.value;
+                                        // Lo que escribe el operador está en la
+                                        // unidad MOSTRADA (simboloDisplay) — se
+                                        // convierte a la unidad nativa del
+                                        // insumo antes de guardarlo, para no
+                                        // desalinear lo que se ve de lo que
+                                        // realmente se descuenta del inventario.
+                                        const aNativo = (num) =>
+                                          unidadFilaUuid && unidadFilaUuid !== unidadRecetaUuid
+                                            ? convertirCantidad(grafoUnidades, unidadFilaUuid, unidadRecetaUuid, num) ?? num
+                                            : num;
+                                        // Si se edita el PRINCIPAL, los demás
+                                        // insumos (no automáticos) se mueven en
+                                        // su misma proporción — pedido
+                                        // explícito. Agua y ACONDICIONADOR se
+                                        // recalculan solos, no se tocan.
+                                        const esEdicionPrincipal = c.esPrincipal;
+                                        if (escrito === "") {
+                                          // Vaciar el principal resetea toda
+                                          // la tabla al sugerido (los
+                                          // overrides viejos quedarían
+                                          // desproporcionados).
+                                          setTextosCantidadAjustada((t) => {
+                                            const next = { ...t };
+                                            delete next[articuloUuid];
+                                            if (esEdicionPrincipal) {
+                                              for (const ff of filas) {
+                                                if (!ff.esAutomatico) delete next[ff.articuloUuid];
+                                              }
+                                            } else {
+                                              // Si cambió una referencia, sus
+                                              // seguidores muestran el valor
+                                              // recalculado (se les borra el
+                                              // texto crudo viejo).
+                                              for (const u of seguidoresTransitivos(articuloUuid)) delete next[u];
+                                            }
+                                            return next;
+                                          });
+                                          setForm((f) => {
+                                            if (!esEdicionPrincipal) {
+                                              const next = { ...f.componentesAjustados, [articuloUuid]: "" };
+                                              // La referencia vacía vuelve a la
+                                              // sugerida y arrastra a sus
+                                              // seguidores.
+                                              propagarReglasDosis(next, articuloUuid);
+                                              return { ...f, componentesAjustados: next };
+                                            }
+                                            const next = { ...f.componentesAjustados };
+                                            for (const ff of filas) {
+                                              if (!ff.esAutomatico) delete next[ff.articuloUuid];
+                                            }
+                                            return { ...f, componentesAjustados: next };
+                                          });
+                                          return;
+                                        }
+                                        const numEscrito = Number(escrito);
+                                        if (Number.isNaN(numEscrito)) return;
+                                        const nativo = aNativo(numEscrito);
                                         // Se guarda el texto tal cual se está
                                         // escribiendo (para que borrar un
                                         // dígito se vea reflejado de una vez,
@@ -2151,27 +2869,49 @@ export default function AspersionesPage() {
                                         // ".toFixed(2)" lo reemplace de
                                         // inmediato) — se sincroniza con
                                         // componentesAjustados en paralelo.
-                                        setTextosCantidadAjustada((t) => ({ ...t, [articuloUuid]: escrito }));
-                                        // Lo que escribe el operador está en la
-                                        // unidad MOSTRADA (simboloDisplay) — se
-                                        // convierte a la unidad nativa del
-                                        // insumo antes de guardarlo, para no
-                                        // desalinear lo que se ve de lo que
-                                        // realmente se descuenta del inventario.
-                                        if (escrito === "") {
-                                          setForm((f) => ({ ...f, componentesAjustados: { ...f.componentesAjustados, [articuloUuid]: "" } }));
-                                          return;
-                                        }
-                                        const numEscrito = Number(escrito);
-                                        if (Number.isNaN(numEscrito)) return;
-                                        const nativo =
-                                          unidadFilaUuid && unidadFilaUuid !== unidadRecetaUuid
-                                            ? convertirCantidad(grafoUnidades, unidadFilaUuid, unidadRecetaUuid, numEscrito) ?? numEscrito
-                                            : numEscrito;
-                                        setForm((f) => ({
-                                          ...f,
-                                          componentesAjustados: { ...f.componentesAjustados, [articuloUuid]: String(nativo) },
-                                        }));
+                                        setTextosCantidadAjustada((t) => {
+                                          const next = { ...t, [articuloUuid]: escrito };
+                                          // Las filas arrastradas por el
+                                          // principal muestran su nuevo valor
+                                          // derivado (se les borra el texto
+                                          // crudo viejo).
+                                          if (esEdicionPrincipal) {
+                                            for (const ff of filas) {
+                                              if (ff.articuloUuid !== articuloUuid && !ff.esAutomatico) {
+                                                delete next[ff.articuloUuid];
+                                              }
+                                            }
+                                          } else {
+                                            for (const u of seguidoresTransitivos(articuloUuid)) delete next[u];
+                                          }
+                                          return next;
+                                        });
+                                        setForm((f) => {
+                                          const next = { ...f.componentesAjustados, [articuloUuid]: String(nativo) };
+                                          if (esEdicionPrincipal) {
+                                            const sugeridaPrincipal = filas.find(
+                                              (ff) => ff.articuloUuid === articuloUuid,
+                                            )?.necesariaSugeridaRedondeada;
+                                            if (sugeridaPrincipal > 0) {
+                                              const ratio = nativo / sugeridaPrincipal;
+                                              for (const ff of filas) {
+                                                if (ff.articuloUuid === articuloUuid || ff.esAutomatico || ff.esRegulador) continue;
+                                                // Los por-litro siguen al agua, no al principal.
+                                                if (ff.c?.tipoDosis === "POR_LITRO_AGUA") continue;
+                                                if (ff.necesariaSugeridaRedondeada != null) {
+                                                  next[ff.articuloUuid] = (ff.necesariaSugeridaRedondeada * ratio).toFixed(4);
+                                                }
+                                              }
+                                            }
+                                          }
+                                          // Dosis relativas: los seguidores de
+                                          // la fila editada se recalculan
+                                          // (X% de su referencia). La fila
+                                          // editada conserva su valor aunque
+                                          // sea seguidora.
+                                          propagarReglasDosis(next, articuloUuid);
+                                          return { ...f, componentesAjustados: next };
+                                        });
                                       }}
                                       onBlur={() => {
                                         // Al salir del campo se vuelve a mostrar
@@ -2218,6 +2958,11 @@ export default function AspersionesPage() {
                                 {dosisMaxima != null ? (
                                   <>
                                     {dosisAplicada.toLocaleString("es-CO", { maximumFractionDigits: 2 })} / {dosisMaxima.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {unidadDosisMaximaSimbolo}
+                                    {dosisEsDelRenglon && (
+                                      <span className="badge bg-info rounded-pill ms-1" style={{ fontSize: "0.65rem" }} title="Dosis de referencia de ESTA receta (manda sobre la del artículo)">
+                                        R
+                                      </span>
+                                    )}
                                     {excedeDosis && <FiAlertTriangle className="ms-1 mb-1" size={12} />}
                                   </>
                                 ) : (
@@ -2238,6 +2983,22 @@ export default function AspersionesPage() {
                           ))}
                         </tbody>
                         <tfoot>
+                          {hayFilasVolumen && (
+                            <tr className="small fw-medium">
+                              <td style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>
+                                Total{simboloVolumenTotal ? ` (${simboloVolumenTotal})` : ""}
+                              </td>
+                              <td style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>
+                                {totalVolumen.teorica.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {simboloVolumenTotal}
+                              </td>
+                              <td style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>
+                                {totalVolumen.ajustada.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {simboloVolumenTotal}
+                              </td>
+                              <td style={{ backgroundColor: "var(--brand-900)" }} />
+                              <td style={{ backgroundColor: "var(--brand-900)" }} />
+                              <td style={{ backgroundColor: "var(--brand-900)" }} />
+                            </tr>
+                          )}
                           {[...totalesPorUnidad.entries()].map(([simbolo, { teorica, ajustada }]) => (
                             <tr key={simbolo || "sin-unidad"} className="small fw-medium">
                               <td style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>Total{simbolo ? ` (${simbolo})` : ""}</td>
@@ -2335,14 +3096,18 @@ export default function AspersionesPage() {
                   {usuariosFinca.length > 0 ? (
                     <select
                       className="form-select form-select-sm rounded-3"
-                      value={form.administradorFincaUuid}
+                      value={form.administradorFincaUuid || (guardadoFueraDeLista ? "__guardado__" : "")}
                       onChange={(e) => {
                         const uuid = e.target.value;
+                        if (uuid === "__guardado__") return;
                         const usuario = usuariosFinca.find((u) => u.uuid === uuid);
                         setForm((f) => ({ ...f, administradorFincaUuid: uuid, administradorFincaNombre: usuario ? nombreUsuario(usuario) : "" }));
                       }}
                     >
                       <option value="">Selecciona...</option>
+                      {guardadoFueraDeLista && (
+                        <option value="__guardado__">{form.administradorFincaNombre} (guardado)</option>
+                      )}
                       {usuariosFinca.map((u) => (
                         <option key={u.uuid} value={u.uuid}>
                           {nombreUsuario(u)}
@@ -2353,7 +3118,7 @@ export default function AspersionesPage() {
                     <input
                       type="text"
                       className="form-control form-control-sm rounded-3"
-                      placeholder={cargandoUsuariosFinca ? "Cargando..." : form.fincaUuid ? "Sin usuarios asignados a esta finca" : "Elegí primero la finca"}
+                      placeholder={cargandoUsuariosFinca ? "Cargando..." : form.fincaUuid ? "Sin usuarios asignados a esta finca" : "Elige primero la finca"}
                       value={form.administradorFincaNombre}
                       onChange={(e) => setForm((f) => ({ ...f, administradorFincaNombre: e.target.value }))}
                     />
@@ -2377,7 +3142,96 @@ export default function AspersionesPage() {
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
-                  {saving ? "Guardando..." : "Programar"}
+                  {saving ? "Guardando..." : editingUuid ? "Guardar cambios" : "Programar"}
+                </button>
+              </div>
+            </form>
+          </ModalShell>
+        )}
+
+        {stockModal && (
+          <StockInsuficienteModal
+            advertencias={stockModal.advertencias}
+            onCancelar={() => setStockModal(null)}
+            onContinuar={async () => {
+              const { aspersion, comprobante } = stockModal;
+              setStockModal(null);
+              await handleEjecutar(aspersion, true, comprobante);
+            }}
+            textoContinuar="Ejecutar de todas formas"
+          />
+        )}
+
+        {ejecutarModal && (
+          <ModalShell title="Ejecutar aspersión" onClose={() => setEjecutarModal(null)} width="32rem">
+            <form onSubmit={confirmarEjecutar}>
+              <p className="small text-secondary mb-3">
+                Completa los datos de la aplicación. Se descontarán los insumos y se guardará el{" "}
+                <strong>comprobante de aplicación en borrador</strong>.
+              </p>
+              <div className="rounded-3 p-2 mb-3 small" style={{ backgroundColor: "#f0fdf4" }}>
+                <div><strong>{ejecutarModal.aspersion.numero}</strong> · {ejecutarModal.aspersion.finca?.nombre}</div>
+                <div className="text-secondary">
+                  {ejecutarModal.aspersion.mezcla?.nombre || ejecutarModal.aspersion.mezcla?.codigo} ·{" "}
+                  {ejecutarModal.aspersion.medio === "DRON" ? "Dron" : ejecutarModal.aspersion.medio === "AVION" ? "Avión" : "—"} ·{" "}
+                  {Number(ejecutarModal.aspersion.hectareas)} ha programadas
+                </div>
+              </div>
+              {ejecutarModal.error && <div className="alert alert-danger py-2 small">{ejecutarModal.error}</div>}
+              <div className="row g-2 mb-2">
+                <div className="col-12">
+                  <label className="form-label small fw-medium mb-1">
+                    Piloto del {ejecutarModal.aspersion.medio === "DRON" ? "dron" : "avión"} *
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm rounded-3"
+                    value={ejecutarModal.piloto}
+                    maxLength={150}
+                    autoFocus
+                    onChange={(e) => setEjecutarModal((m) => ({ ...m, piloto: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small fw-medium mb-1">Hectáreas aplicadas *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    className="form-control form-control-sm rounded-3"
+                    value={ejecutarModal.hectareasAplicadas}
+                    onChange={(e) => setEjecutarModal((m) => ({ ...m, hectareasAplicadas: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small fw-medium mb-1">Galones totales de la mezcla</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="form-control form-control-sm rounded-3"
+                    placeholder="Sin conversión"
+                    value={ejecutarModal.galonesTotales}
+                    onChange={(e) => setEjecutarModal((m) => ({ ...m, galonesTotales: e.target.value }))}
+                  />
+                </div>
+                <div className="col-12">
+                  <label className="form-label small fw-medium mb-1">Observaciones</label>
+                  <textarea
+                    className="form-control form-control-sm rounded-3"
+                    rows={2}
+                    maxLength={1000}
+                    value={ejecutarModal.observaciones}
+                    onChange={(e) => setEjecutarModal((m) => ({ ...m, observaciones: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="d-flex justify-content-end gap-2 mt-3">
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setEjecutarModal(null)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3">
+                  Ejecutar y generar comprobante
                 </button>
               </div>
             </form>
@@ -2389,10 +3243,10 @@ export default function AspersionesPage() {
             <p className="small text-secondary mb-3">
               Sube un archivo .xlsx o .csv con <strong>una fila por vuelo</strong>. Columnas: <strong>medio</strong> (AVION/DRON),{" "}
               <strong>almacen</strong>, <strong>fecha</strong>, <strong>finca</strong>, <strong>observaciones</strong> (opcional),{" "}
-              <strong>hectareas</strong>, <strong>tipo</strong> (opcional, SIGATOKA_NEGRA por defecto), y{" "}
-              <strong>producto1</strong>, <strong>producto2</strong>, ... (los que hagan falta). No se elige una mezcla puntual — el
-              sistema busca sola la mezcla activa que incluya TODOS los productos listados en la fila (si hay varias que
-              coinciden, usa la que se haya usado más recientemente); si ninguna coincide, esa fila queda reportada como
+              <strong>hectareas</strong>, <strong>tipo</strong> (opcional, SIGATOKA_NEGRA por defecto) y{" "}
+              <strong>mezcla</strong> (código o nombre de una mezcla activa, o la lista de insumos de su receta en formato{" "}
+              &quot;INSUMO1 | INSUMO2 | ...&quot; — igual que la columna &quot;Insumos de la receta&quot; de la pestaña de Mezclas y de la hoja
+              &quot;Mezclas&quot; de la plantilla, desde donde se puede copiar y pegar). Si una fila trae una mezcla que no existe, esa fila queda reportada como
               error y el resto del archivo se procesa igual.
             </p>
 

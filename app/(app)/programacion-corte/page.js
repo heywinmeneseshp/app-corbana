@@ -1,11 +1,60 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { FiCalendar, FiFilter, FiRefreshCw, FiTrash2, FiX } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+
+// Buscador dinámico de semana (input + <datalist>) — mismo estilo ya usado
+// en Sanidad Vegetal → Aspersiones ("de ahora en adelante todos los
+// filtros de semana en este estilo"). Reemplaza el <select> plano: el
+// usuario escribe y el navegador filtra las opciones en vivo; al elegir/
+// escribir un código exacto (ej. "S35-2026") se resuelve el uuid y se
+// dispara `onChange`. Mientras el texto no matchea ninguna semana
+// completa, no cambia nada (el usuario sigue escribiendo).
+function BuscadorSemana({ semanas, value, onChange, placeholder = "Todas", className = "", style }) {
+  const datalistId = useId();
+  const [texto, setTexto] = useState("");
+  const semanaSeleccionada = semanas.find((s) => s.uuid === value) || null;
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTexto(semanaSeleccionada?.codigo || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  function handleChange(e) {
+    const val = e.target.value;
+    setTexto(val);
+    if (val === "") {
+      onChange("");
+      return;
+    }
+    const match = semanas.find((s) => s.codigo.toLowerCase() === val.trim().toLowerCase());
+    if (match) onChange(match.uuid);
+  }
+
+  return (
+    <>
+      <input
+        type="text"
+        list={datalistId}
+        className={className}
+        style={style}
+        placeholder={placeholder}
+        value={texto}
+        onChange={handleChange}
+      />
+      <datalist id={datalistId}>
+        {semanas.map((s) => (
+          <option key={s.uuid} value={s.codigo} />
+        ))}
+      </datalist>
+    </>
+  );
+}
 
 export default function ProgramacionCortePage() {
   const [fincas, setFincas] = useState([]);
@@ -253,6 +302,24 @@ function SyncModal({ semanas, onClose, onSynced }) {
   const [error, setError] = useState("");
   const [resultado, setResultado] = useState(null);
 
+  // Por defecto selecciona la ÚLTIMA semana que ya tiene programación
+  // cargada (no la semana actual) — pedido explícito. El backend devuelve
+  // /programacion-corte ordenado por fecha DESC, así que la primera fila
+  // de un GET sin filtros es el registro más reciente — se toma su semana.
+  useEffect(() => {
+    let cancelado = false;
+    apiFetch("/programacion-corte?limit=1")
+      .then(({ items }) => {
+        if (cancelado) return;
+        const ultimaSemanaUuid = items?.[0]?.semana?.uuid;
+        if (ultimaSemanaUuid) setSemanaUuid(ultimaSemanaUuid);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
   async function handleSincronizar() {
     if (!semanaUuid) {
       setError("Selecciona la semana a sincronizar.");
@@ -282,14 +349,13 @@ function SyncModal({ semanas, onClose, onSynced }) {
             <label className="form-label small fw-medium">
               Semana <span className="text-danger">*</span>
             </label>
-            <select className="form-select rounded-3" value={semanaUuid} onChange={(e) => setSemanaUuid(e.target.value)}>
-              <option value="">Selecciona una semana...</option>
-              {semanas.map((s) => (
-                <option key={s.uuid} value={s.uuid}>
-                  {s.codigo}
-                </option>
-              ))}
-            </select>
+            <BuscadorSemana
+              semanas={semanas}
+              value={semanaUuid}
+              onChange={setSemanaUuid}
+              placeholder="Escribe o elige una semana..."
+              className="form-control rounded-3"
+            />
             <p className="form-text small">Solo se trae y procesa la programación de esa semana.</p>
           </div>
 

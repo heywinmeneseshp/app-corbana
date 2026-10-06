@@ -44,7 +44,7 @@ export default function MezclasPage() {
     try {
       // incluirDirectas=false: esta pantalla es de PRUEBAS de laboratorio —
       // una mezcla creada con "Nueva mezcla" (sin prueba, ver
-      // inventarios/elaboraciones) no debe aparecer acá.
+      // sanidad-vegetal/mezclas) no debe aparecer acá.
       const qs = new URLSearchParams({
         page: String(page),
         limit: "100",
@@ -144,7 +144,7 @@ export default function MezclasPage() {
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">Mezclas — Pruebas de laboratorio</h1>
+            <h1 className="fw-bold h3 mb-1">Pruebas de laboratorio</h1>
             <p className="text-secondary mb-0">
               Registra componentes, mide pH y CE por etapa, y determina si una combinación queda válida para
               convertirse en un elaborado.

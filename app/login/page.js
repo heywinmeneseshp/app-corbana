@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { saveSession } from "@/lib/auth";
+import { saveSession, marcarNuevaSesion } from "@/lib/auth";
 import { useMarca } from "@/lib/marca";
 import AppLogo from "@/components/AppLogo";
 import styles from "./login.module.css";
@@ -50,6 +50,7 @@ export default function LoginPage() {
       }
 
       saveSession(data.data);
+      marcarNuevaSesion();
       router.push("/");
     } catch (err) {
       setError(err.message);

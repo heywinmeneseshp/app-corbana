@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FiPlus, FiX, FiCamera, FiTrash2, FiArrowLeft, FiCheckCircle, FiXCircle, FiInfo, FiClock } from "react-icons/fi";
+import { FiPlus, FiX, FiCamera, FiTrash2, FiArrowLeft, FiCheckCircle, FiXCircle, FiInfo, FiClock, FiSend, FiMenu } from "react-icons/fi";
 import { apiFetch, apiFetchFormData, apiFetchBlob } from "@/lib/api";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
 import { estadoPruebaInfo, ESTADOS_PRUEBA_EDITABLES } from "@/lib/mezclaEstados";
@@ -12,8 +12,10 @@ import { parseFechaUTC } from "@/lib/fecha";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
+// Solo para la corrección de pH (ACONDICIONADOR) — el flujo de "Agregar
+// insumo" ya no pasa por este form, ver `insumoSeleccionadoUuid`.
 function emptyEtapaForm() {
-  return { modo: "NUEVO_INSUMO", articuloUuid: "", cantidad: "1", unidadUuid: "", ph: "", ce: "", observaciones: "" };
+  return { cantidad: "1", unidadUuid: "", litrosAgua: "", ph: "", ce: "", observaciones: "" };
 }
 
 const INTERVALOS_HOMOGENEIDAD = [
@@ -74,6 +76,7 @@ export default function MezclaPruebaDetallePage() {
   const [unidades, setUnidades] = useState([]);
   const [conversiones, setConversiones] = useState([]);
   const [almacenes, setAlmacenes] = useState([]);
+  const [parametros, setParametros] = useState(null);
   const grafoUnidades = useMemo(() => construirGrafoUnidades(conversiones), [conversiones]);
 
   const version = mezcla?.versiones?.[0] || null;
@@ -95,7 +98,7 @@ export default function MezclaPruebaDetallePage() {
   // bloquea seguir registrando etapas Y más puntos de homogeneidad,
   // solo queda finalizar la prueba (pedido explícito).
   const homogeneidadFalla = (version?.homogeneidad || []).some((h) => h.homogenea === false);
-  const reguladorPhUuid = articulos.find((a) => a.nombre === "Regulador de pH")?.uuid;
+  const reguladorPhUuid = articulos.find((a) => a.nombre === "ACONDICIONADOR")?.uuid;
 
   const puedeCrear = hasPermission("inventario.mezclas.crear");
   const puedeEditar = hasPermission("inventario.mezclas.editar");
@@ -112,7 +115,7 @@ export default function MezclaPruebaDetallePage() {
   const [infoError, setInfoError] = useState("");
   const infoCompleta = Boolean(mezcla?.nombre);
   // Mientras el nombre no se haya tocado a mano, se sugiere solo
-  // concatenando los insumos de la receta (sin Agua ni Regulador de pH,
+  // concatenando los insumos de la receta (sin Agua ni ACONDICIONADOR,
   // que no son insumos "de fórmula") — pedido explícito. Igual criterio
   // que dosis/cantidad en Aspersiones: se deja de auto-sugerir en cuanto
   // el operador edita el campo.
@@ -124,26 +127,57 @@ export default function MezclaPruebaDetallePage() {
   const [componentesError, setComponentesError] = useState("");
 
   // ─── Etapas ───
-  // modo: "NUEVO_INSUMO" (agrega el insumo a la receta Y mide, en un solo
-  // paso — antes había que guardarlo en "Componentes" aparte antes de
-  // poder elegirlo acá) o "CORRECCION_PH" (insumo puntual, ej. regulador
-  // de pH, que NO se agrega a la receta). articuloUuid/cantidad/unidadUuid
-  // se reutilizan para los dos modos — son el mismo tipo de campo, solo
-  // cambia a dónde va el insumo elegido.
+  // "Agregar insumo" y "Corrección de pH" ya no comparten un único
+  // formulario (pedido explícito: separar "agregar el insumo" de "medir su
+  // pH/CE" en dos pasos/contenedores). `etapaForm` queda solo para
+  // CORRECCION_PH (sigue siendo un solo paso: mide Y corrige a la vez, no
+  // agrega nada a la receta). Agregar un insumo nuevo es ahora
+  // `insumoSeleccionadoUuid` + `handleAgregarInsumo` (abajo); medir un
+  // insumo ya agregado es `medicionesForm` + `handleRegistrarMedicion`.
   const [etapaForm, setEtapaForm] = useState(emptyEtapaForm());
-  const [etapaFotos, setEtapaFotos] = useState([]); // [{file, previewUrl}] — evidencia de la etapa que se está por registrar
+  const [etapaFotos, setEtapaFotos] = useState([]); // [{file, previewUrl}] — evidencia de la corrección de pH que se está por registrar
+
+  // "Agregar insumo": solo el select — la cantidad/unidad se calculan solas
+  // (sugeridas por dosis, ver sugerirCantidadPorDosis) al agregar, y quedan
+  // editables después en "Insumos pendientes de medir"/"Receta actual".
+  const [insumoSeleccionadoUuid, setInsumoSeleccionadoUuid] = useState("");
+  const [agregandoInsumo, setAgregandoInsumo] = useState(false);
+
+  // Medición en progreso por cada insumo pendiente de medir (ver
+  // `pendientesDeMedir` más abajo) — clave: uuid del componente.
+  // { [componenteUuid]: { ph, ce, observaciones, fotos: [{file, previewUrl}] } }
+  const [medicionesForm, setMedicionesForm] = useState({});
+  const [registrandoMedicionUuid, setRegistrandoMedicionUuid] = useState(null);
+  // Arrastrar para reordenar los insumos AÚN SIN MEDIR (uuid del que se
+  // arrastra y de la fila sobre la que está). Uno ya medido es inamovible.
+  const [arrastrandoUuid, setArrastrandoUuid] = useState(null);
+  const [sobreUuid, setSobreUuid] = useState(null);
+
+  function medicionDe(componenteUuid) {
+    return medicionesForm[componenteUuid] || { ph: "", ce: "", observaciones: "", fotos: [] };
+  }
+
+  function updateMedicion(componenteUuid, patch) {
+    setMedicionesForm((prev) => ({ ...prev, [componenteUuid]: { ...medicionDe(componenteUuid), ...patch } }));
+  }
+
+  // "Pendiente de medir": un componente de la receta que todavía NINGUNA
+  // etapa mide — se deriva de datos reales (receta + historial de etapas),
+  // no de un estado local efímero, así sobrevive a recargar la página.
+  const componentesUuidsMedidos = new Set((version?.etapas || []).map((et) => et.componente?.uuid).filter(Boolean));
+  const pendientesDeMedir = componentesForm.filter((c) => c.uuid && !componentesUuidsMedidos.has(c.uuid));
 
   // Nombre sugerido: insumos YA guardados en la receta + el que se está
   // eligiendo ahora mismo en "Agregar insumo" (aunque todavía no se haya
-  // guardado la etapa) — pedido explícito: "debería mostrar desde el
-  // momento que ingreso el primer insumo", no recién cuando ya quedó
-  // registrado y la página se volvió a cargar.
+  // agregado) — pedido explícito: "debería mostrar desde el momento que
+  // ingreso el primer insumo", no recién cuando ya quedó guardado y la
+  // página se volvió a cargar.
   const nombreSugerido = [
     ...componentesForm.map((c) => c.articuloUuid),
-    ...(etapaForm.modo === "NUEVO_INSUMO" && etapaForm.articuloUuid ? [etapaForm.articuloUuid] : []),
+    ...(insumoSeleccionadoUuid ? [insumoSeleccionadoUuid] : []),
   ]
     .map((articuloUuid) => articulos.find((a) => a.uuid === articuloUuid)?.nombre)
-    .filter((nombre) => nombre && nombre !== "Agua" && nombre !== "Regulador de pH")
+    .filter((nombre) => nombre && nombre !== "Agua" && nombre !== "ACONDICIONADOR")
     .join(" + ");
   const [savingEtapa, setSavingEtapa] = useState(false);
   const [etapaError, setEtapaError] = useState("");
@@ -214,11 +248,40 @@ export default function MezclaPruebaDetallePage() {
     }
   }
 
+  // Devuelve los componentes recién cargados — lo necesitan las funciones
+  // que encadenan una sincronización inmediatamente después (ver
+  // `sincronizarAgua`): leer `componentesForm` del estado justo después de
+  // `await load()`, dentro del mismo closure, da el valor VIEJO (React
+  // no lo actualiza de forma síncrona), así que hay que devolverlo.
+  // Un borrador (p. ej. creado con "Nueva mezcla", con cantidades de un lote
+  // de varios litros) se lleva SOLO a 1 litro con las dosis exactas al
+  // abrirlo por primera vez (ver mezcla.service.js#llevarAUnLitro). Una sola
+  // vez por receta (el backend lo marca) y solo si todavía no se midió nada.
+  const autoNormalizadoIntentado = useRef(false);
+
   async function load() {
     setLoading(true);
     setError("");
     try {
-      const detalle = await apiFetch(`/inventarios/mezclas/${uuid}`);
+      let detalle = await apiFetch(`/inventarios/mezclas/${uuid}`);
+      const vAuto = detalle.versiones?.[0];
+      if (
+        !autoNormalizadoIntentado.current &&
+        puedeCrear &&
+        vAuto &&
+        ESTADOS_PRUEBA_EDITABLES.includes(vAuto.estadoPrueba) &&
+        !vAuto.recetaNormalizada &&
+        !(vAuto.etapas || []).length &&
+        (vAuto.componentes || []).length
+      ) {
+        autoNormalizadoIntentado.current = true;
+        try {
+          await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${vAuto.uuid}/llevar-a-un-litro`, { method: "POST", body: JSON.stringify({}) });
+          detalle = await apiFetch(`/inventarios/mezclas/${uuid}`);
+        } catch (errAuto) {
+          setComponentesError(`No se pudo llevar la receta a 1 litro automáticamente: ${errAuto.message}`);
+        }
+      }
       setMezcla(detalle);
       setInfoForm({ nombre: detalle.nombre || "" });
       // Si ya tiene un nombre guardado, se respeta (no se pisa con la
@@ -226,17 +289,18 @@ export default function MezclaPruebaDetallePage() {
       // sigue vacío/sin tocar.
       setNombreEditadoManualmente(Boolean(detalle.nombre));
       const v = detalle.versiones?.[0];
-      setComponentesForm(
-        (v?.componentes || []).map((c) => ({
-          uuid: c.uuid,
-          articuloUuid: c.articulo?.uuid || "",
-          cantidad: String(c.cantidad ?? 1),
-          unidadUuid: c.unidad?.uuid || "",
-          esPrincipal: Boolean(c.esPrincipal),
-        })),
-      );
+      const nuevosComponentes = (v?.componentes || []).map((c) => ({
+        uuid: c.uuid,
+        articuloUuid: c.articulo?.uuid || "",
+        cantidad: String(c.cantidad ?? 1),
+        unidadUuid: c.unidad?.uuid || "",
+        esPrincipal: Boolean(c.esPrincipal),
+      }));
+      setComponentesForm(nuevosComponentes);
+      return nuevosComponentes;
     } catch (err) {
       setError(err.message);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -244,18 +308,20 @@ export default function MezclaPruebaDetallePage() {
 
   async function loadCombos() {
     try {
-      const [todos, categorias, uni, conv, alms] = await Promise.all([
+      const [todos, categorias, uni, conv, alms, params] = await Promise.all([
         apiFetch("/inventarios/articulos?limit=100&estado=true"),
         apiFetch("/inventarios/categorias?limit=100&tipo=ELABORADO&estado=true"),
         apiFetch("/inventarios/unidades?limit=100&estado=true"),
         apiFetch("/inventarios/unidades/conversiones"),
         apiFetch("/inventarios/almacenes?limit=100&estado=true"),
+        apiFetch("/inventarios/mezclas/parametros"),
       ]);
       setArticulos(todos.items || []);
       setCategoriasElaborado(categorias.items || []);
       setUnidades(uni.items || []);
       setConversiones(Array.isArray(conv) ? conv : conv.items || []);
       setAlmacenes(alms.items || []);
+      setParametros(params);
     } catch (err) {
       setError(err.message);
     }
@@ -279,17 +345,6 @@ export default function MezclaPruebaDetallePage() {
     return [...generales, ...deEtapas, ...deHomogeneidad];
   }, [version]);
 
-  // Si la última medición no cumple, "Agregar insumo" queda deshabilitado
-  // (ver bloqueadoPorNoCumple) — si el formulario justo quedó en ese modo
-  // (ej. recién se reseteó tras registrar la etapa que no cumplió), lo
-  // pasa solo a "Corrección de pH".
-  useEffect(() => {
-    if (bloqueadoPorNoCumple && etapaForm.modo === "NUEVO_INSUMO") {
-      setEtapaForm((f) => ({ ...f, modo: "CORRECCION_PH", articuloUuid: "", cantidad: "1", unidadUuid: "" }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bloqueadoPorNoCumple]);
-
   // Sugiere el nombre solo mientras el operador no lo haya tocado a mano
   // (mismo criterio que dosis/cantidad en Aspersiones) — se recalcula cada
   // vez que cambia la lista de insumos de la receta.
@@ -298,6 +353,7 @@ export default function MezclaPruebaDetallePage() {
       setInfoForm((f) => (f.nombre === nombreSugerido ? f : { ...f, nombre: nombreSugerido }));
     }
   }, [nombreSugerido, nombreEditadoManualmente]);
+
 
   // Carga las fotos de forma INCREMENTAL — antes, cualquier acción que
   // agregara una sola foto nueva (registrar una etapa, un punto de
@@ -420,6 +476,163 @@ export default function MezclaPruebaDetallePage() {
     return mejor;
   }
 
+  // Sugiere cuánto de este insumo corresponde a 1 litro de mezcla, según su
+  // dosis por hectárea registrada, asumiendo el rendimiento por defecto de
+  // una mezcla (6 galones/ha, convertidos a Litros — mismo valor que usa
+  // mezcla.service.js#DOSIS_POR_HECTAREA_DEFAULT_GALONES al aprobar). Es solo
+  // una sugerencia en `unidadDestinoUuid` (la que ya se autoselecciona al
+  // elegir el insumo) — si falta cualquier dato para calcularla (el insumo no
+  // tiene dosis configurada, o no hay conversión posible), devuelve null y no
+  // se sugiere nada (el operador sigue pudiendo escribir la cantidad a mano).
+  function sugerirCantidadPorDosis(articuloUuid, unidadDestinoUuid) {
+    const articulo = articulos.find((a) => a.uuid === articuloUuid);
+    const dosis = articulo?.dosisPorHectarea;
+    const dosisUnidadUuid = articulo?.dosisUnidad?.uuid;
+    if (dosis == null || !dosisUnidadUuid || !unidadDestinoUuid) return null;
+
+    const galon = unidades.find((u) => u.nombre === "Galón");
+    const litro = unidades.find((u) => u.nombre === "Litro");
+    if (!galon || !litro) return null;
+
+    const litrosPorHectarea = convertirCantidad(grafoUnidades, galon.uuid, litro.uuid, 6);
+    if (!litrosPorHectarea) return null;
+
+    const dosisEnUnidadDestino = convertirCantidad(grafoUnidades, dosisUnidadUuid, unidadDestinoUuid, Number(dosis));
+    if (dosisEnUnidadDestino == null) return null;
+
+    const cantidad = dosisEnUnidadDestino / litrosPorHectarea;
+    return Number.isFinite(cantidad) && cantidad > 0 ? Math.round(cantidad * 100) / 100 : null;
+  }
+
+  // La receta se calcula siempre en dosis llevada a 1 litro de mezcla
+  // (asumiendo el rendimiento de 6 galones de mezcla por hectárea, igual
+  // criterio que `sugerirCantidadPorDosis`) — pedido explícito: "el agua
+  // siempre debe ser el restante de contenido para completar el litro". Se
+  // suman TODOS los insumos que NO sean Agua, convertidos a litros, y el
+  // Agua completa lo que falta para llegar a 1 litro. Si algún insumo no
+  // se puede convertir a litros (unidad incompatible), no se puede
+  // calcular: devuelve null y el Agua se deja tal cual está (no se fuerza
+  // a 0 con un dato posiblemente incorrecto).
+  // `rows`: por defecto usa el estado actual (para el cálculo que se
+  // muestra en pantalla), pero acepta una lista explícita — la necesita
+  // `sincronizarAgua` justo después de un `load()`, cuando el estado de
+  // React todavía no refleja lo recién guardado dentro del mismo closure.
+  function litrosRestantesParaAgua(rows = componentesForm) {
+    const litro = unidades.find((u) => u.nombre === "Litro");
+    if (!litro) return null;
+    let suma = 0;
+    for (const c of rows) {
+      const articuloC = articulos.find((a) => a.uuid === c.articuloUuid);
+      if (articuloC?.nombre === "Agua") continue;
+      const cantidad = Number(c.cantidad);
+      if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
+      const enLitros = convertirCantidad(grafoUnidades, c.unidadUuid, litro.uuid, cantidad);
+      if (enLitros == null) return null;
+      suma += enLitros;
+    }
+    return Math.max(0, 1 - suma);
+  }
+
+  // Recalcula y guarda el Agua a partir de una lista de componentes YA
+  // confirmada por el servidor — nunca se dispara por cada tecla (ese fue
+  // un bug real: un useEffect reactivo a `componentesForm` completo
+  // guardaba — y su `load()` interno ponía `loading=true`, tapando toda
+  // la pantalla con el spinner — en CADA tecla que se escribía en
+  // cualquier campo). Se llama solo después de un cambio realmente
+  // confirmado: blur de cantidad/unidad de OTRO insumo, o agregar uno
+  // nuevo.
+  async function sincronizarAgua(rows) {
+    const idxAgua = rows.findIndex((c) => articulos.find((a) => a.uuid === c.articuloUuid)?.nombre === "Agua");
+    if (idxAgua === -1) return;
+    const agua = rows[idxAgua];
+    if (!agua.uuid) return;
+    const litro = unidades.find((u) => u.nombre === "Litro");
+    if (!litro) return;
+    const litrosRestantes = litrosRestantesParaAgua(rows);
+    // Sin restante (los demás insumos ya suman 1 litro o más) la receta no está
+    // llevada a 1 litro: no se toca el Agua (se pondría en 0) — para eso está
+    // "Llevar a 1 litro".
+    if (litrosRestantes == null || litrosRestantes <= 0) return;
+    const unidadAguaUuid = agua.unidadUuid || litro.uuid;
+    const cantidadEnUnidadAgua = convertirCantidad(grafoUnidades, litro.uuid, unidadAguaUuid, litrosRestantes);
+    if (cantidadEnUnidadAgua == null) return;
+    const nuevaCantidad = Math.round(cantidadEnUnidadAgua * 100) / 100;
+    const actual = Number(agua.cantidad);
+    if (Number.isFinite(actual) && Math.abs(actual - nuevaCantidad) < 0.005) return;
+    try {
+      await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/componentes/${agua.uuid}`, {
+        method: "PATCH",
+        body: JSON.stringify({ cantidad: nuevaCantidad, unidadUuid: unidadAguaUuid || null }),
+      });
+      await load();
+    } catch (err) {
+      setComponentesError(err.message);
+    }
+  }
+
+  // Cuánto de este insumo hay realmente en la receta, llevado a dosis por
+  // hectárea (la cantidad de la fila, expresada en 1 litro de mezcla,
+  // multiplicada por los litros de 6 galones/ha) — para comparar contra la
+  // dosis de referencia registrada en el artículo (pedido explícito: "debe
+  // ser exacta"). Devuelve null si el insumo no tiene dosis configurada o
+  // si no hay conversión posible entre unidades.
+  // Compara la CANTIDAD de la fila contra la cantidad exacta que le
+  // correspondería según la dosis por hectárea de referencia — pedido
+  // explícito: "esta debe ser exacta", así que la comparación es a 2
+  // decimales, sin margen de tolerancia por porcentaje (un margen de 1%
+  // dejaba pasar como "Exacta" diferencias reales, ej. 8.87 ml cargados
+  // contra 8.81 ml exactos — bug reportado). Misma fórmula que
+  // `sugerirCantidadPorDosis`, solo que acá se compara en vez de solo
+  // sugerir.
+  function evaluarDosisPorHectarea(articulo, cantidad, unidadUuid) {
+    const dosis = articulo?.dosisPorHectarea;
+    const dosisUnidadUuid = articulo?.dosisUnidad?.uuid;
+    if (dosis == null || !dosisUnidadUuid || !unidadUuid) return null;
+
+    const galon = unidades.find((u) => u.nombre === "Galón");
+    const litro = unidades.find((u) => u.nombre === "Litro");
+    if (!galon || !litro) return null;
+
+    const litrosPorHectarea = convertirCantidad(grafoUnidades, galon.uuid, litro.uuid, 6);
+    if (!litrosPorHectarea) return null;
+
+    const dosisEnUnidadDestino = convertirCantidad(grafoUnidades, dosisUnidadUuid, unidadUuid, Number(dosis));
+    if (dosisEnUnidadDestino == null) return null;
+
+    const cantidadEsperada = Math.round((dosisEnUnidadDestino / litrosPorHectarea) * 100) / 100;
+    const cantidadActual = Math.round(Number(cantidad) * 100) / 100;
+
+    let estado = "EXACTA";
+    if (cantidadActual > cantidadEsperada) estado = "POR_ENCIMA";
+    else if (cantidadActual < cantidadEsperada) estado = "POR_DEBAJO";
+
+    return { cantidadEsperada, unidadSimbolo: unidades.find((u) => u.uuid === unidadUuid)?.simbolo || "", estado };
+  }
+
+  // Badge de "Receta actual" — compara la dosis real de la fila (la
+  // cantidad ya cargada, llevada a por-hectárea) contra la dosis de
+  // referencia del artículo. `evaluacion` es lo que devuelve
+  // `evaluarDosisPorHectarea` (o null si no hay dosis configurada o no se
+  // puede convertir entre unidades).
+  function renderEstadoDosisBadge(evaluacion) {
+    if (!evaluacion) return <span className="text-secondary small">—</span>;
+    const { cantidadEsperada, unidadSimbolo, estado } = evaluacion;
+    const config = {
+      EXACTA: { texto: "Exacta", bg: "#d1fae5", color: "#047857" },
+      POR_DEBAJO: { texto: "Por debajo", bg: "#fef3c7", color: "#b45309" },
+      POR_ENCIMA: { texto: "Por encima", bg: "#fee2e2", color: "#b91c1c" },
+    }[estado];
+    return (
+      <span
+        className="badge rounded-pill small"
+        style={{ backgroundColor: config.bg, color: config.color }}
+        title={`La cantidad exacta según la dosis por hectárea sería ${cantidadEsperada.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${unidadSimbolo}`}
+      >
+        {config.texto}
+      </span>
+    );
+  }
+
   // El artículo de una fila ya guardada no se edita (es de solo lectura en
   // "Receta actual") — esta función solo recibe field="cantidad" o
   // "unidadUuid".
@@ -434,11 +647,11 @@ export default function MezclaPruebaDetallePage() {
   }
 
   // Guarda ediciones a insumos YA agregados a la receta (cantidad/unidad) —
-  // agregar un insumo NUEVO ya no pasa por acá: se hace desde "Registrar
-  // nueva etapa" (ver handleAgregarEtapa), en un solo paso junto con su
-  // medición. Un insumo guardado tampoco se puede eliminar de la receta
-  // (pedido explícito: evita perder trazabilidad si una etapa ya lo
-  // referencia).
+  // agregar un insumo NUEVO ya no pasa por acá: se hace desde "Agregar
+  // insumo" (ver handleAgregarInsumo), separado de su medición (ver
+  // handleRegistrarMedicion). Un insumo guardado tampoco se puede eliminar
+  // de la receta (pedido explícito: evita perder trazabilidad si una etapa
+  // ya lo referencia).
   // Cambiar cantidad o unidad guarda solo (sin botón aparte — pedido
   // explícito: "si se cambia, ya se sabe que cambió y debe actualizar").
   // La cantidad guarda al salir del campo (onBlur), no en cada tecleada.
@@ -459,7 +672,14 @@ export default function MezclaPruebaDetallePage() {
         method: "PATCH",
         body: JSON.stringify({ cantidad: Number(fila.cantidad), unidadUuid: fila.unidadUuid || null }),
       });
-      await load();
+      const recargados = await load();
+      // Si lo que se acaba de guardar NO es el Agua, puede haber quedado
+      // desactualizada (tiene que completar 1 litro) — se sincroniza acá,
+      // con los datos YA confirmados por el servidor.
+      const articuloFila = articulos.find((a) => a.uuid === fila.articuloUuid);
+      if (recargados && articuloFila?.nombre !== "Agua") {
+        await sincronizarAgua(recargados);
+      }
     } catch (err) {
       setComponentesError(err.message);
     } finally {
@@ -488,19 +708,40 @@ export default function MezclaPruebaDetallePage() {
 
   // ─── Etapas ───
 
-  async function handleAgregarEtapa(e) {
+  // Sube fotos a una etapa recién creada — extraída porque ahora la usan
+  // tanto la corrección de pH como el registro de medición de un insumo.
+  async function subirFotosDeEtapaNueva(versionActualizada, fotos) {
+    if (!fotos.length) return;
+    const nuevaEtapa = (versionActualizada.etapas || []).reduce(
+      (max, e) => (!max || e.numero > max.numero ? e : max),
+      null,
+    );
+    if (!nuevaEtapa) return;
+    const formData = new FormData();
+    formData.append("etapaUuid", nuevaEtapa.uuid);
+    fotos.forEach(({ file }) => formData.append("fotos", file));
+    await apiFetchFormData(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/fotos`, formData);
+  }
+
+  // "Corrección de pH": sigue siendo un solo paso (mide Y corrige a la
+  // vez) — no agrega nada a la receta, usa el ACONDICIONADOR fijo (ver
+  // mezcla.service.js#agregarEtapa).
+  async function handleCorregirPh(e) {
     e.preventDefault();
     setEtapaError("");
     if (etapaForm.ph === "" || etapaForm.ce === "") {
       setEtapaError("Ingresa pH y CE medidos.");
       return;
     }
-    if (etapaForm.modo === "CORRECCION_PH" && (!etapaForm.cantidad || !etapaForm.unidadUuid)) {
+    // El select de Unidad muestra un valor sugerido (unidadMasPequenaPara)
+    // aunque el operador nunca lo haya tocado — hay que resolver ACÁ el
+    // mismo fallback, si no `etapaForm.unidadUuid` queda vacío en el
+    // estado aunque el select ya se vea con "g" elegido (bug real: el
+    // submit rechazaba con "Ingresa la cantidad y la unidad..." aunque se
+    // viera una unidad seleccionada).
+    const unidadCorreccionUuid = etapaForm.unidadUuid || unidadMasPequenaPara(reguladorPhUuid);
+    if (!etapaForm.cantidad || !unidadCorreccionUuid) {
       setEtapaError("Ingresa la cantidad y la unidad usadas para corregir el pH.");
-      return;
-    }
-    if (etapaForm.modo === "NUEVO_INSUMO" && (!etapaForm.articuloUuid || !etapaForm.cantidad || !etapaForm.unidadUuid)) {
-      setEtapaError("Selecciona el insumo, la cantidad y la unidad a agregar.");
       return;
     }
     if (etapaFotos.length === 0) {
@@ -509,82 +750,28 @@ export default function MezclaPruebaDetallePage() {
     }
     setSavingEtapa(true);
     try {
-      // El modo NUEVO_INSUMO siempre resuelve componenteUuid abajo (recién
-      // creado); CORRECCION_PH nunca lo usa (va con articuloCorreccion
-      // fijo en el backend) — no hay ningún modo que llegue acá con un
-      // componente YA elegido de antes.
-      let componenteUuid = null;
-
-      if (etapaForm.modo === "NUEVO_INSUMO") {
-        // Agrega el insumo a la receta (componentes) y, en el mismo paso,
-        // registra la etapa que lo mide — antes había que guardarlo en
-        // "Componentes de la receta" aparte antes de poder elegirlo acá.
-        // INSERT puntual (no reemplaza toda la lista): así el
-        // componenteId que las etapas anteriores ya tenían guardado sigue
-        // apuntando a la misma fila (bug real reportado: con el PUT que
-        // reemplazaba toda la lista, la primera etapa quedaba mostrando
-        // "—" apenas se agregaba un segundo insumo).
-        const resultado = await apiFetch(
-          `/inventarios/mezclas/${uuid}/versiones/${version.uuid}/componentes/agregar`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              articuloUuid: etapaForm.articuloUuid,
-              cantidad: Number(etapaForm.cantidad),
-              unidadUuid: etapaForm.unidadUuid || null,
-            }),
-          },
-        );
-        componenteUuid = resultado.componenteUuid || null;
-      }
-
       const versionActualizada = await apiFetch(
         `/inventarios/mezclas/${uuid}/versiones/${version.uuid}/etapas`,
         {
           method: "POST",
-          body: JSON.stringify(
-            etapaForm.modo === "CORRECCION_PH"
-              ? {
-                  // El artículo NO se manda: el backend siempre usa/crea
-                  // "Regulador de pH" (ver mezcla.service.js#agregarEtapa).
-                  tipoEtapa: "CORRECCION_PH",
-                  cantidadCorreccion: Number(etapaForm.cantidad),
-                  unidadCorreccionUuid: etapaForm.unidadUuid,
-                  ph: Number(etapaForm.ph),
-                  ce: Number(etapaForm.ce),
-                  observaciones: etapaForm.observaciones || null,
-                }
-              : {
-                  componenteUuid,
-                  ph: Number(etapaForm.ph),
-                  ce: Number(etapaForm.ce),
-                  observaciones: etapaForm.observaciones || null,
-                },
-          ),
+          body: JSON.stringify({
+            // El artículo NO se manda: el backend siempre usa/crea
+            // "ACONDICIONADOR" (ver mezcla.service.js#agregarEtapa).
+            tipoEtapa: "CORRECCION_PH",
+            cantidadCorreccion: Number(etapaForm.cantidad),
+            unidadCorreccionUuid,
+            ph: Number(etapaForm.ph),
+            ce: Number(etapaForm.ce),
+            observaciones: etapaForm.observaciones || null,
+          }),
         },
       );
 
-      // El insumo y la etapa YA quedaron creados en el servidor en este
-      // punto — si la subida de la foto falla de acá en adelante, igual
-      // hay que refrescar y limpiar el formulario (si no, el insumo recién
-      // agregado sigue apareciendo como "disponible para agregar" y un
-      // reintento del operador lo duplicaría).
+      // La etapa YA quedó creada en el servidor en este punto — si la
+      // subida de la foto falla de acá en adelante, igual hay que
+      // refrescar y limpiar el formulario.
       try {
-        if (etapaFotos.length) {
-          const nuevaEtapa = (versionActualizada.etapas || []).reduce(
-            (max, e) => (!max || e.numero > max.numero ? e : max),
-            null,
-          );
-          if (nuevaEtapa) {
-            const formData = new FormData();
-            formData.append("etapaUuid", nuevaEtapa.uuid);
-            etapaFotos.forEach(({ file }) => formData.append("fotos", file));
-            await apiFetchFormData(
-              `/inventarios/mezclas/${uuid}/versiones/${version.uuid}/fotos`,
-              formData,
-            );
-          }
-        }
+        await subirFotosDeEtapaNueva(versionActualizada, etapaFotos);
       } catch (errFoto) {
         setEtapaError(`La etapa se registró, pero falló la subida de la evidencia: ${errFoto.message}`);
       }
@@ -597,6 +784,111 @@ export default function MezclaPruebaDetallePage() {
       setEtapaError(err.message);
     } finally {
       setSavingEtapa(false);
+    }
+  }
+
+  // Paso 1: solo agrega el insumo a la receta (componentes) — pedido
+  // explícito de separarlo de la medición. Cantidad/unidad se calculan
+  // solas (sugeridas por dosis, ver sugerirCantidadPorDosis) y quedan
+  // editables después en "Insumos pendientes de medir"/"Receta actual"
+  // (mismo `updateComponenteYGuardar` que ya usa esa tabla). INSERT
+  // puntual (no reemplaza toda la lista): así el componenteId que las
+  // etapas anteriores ya tenían guardado sigue apuntando a la misma fila
+  // (bug real reportado: con el PUT que reemplazaba toda la lista, la
+  // primera etapa quedaba mostrando "—" apenas se agregaba un segundo
+  // insumo).
+  async function handleAgregarInsumo() {
+    if (!insumoSeleccionadoUuid) return;
+    setEtapaError("");
+    setAgregandoInsumo(true);
+    try {
+      const unidadUuid = unidadMasPequenaPara(insumoSeleccionadoUuid);
+      const cantidad = sugerirCantidadPorDosis(insumoSeleccionadoUuid, unidadUuid) ?? 1;
+      await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/componentes/agregar`, {
+        method: "POST",
+        body: JSON.stringify({ articuloUuid: insumoSeleccionadoUuid, cantidad, unidadUuid: unidadUuid || null }),
+      });
+      setInsumoSeleccionadoUuid("");
+      const recargados = await load();
+      const articuloAgregado = articulos.find((a) => a.uuid === insumoSeleccionadoUuid);
+      if (recargados && articuloAgregado?.nombre !== "Agua") {
+        await sincronizarAgua(recargados);
+      }
+    } catch (err) {
+      setEtapaError(err.message);
+    } finally {
+      setAgregandoInsumo(false);
+    }
+  }
+
+  // Mueve `origenUuid` a la posición de `destinoUuid` entre los insumos
+  // pendientes de medir y guarda el nuevo orden. El principal siempre va
+  // primero (no se arrastra ni se puede pasar por encima).
+  async function handleReordenarPendientes(origenUuid, destinoUuid) {
+    if (!origenUuid || !destinoUuid || origenUuid === destinoUuid) return;
+    const uuids = pendientesDeMedir.map((c) => c.uuid);
+    const desde = uuids.indexOf(origenUuid);
+    const hasta = uuids.indexOf(destinoUuid);
+    if (desde === -1 || hasta === -1) return;
+    uuids.splice(hasta, 0, uuids.splice(desde, 1)[0]);
+    setEtapaError("");
+    try {
+      await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/componentes/orden`, {
+        method: "PUT",
+        body: JSON.stringify({ componenteUuids: uuids }),
+      });
+      await load();
+    } catch (err) {
+      setEtapaError(err.message);
+    }
+  }
+
+  // Paso 2: registra la medición de pH/CE de un insumo YA agregado a la
+  // receta (fila de "Insumos pendientes de medir") — mismas validaciones
+  // que antes tenía el formulario combinado.
+  async function handleRegistrarMedicion(componenteUuid) {
+    const medicion = medicionDe(componenteUuid);
+    setEtapaError("");
+    if (medicion.ph === "" || medicion.ce === "") {
+      setEtapaError("Ingresa pH y CE medidos.");
+      return;
+    }
+    if (medicion.fotos.length === 0) {
+      setEtapaError("Adjunta una foto de evidencia antes de registrar la medición.");
+      return;
+    }
+    setRegistrandoMedicionUuid(componenteUuid);
+    try {
+      const versionActualizada = await apiFetch(
+        `/inventarios/mezclas/${uuid}/versiones/${version.uuid}/etapas`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            componenteUuid,
+            ph: Number(medicion.ph),
+            ce: Number(medicion.ce),
+            observaciones: medicion.observaciones || null,
+          }),
+        },
+      );
+
+      try {
+        await subirFotosDeEtapaNueva(versionActualizada, medicion.fotos);
+      } catch (errFoto) {
+        setEtapaError(`La medición se registró, pero falló la subida de la evidencia: ${errFoto.message}`);
+      }
+
+      medicion.fotos.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
+      setMedicionesForm((prev) => {
+        const next = { ...prev };
+        delete next[componenteUuid];
+        return next;
+      });
+      await load();
+    } catch (err) {
+      setEtapaError(err.message);
+    } finally {
+      setRegistrandoMedicionUuid(null);
     }
   }
 
@@ -617,6 +909,23 @@ export default function MezclaPruebaDetallePage() {
       prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
       return [];
     });
+  }
+
+  // Mismo patrón que handleSelectEtapaFiles/limpiarEtapaFotos de arriba,
+  // pero por fila de medición (varias filas pendientes pueden tener cada
+  // una su propia foto en curso a la vez).
+  async function handleSelectMedicionFiles(componenteUuid, e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    const selladas = await sellarFotos(files, { usuario: usuarioSello });
+    const nuevas = selladas.map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
+    updateMedicion(componenteUuid, { fotos: [...medicionDe(componenteUuid).fotos, ...nuevas] });
+  }
+
+  function limpiarFotosMedicion(componenteUuid) {
+    medicionDe(componenteUuid).fotos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    updateMedicion(componenteUuid, { fotos: [] });
   }
 
   // Agrega fotos a una etapa que YA fue registrada.
@@ -807,8 +1116,32 @@ export default function MezclaPruebaDetallePage() {
     // Unidad por defecto: Litro, si existe en el catálogo — el operador la
     // puede cambiar igual.
     const unidadLitro = unidades.find((u) => u.nombre?.toLowerCase() === "litro" || u.simbolo?.toLowerCase() === "l");
+    // Cantidad por defecto: la suma real de las cantidades de "Receta
+    // actual" (todas convertidas a Litros), no un "1" fijo — pedido
+    // explícito. En teoría siempre da ~1 (la receta se calcula sobre 1
+    // litro y el Agua completa el resto), pero así refleja el total real
+    // en vez de asumirlo, por si hay algún insumo con unidad sin
+    // conversión a litros o alguna diferencia de redondeo.
+    let cantidadSugerida = "1";
+    if (unidadLitro) {
+      let suma = 0;
+      let convertible = true;
+      for (const c of componentesForm) {
+        const cantidad = Number(c.cantidad);
+        if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
+        const enLitros = convertirCantidad(grafoUnidades, c.unidadUuid, unidadLitro.uuid, cantidad);
+        if (enLitros == null) {
+          convertible = false;
+          break;
+        }
+        suma += enLitros;
+      }
+      if (convertible && suma > 0) {
+        cantidadSugerida = String(Math.round(suma * 100) / 100);
+      }
+    }
     setElaboradoForm({
-      cantidadElaborada: "1",
+      cantidadElaborada: cantidadSugerida,
       almacenUuid: version?.almacen?.uuid || "",
       // No se pide en el formulario — la fecha real del elaborado se fija a
       // la fecha de aprobación (ver mezcla.service.js#aprobar); esto solo
@@ -987,6 +1320,555 @@ export default function MezclaPruebaDetallePage() {
           </div>
         </div>
 
+        {/* ─── Agregar insumo ───
+            Sin toggle de modo (pedido explícito: se quitaron los botones
+            "Agregar insumo"/"Corrección de pH"). Acá solo se elige el
+            insumo y se agrega a la receta — cantidad/unidad se calculan
+            solas (ver sugerirCantidadPorDosis) y quedan editables después
+            en "Mediciones" y en "Receta actual". La corrección de pH ya no
+            es un modo que se elige a mano: aparece sola, como una opción
+            puntual, justo cuando la última medición (típicamente la del
+            Agua) no dio el pH correcto (ver más abajo). */}
+        <div className="card border-0 rounded-4 mb-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div className="px-3 py-1" style={{ backgroundColor: "#166534" }}>
+            <h2 className="h6 fw-bold mb-0 text-white text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "0.03em" }}>
+              Agregar insumo
+            </h2>
+          </div>
+          <div className="p-3">
+            {editable && puedeCrear && (
+              <div>
+                <div className="d-flex flex-wrap align-items-end gap-2">
+                  <div className="flex-grow-1" style={{ minWidth: "14rem" }}>
+                    <select
+                      className="form-select form-select-sm rounded-3"
+                      value={insumoSeleccionadoUuid}
+                      disabled={homogeneidadFalla || bloqueadoPorNoCumple}
+                      onChange={(e) => setInsumoSeleccionadoUuid(e.target.value)}
+                    >
+                      <option value="">Selecciona un insumo</option>
+                      {articulos
+                        .filter((a) => !componentesForm.some((c) => c.articuloUuid === a.uuid))
+                        .map((a) => (
+                          <option key={a.uuid} value={a.uuid}>
+                            {a.nombre}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-brand btn-sm rounded-3 d-inline-flex align-items-center gap-2"
+                    disabled={homogeneidadFalla || bloqueadoPorNoCumple || !insumoSeleccionadoUuid || agregandoInsumo}
+                    title={
+                      homogeneidadFalla
+                        ? "La mezcla no dio homogénea — hay que finalizar la prueba"
+                        : bloqueadoPorNoCumple
+                          ? "La última medición no cumple — corrige el pH o finaliza la prueba"
+                          : undefined
+                    }
+                    onClick={handleAgregarInsumo}
+                  >
+                    {agregandoInsumo ? <span className="spinner-border spinner-border-sm" /> : <FiPlus size={16} />}
+                    Agregar
+                  </button>
+                </div>
+                {homogeneidadFalla ? (
+                  <p className="small mb-0 mt-2" style={{ color: "#b91c1c" }}>
+                    La mezcla no dio homogénea en la prueba de homogeneidad (se separó) — no hay forma de
+                    corregirlo ajustando pH o insumos. Finaliza la prueba (quedará como no válida).
+                  </p>
+                ) : ceSinCorregir ? (
+                  <p className="small mb-0 mt-2" style={{ color: "#b91c1c" }}>
+                    La conductividad eléctrica (CE) no cumple — no hay forma de corregirla en esta prueba. Finaliza
+                    la prueba (quedará como no válida).
+                  </p>
+                ) : (
+                  bloqueadoPorNoCumple && (
+                    <p className="small mb-0 mt-2" style={{ color: "#b91c1c" }}>
+                      La última medición no dio el pH correcto — corrígelo con ACONDICIONADOR acá abajo.
+                    </p>
+                  )
+                )}
+
+                {/* Opción puntual: solo aparece cuando la última medición
+                    falló específicamente por pH (no por CE) — no es un modo
+                    que se elige a mano, se ofrece sola cuando hace falta. */}
+                {bloqueadoPorNoCumple && !ceSinCorregir && !homogeneidadFalla && (
+                  <form onSubmit={handleCorregirPh} className="d-flex flex-wrap flex-md-nowrap align-items-end gap-2 pt-3 mt-2 border-top">
+                    <div style={{ minWidth: "8rem" }} className="flex-shrink-0">
+                      <label className="form-label small mb-1">Corregir con</label>
+                      {/* Fijo: la corrección de pH siempre usa "Regulador
+                          de pH" — el backend lo resuelve/crea solo (ver
+                          mezcla.service.js#agregarEtapa), no se elige acá. */}
+                      <input type="text" disabled className="form-control form-control-sm rounded-3" value="ACONDICIONADOR" />
+                    </div>
+                    <div style={{ width: "6rem" }} className="flex-shrink-0">
+                      <label className="form-label small mb-1" title="Solo para sugerir la cantidad — no se guarda">
+                        Litros de agua
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="form-control form-control-sm rounded-3"
+                        value={etapaForm.litrosAgua}
+                        onChange={(e) => {
+                          const litrosAgua = e.target.value;
+                          const dosis = Number(parametros?.reguladorPhDosisGL ?? 0.8);
+                          const litros = Number(litrosAgua);
+                          setEtapaForm((f) => ({
+                            ...f,
+                            litrosAgua,
+                            // Solo sugiere — el operador puede corregir la
+                            // cantidad a mano después de esto.
+                            cantidad: Number.isFinite(litros) && litros > 0 ? String(Math.round(dosis * litros * 100) / 100) : f.cantidad,
+                          }));
+                        }}
+                      />
+                    </div>
+                    <div style={{ width: "7rem" }} className="flex-shrink-0">
+                      <label className="form-label small mb-1">Unidad</label>
+                      <select
+                        className="form-select form-select-sm rounded-3"
+                        required
+                        value={etapaForm.unidadUuid || unidadMasPequenaPara(reguladorPhUuid)}
+                        onChange={(e) => setEtapaForm((f) => ({ ...f, unidadUuid: e.target.value }))}
+                      >
+                        <option value="">—</option>
+                        {unidades.map((u) => (
+                          <option key={u.uuid} value={u.uuid}>
+                            {u.simbolo || u.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ width: "5.5rem" }} className="flex-shrink-0">
+                      <label className="form-label small mb-1">Cantidad</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        required
+                        className="form-control form-control-sm rounded-3"
+                        value={etapaForm.cantidad}
+                        onChange={(e) => setEtapaForm((f) => ({ ...f, cantidad: e.target.value }))}
+                      />
+                    </div>
+                    <div style={{ width: "5.5rem" }} className="flex-shrink-0">
+                      <label className="form-label small mb-1">pH</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="14"
+                        required
+                        className="form-control form-control-sm rounded-3"
+                        value={etapaForm.ph}
+                        onChange={(e) => setEtapaForm((f) => ({ ...f, ph: e.target.value }))}
+                      />
+                    </div>
+                    <div style={{ width: "5.5rem" }} className="flex-shrink-0">
+                      <label className="form-label small mb-1">CE</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        required
+                        className="form-control form-control-sm rounded-3"
+                        value={etapaForm.ce}
+                        onChange={(e) => setEtapaForm((f) => ({ ...f, ce: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex-grow-1" style={{ minWidth: "10rem" }}>
+                      <label className="form-label small mb-1">Observaciones</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm rounded-3"
+                        value={etapaForm.observaciones}
+                        onChange={(e) => setEtapaForm((f) => ({ ...f, observaciones: e.target.value }))}
+                      />
+                    </div>
+                    <label
+                      className={`btn btn-sm rounded-3 d-inline-flex align-items-center justify-content-center gap-1 flex-shrink-0 px-2 mb-0 ${
+                        etapaFotos.length ? "btn-brand" : "btn-outline-secondary"
+                      }`}
+                      style={{ minHeight: 31 }}
+                      title={
+                        etapaFotos.length
+                          ? `${etapaFotos.length} evidencia(s) adjunta(s) — clic para quitar`
+                          : "Adjuntar evidencia fotográfica (galería o cámara, obligatoria)"
+                      }
+                      onClick={etapaFotos.length ? (e) => { e.preventDefault(); limpiarEtapaFotos(); } : undefined}
+                    >
+                      <FiCamera size={16} />
+                      {etapaFotos.length > 0 && (
+                        <span className="fw-bold" style={{ fontSize: 12, lineHeight: 1, color: "#fff" }}>
+                          {etapaFotos.length}
+                        </span>
+                      )}
+                      {!etapaFotos.length && (
+                        <input type="file" accept="image/*" multiple className="d-none" onChange={handleSelectEtapaFiles} />
+                      )}
+                    </label>
+                    <button
+                      type="submit"
+                      className="btn btn-brand btn-sm rounded-3 d-inline-flex align-items-center justify-content-center flex-shrink-0 p-0"
+                      style={{ width: 31, height: 31 }}
+                      disabled={savingEtapa || etapaFotos.length === 0}
+                      title={etapaFotos.length === 0 ? "Adjunta una foto antes de registrar" : "Registrar corrección"}
+                    >
+                      {savingEtapa ? <span className="spinner-border spinner-border-sm" /> : <FiSend size={16} />}
+                    </button>
+                  </form>
+                )}
+                {etapaError && <div className="alert alert-danger py-2 small mt-2">{etapaError}</div>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ─── Mediciones ───
+            Una sola tabla (pedido explícito: fusionar el historial de
+            etapas con las filas de insumos pendientes de medir): primero
+            las etapas ya registradas, después una fila editable por cada
+            insumo agregado que todavía no tiene medición. Solo la PRIMERA
+            fila pendiente está habilitada (pedido explícito: "hasta no
+            completar el primero, no habilitar el segundo") — las demás se
+            desbloquean en orden, una vez registrada la anterior.
+            "Pendiente" se deriva de la receta + las etapas ya registradas
+            (no es estado local efímero): sobrevive a recargar la página. */}
+        <div className="card border-0 rounded-4 mb-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div className="px-3 py-1" style={{ backgroundColor: "#166534" }}>
+            <h2 className="h6 fw-bold mb-0 text-white text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "0.03em" }}>
+              Mediciones
+            </h2>
+          </div>
+          <div className="p-3">
+            {editable && puedeCrear && pendientesDeMedir.length > 0 && (homogeneidadFalla || ceSinCorregir) && (
+              <p className="small mb-2" style={{ color: "#b91c1c" }}>
+                {homogeneidadFalla
+                  ? "La mezcla no dio homogénea — finaliza la prueba en vez de seguir midiendo."
+                  : "La CE no cumple y no se puede corregir — finaliza la prueba."}
+              </p>
+            )}
+            {etapaError && <div className="alert alert-danger py-2 small mb-3">{etapaError}</div>}
+
+            <div className="table-responsive">
+              <table className="table table-sm align-middle mb-0" style={{ minWidth: "52rem" }}>
+                <thead>
+                  <tr className="small" style={{ backgroundColor: "#f0fdf4" }}>
+                    <th className="text-center" style={{ color: "#166534", width: "2rem" }}>#</th>
+                    <th style={{ color: "#166534", minWidth: "8rem" }}>Insumo</th>
+                    <th className="text-center" style={{ color: "#166534", width: "5rem", whiteSpace: "nowrap" }}>Dosis/ha.</th>
+                    <th className="text-center" style={{ color: "#166534", width: "4.5rem" }}>Unidad</th>
+                    <th className="text-center" style={{ color: "#166534", width: "5rem" }}>Cantidad</th>
+                    <th className="text-center" style={{ color: "#166534", width: "3.5rem" }}>pH</th>
+                    <th className="text-center" style={{ color: "#166534", width: "3.5rem" }}>CE</th>
+                    <th className="text-center" style={{ color: "#166534", width: "5.5rem" }}>Resultado</th>
+                    <th className="text-center" style={{ color: "#166534", width: "6.5rem", whiteSpace: "nowrap" }}>Fecha</th>
+                    <th style={{ color: "#166534", minWidth: "7rem" }}>Observaciones</th>
+                    <th className="text-center" style={{ color: "#166534", width: "3.5rem" }}>Evidencia</th>
+                    {editable && puedeCrear && <th className="text-center" style={{ width: "2.75rem", backgroundColor: "#f0fdf4" }}>Acción</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(version.etapas || []).length === 0 && pendientesDeMedir.length === 0 && (
+                    <tr>
+                      <td colSpan={editable && puedeCrear ? 12 : 11} className="text-center text-secondary small py-2">
+                        Sin etapas registradas todavía.
+                      </td>
+                    </tr>
+                  )}
+                  {(version.etapas || []).map((et) => {
+                    const esCorreccion = et.tipoEtapa === "CORRECCION_PH";
+                    const articuloEtapa = !esCorreccion
+                      ? articulos.find((a) => a.uuid === et.componente?.articulo?.uuid)
+                      : null;
+                    const dosisEtapa = articuloEtapa?.dosisPorHectarea;
+                    const dosisSimboloEtapa = articuloEtapa?.dosisUnidad?.simbolo || "";
+                    return (
+                      <tr key={et.uuid}>
+                        <td className="small text-center">{et.numero}</td>
+                        <td className="small">
+                          {esCorreccion ? (
+                            <span
+                              className="badge rounded-pill small"
+                              style={{ backgroundColor: "#fef3c7", color: "#b45309" }}
+                            >
+                              Corrección pH
+                            </span>
+                          ) : (
+                            et.componente?.articulo?.nombre || "—"
+                          )}
+                        </td>
+                        <td className="small text-secondary text-center">
+                          {!esCorreccion && dosisEtapa != null ? `${Number(dosisEtapa)} ${dosisSimboloEtapa}/ha` : "—"}
+                        </td>
+                        <td className="small text-secondary text-center">
+                          {esCorreccion ? et.unidadCorreccion?.simbolo || "—" : et.componente?.unidad?.simbolo || "—"}
+                        </td>
+                        <td className="small text-center">
+                          {esCorreccion
+                            ? et.cantidadCorreccion != null
+                              ? Number(et.cantidadCorreccion).toLocaleString("es-CO", { maximumFractionDigits: 2 })
+                              : "—"
+                            : et.componente?.cantidad != null
+                              ? Number(et.componente.cantidad).toLocaleString("es-CO", { maximumFractionDigits: 2 })
+                              : "—"}
+                        </td>
+                        <td className="small text-center">{Number(et.ph).toFixed(2)}</td>
+                        <td className="small text-center">{Number(et.ce).toFixed(2)}</td>
+                        <td className="small text-center">
+                          <span
+                            className="badge rounded-pill small"
+                            style={
+                              et.resultado === "CUMPLE"
+                                ? { backgroundColor: "#d1fae5", color: "#047857" }
+                                : { backgroundColor: "#fee2e2", color: "#b91c1c" }
+                            }
+                          >
+                            {et.resultado === "CUMPLE" ? "Cumple" : "No cumple"}
+                          </span>
+                        </td>
+                        <td className="small text-secondary text-center">
+                          {et.medidoEn ? parseFechaUTC(et.medidoEn).toLocaleString("es-CO", { timeZone: "America/Bogota" }) : "—"}
+                        </td>
+                        <td className="small text-secondary">{et.observaciones || "—"}</td>
+                        <td className="text-center">
+                          {(() => {
+                            const nFotos = (et.fotos || []).length;
+                            const subiendo = subiendoFotoEtapa === et.uuid;
+                            // Con la prueba ya guardada (no editable) el botón es
+                            // solo de consulta: sin fondo verde, solo el ícono.
+                            const claseBoton = editable
+                              ? `btn btn-sm rounded-3 px-2 ${nFotos > 0 ? "btn-brand" : "btn-outline-secondary"}`
+                              : "btn btn-sm btn-link p-0 text-decoration-none";
+                            return (
+                              <button
+                                type="button"
+                                className={`${claseBoton} d-inline-flex align-items-center justify-content-center gap-1`}
+                                style={{ minHeight: 31 }}
+                                title={nFotos > 0 ? `Ver ${nFotos} evidencia(s)` : "Sin evidencia" + (editable && puedeCrear ? " — agregar" : "")}
+                                onClick={() => setFotosModalEtapaUuid(et.uuid)}
+                              >
+                                {subiendo ? (
+                                  <span className="spinner-border spinner-border-sm" />
+                                ) : (
+                                  <FiCamera
+                                    size={16}
+                                    style={!editable ? { color: nFotos > 0 ? "#16a34a" : "#9ca3af" } : undefined}
+                                  />
+                                )}
+                                {nFotos > 0 && (
+                                  <span
+                                    className="fw-bold"
+                                    style={{ fontSize: 12, lineHeight: 1, color: editable ? "#fff" : "#16a34a" }}
+                                  >
+                                    {nFotos}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })()}
+                        </td>
+                        {editable && puedeCrear && (
+                          <td>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-link p-1 d-inline-flex text-danger"
+                              title="Eliminar etapa"
+                              onClick={() => handleEliminarEtapa(et.uuid)}
+                            >
+                              <FiX size={16} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {editable && puedeCrear && !homogeneidadFalla && !ceSinCorregir && pendientesDeMedir.map((c, idx) => {
+                    // Solo la primera fila pendiente está activa — el resto
+                    // queda deshabilitado hasta que le toque el turno
+                    // (pedido explícito).
+                    const activo = idx === 0;
+                    // Se puede arrastrar mientras no se haya medido (aquí solo
+                    // hay pendientes) y salvo el principal, que va primero.
+                    const arrastrable = !c.esPrincipal && pendientesDeMedir.length > 1;
+                    const idxComponentes = componentesForm.findIndex((cc) => cc.uuid === c.uuid);
+                    const articuloFila = articulos.find((a) => a.uuid === c.articuloUuid);
+                    const dosis = articuloFila?.dosisPorHectarea;
+                    const dosisSimbolo = articuloFila?.dosisUnidad?.simbolo || "";
+                    const unidadesFila = unidadesCompatiblesPara(c.articuloUuid);
+                    const medicion = medicionDe(c.uuid);
+                    const registrando = registrandoMedicionUuid === c.uuid;
+                    return (
+                      <tr
+                        key={c.uuid}
+                        className={!activo ? "opacity-50" : undefined}
+                        draggable={arrastrable}
+                        onDragStart={(e) => {
+                          if (!arrastrable) return;
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", c.uuid);
+                          setArrastrandoUuid(c.uuid);
+                        }}
+                        onDragOver={(e) => {
+                          if (!arrastrandoUuid || c.esPrincipal || c.uuid === arrastrandoUuid) return;
+                          e.preventDefault();
+                          if (sobreUuid !== c.uuid) setSobreUuid(c.uuid);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const origen = arrastrandoUuid;
+                          setArrastrandoUuid(null);
+                          setSobreUuid(null);
+                          if (!c.esPrincipal) handleReordenarPendientes(origen, c.uuid);
+                        }}
+                        onDragEnd={() => {
+                          setArrastrandoUuid(null);
+                          setSobreUuid(null);
+                        }}
+                        style={{
+                          cursor: arrastrable ? "grab" : undefined,
+                          boxShadow: sobreUuid === c.uuid && arrastrandoUuid ? "inset 0 2px 0 #166534" : undefined,
+                          opacity: arrastrandoUuid === c.uuid ? 0.4 : undefined,
+                        }}
+                      >
+                        <td
+                          className="small text-center text-secondary"
+                          title={arrastrable ? "Arrastra para cambiar el orden — se puede mover hasta que se mida" : "El principal va siempre primero"}
+                        >
+                          {arrastrable ? <FiMenu size={14} /> : "—"}
+                        </td>
+                        <td className="small">
+                          {articuloFila?.nombre || "—"}
+                        </td>
+                        <td className="small text-secondary text-center">
+                          {dosis != null ? `${Number(dosis)} ${dosisSimbolo}/ha` : "Sin dosis"}
+                        </td>
+                        <td>
+                          <select
+                            className="form-select form-select-sm rounded-3"
+                            value={c.unidadUuid}
+                            disabled={!activo}
+                            onChange={(e) => updateComponenteYGuardar(idxComponentes, "unidadUuid", e.target.value)}
+                          >
+                            <option value="">Sin unidad</option>
+                            {unidadesFila.map((u) => (
+                              <option key={u.uuid} value={u.uuid}>
+                                {u.simbolo}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            className="form-control form-control-sm rounded-3 text-center"
+                            value={c.cantidad}
+                            disabled={!activo}
+                            onChange={(e) => updateComponente(idxComponentes, "cantidad", e.target.value)}
+                            onBlur={(e) => updateComponenteYGuardar(idxComponentes, "cantidad", e.target.value)}
+                          />
+                        </td>
+                        <td style={{ width: "5rem" }}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="14"
+                            className="form-control form-control-sm rounded-3"
+                            value={medicion.ph}
+                            disabled={!activo}
+                            onChange={(e) => updateMedicion(c.uuid, { ph: e.target.value })}
+                          />
+                        </td>
+                        <td style={{ width: "5rem" }}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="form-control form-control-sm rounded-3"
+                            value={medicion.ce}
+                            disabled={!activo}
+                            onChange={(e) => updateMedicion(c.uuid, { ce: e.target.value })}
+                          />
+                        </td>
+                        <td className="small text-center">
+                          <span className="badge rounded-pill small text-bg-secondary">Pendiente</span>
+                        </td>
+                        <td className="small text-secondary text-center">—</td>
+                        <td>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm rounded-3"
+                            value={medicion.observaciones}
+                            disabled={!activo}
+                            onChange={(e) => updateMedicion(c.uuid, { observaciones: e.target.value })}
+                          />
+                        </td>
+                        <td className="text-center">
+                          <label
+                            className={`btn btn-sm btn-link p-1 d-inline-flex align-items-center gap-1 mb-0 ${!activo ? "disabled" : ""}`}
+                            style={{
+                              color: medicion.fotos.length ? "#166534" : "#6c757d",
+                              pointerEvents: activo ? undefined : "none",
+                            }}
+                            title={
+                              medicion.fotos.length
+                                ? `${medicion.fotos.length} evidencia(s) adjunta(s) — clic para quitar`
+                                : "Adjuntar evidencia fotográfica (obligatoria)"
+                            }
+                            onClick={activo && medicion.fotos.length ? (e) => { e.preventDefault(); limpiarFotosMedicion(c.uuid); } : undefined}
+                          >
+                            <FiCamera size={16} />
+                            {medicion.fotos.length > 0 && (
+                              <span className="fw-bold" style={{ fontSize: 12, lineHeight: 1 }}>
+                                {medicion.fotos.length}
+                              </span>
+                            )}
+                            {!medicion.fotos.length && (
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                disabled={!activo}
+                                className="d-none"
+                                onChange={(e) => handleSelectMedicionFiles(c.uuid, e)}
+                              />
+                            )}
+                          </label>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link p-1 d-inline-flex"
+                            style={{ color: !activo || registrando || medicion.fotos.length === 0 ? "#adb5bd" : "#166534" }}
+                            disabled={!activo || registrando || medicion.fotos.length === 0}
+                            title={
+                              !activo
+                                ? "Completa primero el insumo anterior"
+                                : medicion.fotos.length === 0
+                                  ? "Adjunta una foto antes de registrar"
+                                  : "Registrar medición"
+                            }
+                            onClick={() => handleRegistrarMedicion(c.uuid)}
+                          >
+                            {registrando ? <span className="spinner-border spinner-border-sm" /> : <FiSend size={16} />}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <div className="mb-4 d-flex justify-content-end gap-2">
             {version.estadoPrueba === "OPTIMA" && !version.elaboracionGenerada && puedeElaborar && (
               <button type="button" className="btn btn-success rounded-3 d-flex align-items-center gap-2" onClick={openElaboradoModal}>
@@ -1083,374 +1965,6 @@ export default function MezclaPruebaDetallePage() {
           </div>
         )}
 
-        {/* ─── Insumos y mediciones ───
-            Un solo contenedor: agregar un insumo a la receta y registrar
-            su medición de pH/CE es UNA sola acción (ver handleAgregarEtapa)
-            — antes había que guardar "Componentes de la receta" aparte
-            antes de poder elegirlo en la medición. */}
-        <div className="card border-0 rounded-4 mb-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <div className="px-3 py-1" style={{ backgroundColor: "#166534" }}>
-            <h2 className="h6 fw-bold mb-0 text-white text-uppercase" style={{ fontSize: "0.8rem", letterSpacing: "0.03em" }}>
-              Insumos y mediciones
-            </h2>
-          </div>
-          <div className="p-3">
-            {editable && puedeCrear && (
-              <form onSubmit={handleAgregarEtapa} className="pt-3 pb-3 mb-3 border-top">
-                <div className="mb-2">
-                  <p className="small fw-medium mb-1">Registrar nueva etapa</p>
-                  <div className="btn-group btn-group-sm" role="group">
-                    {[
-                      ["NUEVO_INSUMO", "Agregar insumo"],
-                      ["CORRECCION_PH", "Corrección de pH"],
-                    ].map(([valor, label]) => {
-                      const deshabilitado =
-                        homogeneidadFalla || (valor === "NUEVO_INSUMO" && bloqueadoPorNoCumple) || (valor === "CORRECCION_PH" && ceSinCorregir);
-                      return (
-                        <button
-                          key={valor}
-                          type="button"
-                          className={`btn ${etapaForm.modo === valor ? "btn-brand" : "btn-outline-secondary"}`}
-                          disabled={deshabilitado}
-                          title={
-                            homogeneidadFalla
-                              ? "La mezcla no dio homogénea — hay que finalizar la prueba"
-                              : valor === "CORRECCION_PH" && ceSinCorregir
-                                ? "La CE no cumple — corregir el pH no la arregla, hay que finalizar la prueba"
-                                : deshabilitado
-                                  ? "La última medición no cumple — corrige el pH o finaliza la prueba"
-                                  : undefined
-                          }
-                          onClick={() =>
-                            setEtapaForm((f) => ({
-                              ...f,
-                              modo: valor,
-                              articuloUuid: "",
-                              cantidad: "1",
-                              // Precarga la unidad más chica compatible con
-                              // el Regulador de pH (ej. gramo en vez de Kg)
-                              // — se dosifica en cantidades chicas.
-                              unidadUuid: valor === "CORRECCION_PH" ? unidadMasPequenaPara(reguladorPhUuid) : "",
-                            }))
-                          }
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {homogeneidadFalla ? (
-                    <p className="small mb-0 mt-2" style={{ color: "#b91c1c" }}>
-                      La mezcla no dio homogénea en la prueba de homogeneidad (se separó) — no hay forma de
-                      corregirlo ajustando pH o insumos. Finaliza la prueba (quedará como no válida).
-                    </p>
-                  ) : ceSinCorregir ? (
-                    <p className="small mb-0 mt-2" style={{ color: "#b91c1c" }}>
-                      La conductividad eléctrica (CE) no cumple — no hay forma de corregirla en esta prueba. Finaliza
-                      la prueba (quedará como no válida).
-                    </p>
-                  ) : (
-                    bloqueadoPorNoCumple && (
-                      <p className="small mb-0 mt-2" style={{ color: "#b91c1c" }}>
-                        La última medición no cumple los parámetros de pH/CE — corrige el pH o finaliza la prueba.
-                      </p>
-                    )
-                  )}
-                </div>
-                {!ceSinCorregir && !homogeneidadFalla && (
-                <div className="d-flex flex-wrap flex-md-nowrap align-items-end gap-2">
-                  {etapaForm.modo === "CORRECCION_PH" ? (
-                    <>
-                      <div style={{ minWidth: "8rem" }} className="flex-shrink-0">
-                        <label className="form-label small mb-1">Insumo usado</label>
-                        {/* Fijo: la corrección de pH siempre usa "Regulador
-                            de pH" — el backend lo resuelve/crea solo (ver
-                            mezcla.service.js#agregarEtapa), no se elige acá. */}
-                        <input type="text" disabled className="form-control form-control-sm rounded-3" value="Regulador de pH" />
-                      </div>
-                      <div style={{ width: "7rem" }} className="flex-shrink-0">
-                        <label className="form-label small mb-1">Unidad</label>
-                        <select
-                          className="form-select form-select-sm rounded-3"
-                          required
-                          value={etapaForm.unidadUuid}
-                          onChange={(e) => setEtapaForm((f) => ({ ...f, unidadUuid: e.target.value }))}
-                        >
-                          <option value="">—</option>
-                          {unidades.map((u) => (
-                            <option key={u.uuid} value={u.uuid}>
-                              {u.simbolo || u.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div style={{ width: "5.5rem" }} className="flex-shrink-0">
-                        <label className="form-label small mb-1">Cantidad</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0.01"
-                          required
-                          className="form-control form-control-sm rounded-3"
-                          value={etapaForm.cantidad}
-                          onChange={(e) => setEtapaForm((f) => ({ ...f, cantidad: e.target.value }))}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex-grow-1" style={{ minWidth: "10rem" }}>
-                        <label className="form-label small mb-1">Insumo a agregar</label>
-                        <select
-                          className="form-select form-select-sm rounded-3"
-                          required
-                          value={etapaForm.articuloUuid}
-                          onChange={(e) =>
-                            setEtapaForm((f) => ({ ...f, articuloUuid: e.target.value, unidadUuid: unidadMasPequenaPara(e.target.value) }))
-                          }
-                        >
-                          <option value="">Selecciona un insumo</option>
-                          {articulos
-                            .filter((a) => !componentesForm.some((c) => c.articuloUuid === a.uuid))
-                            .map((a) => (
-                              <option key={a.uuid} value={a.uuid}>
-                                {a.nombre}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                      <div style={{ width: "7rem" }} className="flex-shrink-0">
-                        <label className="form-label small mb-1">Unidad</label>
-                        <select
-                          className="form-select form-select-sm rounded-3"
-                          required
-                          value={etapaForm.unidadUuid}
-                          onChange={(e) => setEtapaForm((f) => ({ ...f, unidadUuid: e.target.value }))}
-                        >
-                          <option value="">—</option>
-                          {unidadesCompatiblesPara(etapaForm.articuloUuid).map((u) => (
-                            <option key={u.uuid} value={u.uuid}>
-                              {u.simbolo || u.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div style={{ width: "5.5rem" }} className="flex-shrink-0">
-                        <label className="form-label small mb-1">Cantidad</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0.01"
-                          required
-                          className="form-control form-control-sm rounded-3"
-                          value={etapaForm.cantidad}
-                          onChange={(e) => setEtapaForm((f) => ({ ...f, cantidad: e.target.value }))}
-                        />
-                      </div>
-                    </>
-                  )}
-                  <div style={{ width: "5.5rem" }} className="flex-shrink-0">
-                    <label className="form-label small mb-1">pH</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="14"
-                      required
-                      className="form-control form-control-sm rounded-3"
-                      value={etapaForm.ph}
-                      onChange={(e) => setEtapaForm((f) => ({ ...f, ph: e.target.value }))}
-                    />
-                  </div>
-                  <div style={{ width: "5.5rem" }} className="flex-shrink-0">
-                    <label className="form-label small mb-1">CE</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      required
-                      className="form-control form-control-sm rounded-3"
-                      value={etapaForm.ce}
-                      onChange={(e) => setEtapaForm((f) => ({ ...f, ce: e.target.value }))}
-                    />
-                  </div>
-                  <div className="flex-grow-1" style={{ minWidth: "10rem" }}>
-                    <label className="form-label small mb-1">Observaciones</label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm rounded-3"
-                      value={etapaForm.observaciones}
-                      onChange={(e) => setEtapaForm((f) => ({ ...f, observaciones: e.target.value }))}
-                    />
-                  </div>
-                  <label
-                    className={`btn btn-sm rounded-3 d-inline-flex align-items-center justify-content-center gap-1 flex-shrink-0 px-2 mb-0 ${
-                      etapaFotos.length ? "btn-brand" : "btn-outline-secondary"
-                    }`}
-                    style={{ minHeight: 31 }}
-                    title={
-                      etapaFotos.length
-                        ? `${etapaFotos.length} evidencia(s) adjunta(s) — clic para quitar`
-                        : "Adjuntar evidencia fotográfica (galería o cámara, obligatoria)"
-                    }
-                    onClick={etapaFotos.length ? (e) => { e.preventDefault(); limpiarEtapaFotos(); } : undefined}
-                  >
-                    <FiCamera size={16} />
-                    {etapaFotos.length > 0 && (
-                      <span className="fw-bold" style={{ fontSize: 12, lineHeight: 1, color: "#fff" }}>
-                        {etapaFotos.length}
-                      </span>
-                    )}
-                    {!etapaFotos.length && (
-                      <input type="file" accept="image/*" multiple className="d-none" onChange={handleSelectEtapaFiles} />
-                    )}
-                  </label>
-                  <button
-                    type="submit"
-                    className="btn btn-brand btn-sm rounded-3 d-inline-flex align-items-center justify-content-center flex-shrink-0 p-0"
-                    style={{ width: 31, height: 31 }}
-                    disabled={savingEtapa || etapaFotos.length === 0}
-                    title={etapaFotos.length === 0 ? "Adjunta una foto antes de registrar" : "Registrar etapa"}
-                  >
-                    {savingEtapa ? <span className="spinner-border spinner-border-sm" /> : <FiPlus size={18} />}
-                  </button>
-                </div>
-                )}
-                {etapaError && <div className="alert alert-danger py-2 small mt-2">{etapaError}</div>}
-              </form>
-            )}
-
-            <div className="table-responsive mb-3">
-              <table className="table table-sm align-middle mb-0">
-                <thead>
-                  <tr className="small" style={{ backgroundColor: "#f0fdf4" }}>
-                    <th className="text-center" style={{ color: "#166534" }}>#</th>
-                    <th style={{ color: "#166534" }}>Componente incorporado</th>
-                    <th className="text-center" style={{ color: "#166534" }}>pH</th>
-                    <th className="text-center" style={{ color: "#166534" }}>CE</th>
-                    <th className="text-center" style={{ color: "#166534" }}>Resultado</th>
-                    <th className="text-center" style={{ color: "#166534" }}>Fecha</th>
-                    <th style={{ color: "#166534" }}>Observaciones</th>
-                    <th className="text-center" style={{ color: "#166534" }}>Evidencia</th>
-                    {editable && puedeCrear && <th style={{ width: "2.5rem", backgroundColor: "#f0fdf4" }} />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(version.etapas || []).length === 0 && (
-                    <tr>
-                      <td colSpan={editable && puedeCrear ? 9 : 8} className="text-center text-secondary small py-2">
-                        Sin etapas registradas todavía.
-                      </td>
-                    </tr>
-                  )}
-                  {(version.etapas || []).map((et) => (
-                    <tr key={et.uuid}>
-                      <td className="small text-center">{et.numero}</td>
-                      <td className="small">
-                        {et.tipoEtapa === "CORRECCION_PH" ? (
-                          <div className="d-flex align-items-center gap-1 flex-wrap">
-                            <span
-                              className="badge rounded-pill small"
-                              style={{ backgroundColor: "#fef3c7", color: "#b45309" }}
-                            >
-                              Corrección pH
-                            </span>
-                            <span className="text-secondary">
-                              {et.articuloCorreccion?.nombre}
-                              {et.cantidadCorreccion != null &&
-                                ` — ${Number(et.cantidadCorreccion).toLocaleString("es-CO", { maximumFractionDigits: 2 })} ${
-                                  et.unidadCorreccion?.simbolo || ""
-                                }`}
-                            </span>
-                          </div>
-                        ) : et.componente ? (
-                          <>
-                            {et.componente.articulo?.nombre}
-                            <span className="text-secondary">
-                              {" — "}
-                              {Number(et.componente.cantidad).toLocaleString("es-CO", { maximumFractionDigits: 2 })}{" "}
-                              {et.componente.unidad?.simbolo || ""}
-                            </span>
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="small text-center">{Number(et.ph).toFixed(2)}</td>
-                      <td className="small text-center">{Number(et.ce).toFixed(2)}</td>
-                      <td className="small text-center">
-                        <span
-                          className="badge rounded-pill small"
-                          style={
-                            et.resultado === "CUMPLE"
-                              ? { backgroundColor: "#d1fae5", color: "#047857" }
-                              : { backgroundColor: "#fee2e2", color: "#b91c1c" }
-                          }
-                        >
-                          {et.resultado === "CUMPLE" ? "Cumple" : "No cumple"}
-                        </span>
-                      </td>
-                      <td className="small text-secondary text-center">
-                        {et.medidoEn ? parseFechaUTC(et.medidoEn).toLocaleString("es-CO", { timeZone: "America/Bogota" }) : "—"}
-                      </td>
-                      <td className="small text-secondary">{et.observaciones || "—"}</td>
-                      <td className="text-center">
-                        {(() => {
-                          const nFotos = (et.fotos || []).length;
-                          const subiendo = subiendoFotoEtapa === et.uuid;
-                          // Con la prueba ya guardada (no editable) el botón es
-                          // solo de consulta: sin fondo verde, solo el ícono.
-                          const claseBoton = editable
-                            ? `btn btn-sm rounded-3 px-2 ${nFotos > 0 ? "btn-brand" : "btn-outline-secondary"}`
-                            : "btn btn-sm btn-link p-0 text-decoration-none";
-                          return (
-                            <button
-                              type="button"
-                              className={`${claseBoton} d-inline-flex align-items-center justify-content-center gap-1`}
-                              style={{ minHeight: 31 }}
-                              title={nFotos > 0 ? `Ver ${nFotos} evidencia(s)` : "Sin evidencia" + (editable && puedeCrear ? " — agregar" : "")}
-                              onClick={() => setFotosModalEtapaUuid(et.uuid)}
-                            >
-                              {subiendo ? (
-                                <span className="spinner-border spinner-border-sm" />
-                              ) : (
-                                <FiCamera
-                                  size={16}
-                                  style={!editable ? { color: nFotos > 0 ? "#16a34a" : "#9ca3af" } : undefined}
-                                />
-                              )}
-                              {nFotos > 0 && (
-                                <span
-                                  className="fw-bold"
-                                  style={{ fontSize: 12, lineHeight: 1, color: editable ? "#fff" : "#16a34a" }}
-                                >
-                                  {nFotos}
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })()}
-                      </td>
-                      {editable && puedeCrear && (
-                        <td>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-link p-1 d-inline-flex text-danger"
-                            title="Eliminar etapa"
-                            onClick={() => handleEliminarEtapa(et.uuid)}
-                          >
-                            <FiX size={16} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
         {/* ─── Receta actual ─── */}
         <div className="card border-0 rounded-4 mb-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="px-3 py-1" style={{ backgroundColor: "#166534" }}>
@@ -1459,6 +1973,11 @@ export default function MezclaPruebaDetallePage() {
             </h2>
           </div>
           <div className="p-3">
+            <p className="small text-secondary mb-3">
+              La receta se calcula en dosis llevada a <strong>1 litro de mezcla</strong>, asumiendo un rendimiento
+              de <strong>6 galones de mezcla por hectárea</strong>. El <strong>Agua</strong> siempre completa lo que
+              falta para llegar a ese litro — se calcula sola en cuanto cambia algún otro insumo, no se edita a mano.
+            </p>
             <div className="table-responsive">
               <table className="table table-sm align-middle mb-2">
                 <thead>
@@ -1467,6 +1986,8 @@ export default function MezclaPruebaDetallePage() {
                     <th className="text-start" style={{ minWidth: "14rem", color: "#166534" }}>Artículo</th>
                     <th className="text-center" style={{ width: "8rem", color: "#166534" }}>Cantidad</th>
                     <th className="text-center" style={{ minWidth: "8rem", color: "#166534" }}>Unidad</th>
+                    <th className="text-center" style={{ minWidth: "7rem", color: "#166534" }}>Dosis por ha.</th>
+                    <th className="text-center" style={{ minWidth: "7rem", color: "#166534" }}>Dosis real</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1476,6 +1997,7 @@ export default function MezclaPruebaDetallePage() {
                       // consumirStockConReceta) — ya no se muestra en la
                       // tabla (el PDF/reporte no la incluye), pero se sigue
                       // calculando acá por si en el futuro hace falta.
+                      const evaluacion = evaluarDosisPorHectarea(c.articulo, c.cantidad, c.unidad?.uuid);
                       return (
                         <tr key={c.uuid || idx}>
                           <td className="text-center">
@@ -1484,6 +2006,12 @@ export default function MezclaPruebaDetallePage() {
                           <td className="small">{c.articulo?.nombre || "—"}</td>
                           <td className="small text-center">{Number(c.cantidad).toFixed(2)}</td>
                           <td className="small text-center text-secondary">{c.unidad?.simbolo || "—"}</td>
+                          <td className="small text-center text-secondary">
+                            {c.articulo?.dosisPorHectarea != null
+                              ? `${Number(c.articulo.dosisPorHectarea)} ${c.articulo?.dosisUnidad?.simbolo || ""}/ha`
+                              : "—"}
+                          </td>
+                          <td className="text-center">{renderEstadoDosisBadge(evaluacion)}</td>
                         </tr>
                       );
                     }
@@ -1492,6 +2020,10 @@ export default function MezclaPruebaDetallePage() {
                     // (pedido explícito) — solo cantidad/unidad son
                     // editables acá.
                     const articuloFila = articulos.find((a) => a.uuid === c.articuloUuid);
+                    // El Agua nunca se edita a mano — ver
+                    // `litrosRestantesParaAgua` y el useEffect que la
+                    // recalcula sola cada vez que cambia otro insumo.
+                    const esAgua = articuloFila?.nombre === "Agua";
                     return (
                       <tr key={idx}>
                         <td className="text-center">
@@ -1506,17 +2038,27 @@ export default function MezclaPruebaDetallePage() {
                             />
                           )}
                         </td>
-                        <td className="small">{articuloFila ? (articuloFila.codigo ? `${articuloFila.codigo} — ${articuloFila.nombre}` : articuloFila.nombre) : "—"}</td>
+                        <td className="small">{articuloFila?.nombre || "—"}</td>
                         <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            className="form-control form-control-sm rounded-3 text-center"
-                            value={c.cantidad}
-                            onChange={(e) => updateComponente(idx, "cantidad", e.target.value)}
-                            onBlur={(e) => updateComponenteYGuardar(idx, "cantidad", e.target.value)}
-                          />
+                          {esAgua ? (
+                            <input
+                              type="text"
+                              disabled
+                              title="Se calcula sola — completa lo que falta para llegar a 1 litro de mezcla"
+                              className="form-control form-control-sm rounded-3 text-center text-secondary"
+                              value={Number(c.cantidad).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            />
+                          ) : (
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              className="form-control form-control-sm rounded-3 text-center"
+                              value={c.cantidad}
+                              onChange={(e) => updateComponente(idx, "cantidad", e.target.value)}
+                              onBlur={(e) => updateComponenteYGuardar(idx, "cantidad", e.target.value)}
+                            />
+                          )}
                         </td>
                         <td>
                           <select className="form-select form-select-sm rounded-3" value={c.unidadUuid} onChange={(e) => updateComponenteYGuardar(idx, "unidadUuid", e.target.value)}>
@@ -1528,13 +2070,21 @@ export default function MezclaPruebaDetallePage() {
                             ))}
                           </select>
                         </td>
+                        <td className="small text-center text-secondary">
+                          {articuloFila?.dosisPorHectarea != null
+                            ? `${Number(articuloFila.dosisPorHectarea)} ${articuloFila?.dosisUnidad?.simbolo || ""}/ha`
+                            : "—"}
+                        </td>
+                        <td className="text-center">
+                          {renderEstadoDosisBadge(evaluarDosisPorHectarea(articuloFila, c.cantidad, c.unidadUuid))}
+                        </td>
                       </tr>
                     );
                   })}
                   {(editable ? componentesForm : version.componentes || []).length === 0 && (
                     <tr>
-                      <td colSpan={4} className="text-center text-secondary small py-2">
-                        Sin insumos agregados todavía — agrégalos desde &quot;Registrar nueva etapa&quot;, arriba.
+                      <td colSpan={6} className="text-center text-secondary small py-2">
+                        Sin insumos agregados todavía — agrégalos desde &quot;Agregar insumo&quot;, arriba.
                       </td>
                     </tr>
                   )}
@@ -1812,7 +2362,7 @@ export default function MezclaPruebaDetallePage() {
         )}
 
         {elaboradoModalOpen && (
-          <ModalShell title="Aprobar prueba y crear elaborado" onClose={() => setElaboradoModalOpen(false)} size="lg">
+          <ModalShell title="Aprobar prueba y crear elaborado" onClose={() => setElaboradoModalOpen(false)} size="xl">
             <form onSubmit={handleCrearYAprobar}>
               <p className="small text-secondary">
                 Se usan automáticamente los componentes, cantidades y unidades de esta prueba — no hace falta
@@ -1895,31 +2445,22 @@ export default function MezclaPruebaDetallePage() {
                     </div>
                     <div className="col-3">
                       <label className="form-label small fw-medium">Unidad</label>
-                      <select
-                        className="form-select rounded-3"
-                        value={elaboradoForm.articuloUnidadMedidaUuid}
-                        onChange={(e) => setElaboradoForm((f) => ({ ...f, articuloUnidadMedidaUuid: e.target.value }))}
-                      >
-                        <option value="">Sin unidad</option>
-                        {unidades.map((u) => (
-                          <option key={u.uuid} value={u.uuid}>
-                            {u.nombre} ({u.simbolo})
-                          </option>
-                        ))}
-                      </select>
+                      {/* Fija en Litro — la receta siempre se calcula sobre
+                          1 litro de mezcla (ver "Receta actual"), no tiene
+                          sentido elegir otra unidad acá. */}
+                      <input type="text" disabled className="form-control rounded-3" value="Litro (L)" />
                     </div>
                     <div className="col-3">
                       <label className="form-label small fw-medium">Cantidad</label>
+                      {/* Fija: es la suma real de "Receta actual" (todas las
+                          cantidades convertidas a Litros) — no se edita a
+                          mano, así siempre coincide con la receta. */}
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        required
+                        type="text"
+                        disabled
                         className="form-control rounded-3"
-                        value={elaboradoForm.cantidadElaborada}
-                        onChange={(e) => setElaboradoForm((f) => ({ ...f, cantidadElaborada: e.target.value }))}
+                        value={Number(elaboradoForm.cantidadElaborada).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       />
-                   
                     </div>
                   </div>
                   <hr />

@@ -30,6 +30,7 @@ import {
   FiPackage,
   FiAlertTriangle,
   FiDroplet,
+  FiFileText,
   FiSearch,
   FiX,
   FiSettings,
@@ -41,7 +42,6 @@ import {
   FiTruck,
   FiTarget,
   FiDownload,
-  FiTag,
 } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl, GiWeightScale } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
@@ -130,7 +130,15 @@ const NAV = [
       { key: "sanidadAlertas", label: "Alertas", icon: FiAlertTriangle, permKey: "sanidadAlertas", href: "/sanidad-vegetal/alertas" },
       { key: "sanidadObjetivos", label: "Objetivos", icon: FiTarget, permKey: "sanidadObjetivos", href: "/sanidad-vegetal/objetivos" },
       { key: "sanidadAspersiones", label: "Programación de Aspersiones", icon: FiDroplet, permKey: "sanidadAspersiones", href: "/sanidad-vegetal/aspersiones" },
-      { key: "sanidadIngredientesActivos", label: "Ingredientes Activos", icon: FiTag, permKey: "sanidadIngredientesActivos", href: "/sanidad-vegetal/ingredientes-activos" },
+      { key: "sanidadComprobantesAspersion", label: "Comprobante de aspersiones", icon: FiFileText, permKey: "sanidadComprobantesAspersion", href: "/sanidad-vegetal/comprobantes-aspersion" },
+      // Un solo ítem de menú para las 3 vistas (Mezclas/Insumos/Ingredientes
+      // Activos), que comparten la misma barra de pestañas — igual patrón
+      // que Estimaciones Fincas. Mezclas vive acá directamente (ruta
+      // /sanidad-vegetal/mezclas) — por eso este ítem entra directo por ahí
+      // por defecto, y desde sus pestañas se llega a Insumos/Ingredientes
+      // Activos. Pruebas de Laboratorio sigue aparte, con su propio ítem
+      // abajo.
+      { key: "sanidadInsumos", label: "Mezclas", icon: FiBox, permKey: "inventariosElaboraciones", href: "/sanidad-vegetal/mezclas" },
       // Antes vivía como "Mezclas" dentro de Inventarios — se movió acá y se
       // renombró porque conceptualmente es una prueba de laboratorio, no un
       // artículo de inventario. El permiso de menú (menu.inventarios.mezclas)
@@ -174,7 +182,6 @@ const NAV = [
       { key: "inventariosMovimientos", label: "Movimientos", icon: FiShare2, permKey: "inventariosMovimientos", href: "/inventarios/movimientos" },
       { key: "inventariosExistencias", label: "Existencias", icon: FiBox, permKey: "inventariosMovimientos", href: "/inventarios/existencias" },
       { key: "inventariosKardex", label: "Kardex", icon: FiList, permKey: "inventariosMovimientos", href: "/inventarios/kardex" },
-      { key: "inventariosElaboraciones", label: "Mezclas", icon: FiActivity, permKey: "inventariosElaboraciones", href: "/inventarios/elaboraciones" },
       { key: "inventariosProformas", label: "Proformas", icon: FiClipboard, permKey: "inventariosProformas", href: "/inventarios/proformas" },
       { key: "inventariosEquipos", label: "Equipos", icon: GiFarmTractor, permKey: "inventariosEquipos", href: "/inventarios/equipos" },
       { key: "inventariosProveedores", label: "Proveedores", icon: FiTruck, permKey: "inventariosProveedores", href: "/inventarios/proveedores" },
@@ -311,7 +318,8 @@ export default function Sidebar() {
       sanidadAlertas: hasPermission("menu.sanidad_vegetal.alertas"),
       sanidadObjetivos: hasPermission("menu.sanidad_vegetal.objetivos"),
       sanidadAspersiones: hasPermission("menu.sanidad_vegetal.aspersiones"),
-      sanidadIngredientesActivos: hasPermission("menu.sanidad_vegetal.ingredientes_activos"),
+      sanidadComprobantesAspersion: hasPermission("menu.sanidad_vegetal.comprobantes_aspersion"),
+      sanidadInsumos: hasPermission("menu.sanidad_vegetal.insumos"),
 
       precipitacionDiaria: hasPermission("menu.precipitacion_diaria"),
       estacionMeteorologica: hasPermission("menu.estacion_meteorologica"),
@@ -473,7 +481,7 @@ export default function Sidebar() {
         </div>
       )}
 
-      <nav className="flex-grow-1 px-3 d-flex flex-column gap-1 mt-2 overflow-y-auto">
+      <nav className="flex-grow-1 px-3 d-flex flex-column gap-1 mt-2 overflow-y-auto sidebar-scroll">
         {(!buscando || normalizar("Inicio").includes(query)) && (
           <Link href="/" className={navLinkClass(pathname === "/")} title="Inicio">
             <FiHome size={18} />

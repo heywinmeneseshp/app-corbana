@@ -82,6 +82,11 @@ const MENU_TREE = [
         nombre: "Programación de Aspersiones",
         prefijos: ["sanidad_vegetal.aspersiones."],
       },
+      {
+        codigo: "menu.sanidad_vegetal.comprobantes_aspersion",
+        nombre: "Comprobante de aspersiones",
+        prefijos: ["sanidad_vegetal.comprobantes_aspersion."],
+      },
     ],
   },
   {

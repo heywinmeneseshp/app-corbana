@@ -9,6 +9,8 @@ import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import TagPicker from "@/components/TagPicker";
 
+const TIPOS = ["INSUMO", "REPUESTO", "ELABORADO", "GENERAL"];
+
 function emptyForm() {
   return {
     codigo: "",
@@ -21,8 +23,8 @@ function emptyForm() {
     manejaInventario: true,
     stockMinimo: "0",
     stockMaximo: "",
-    dosisMaximaPorHectarea: "",
-    dosisMaximaUnidadUuid: "",
+    dosisPorHectarea: "",
+    dosisUnidadUuid: "",
     estado: true,
     almacenes: [], // [{uuid, label, sublabel}] — ver TagPicker
   };
@@ -36,6 +38,8 @@ export default function ArticulosInventarioPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [categoriaFiltro, setCategoriaFiltro] = useState("");
+  const [tipoFiltro, setTipoFiltro] = useState("");
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ page: 1, limit: 100, total: 0, totalPages: 1 });
 
@@ -102,11 +106,22 @@ export default function ArticulosInventarioPage() {
     }
   }
 
-  async function load() {
+  // `overrides`: para cuando un filtro recién cambió en este mismo evento y
+  // todavía no se refleja en el estado (closures de React) — ver
+  // handleCategoriaFiltroChange/handleTipoFiltroChange.
+  async function load(overrides = {}) {
     setLoading(true);
     setError("");
     try {
-      const qs = new URLSearchParams({ page: String(page), limit: "100", ...(search ? { search } : {}) });
+      const categoriaUuid = overrides.categoriaUuid !== undefined ? overrides.categoriaUuid : categoriaFiltro;
+      const tipo = overrides.tipo !== undefined ? overrides.tipo : tipoFiltro;
+      const qs = new URLSearchParams({
+        page: String(page),
+        limit: "100",
+        ...(search ? { search } : {}),
+        ...(categoriaUuid ? { categoriaUuid } : {}),
+        ...(tipo ? { tipo } : {}),
+      });
       const { items: rows, meta: m } = await apiFetch(`/inventarios/articulos?${qs}`);
       setItems(rows);
       setMeta(m);
@@ -119,6 +134,18 @@ export default function ArticulosInventarioPage() {
 
   function handleSearchSubmit() {
     if (page === 1) load();
+    else setPage(1);
+  }
+
+  function handleCategoriaFiltroChange(value) {
+    setCategoriaFiltro(value);
+    if (page === 1) load({ categoriaUuid: value });
+    else setPage(1);
+  }
+
+  function handleTipoFiltroChange(value) {
+    setTipoFiltro(value);
+    if (page === 1) load({ tipo: value });
     else setPage(1);
   }
 
@@ -166,8 +193,8 @@ export default function ArticulosInventarioPage() {
       manejaInventario: articulo.manejaInventario,
       stockMinimo: String(articulo.stockMinimo ?? 0),
       stockMaximo: articulo.stockMaximo != null ? String(articulo.stockMaximo) : "",
-      dosisMaximaPorHectarea: articulo.dosisMaximaPorHectarea != null ? String(articulo.dosisMaximaPorHectarea) : "",
-      dosisMaximaUnidadUuid: articulo.dosisMaximaUnidad?.uuid || "",
+      dosisPorHectarea: articulo.dosisPorHectarea != null ? String(articulo.dosisPorHectarea) : "",
+      dosisUnidadUuid: articulo.dosisUnidad?.uuid || "",
       estado: articulo.estado,
       almacenes: (articulo.almacenes || []).map((a) => ({ uuid: a.uuid, label: a.nombre, sublabel: a.codigo })),
     });
@@ -178,6 +205,16 @@ export default function ArticulosInventarioPage() {
   async function handleSave(e) {
     e.preventDefault();
     setFormError("");
+    // Si se registró la Dosis por hectárea, la unidad es obligatoria —
+    // pedido explícito: un número de dosis sin unidad no sirve para nada
+    // (Mezclas/Aspersiones no pueden calcular "Dosis real"/"% sobre
+    // dosis" sin ella). Mismo criterio ya exigido en el backend
+    // (articulo.validator.js) — esto solo evita el viaje redondo al
+    // servidor para avisarlo.
+    if (form.dosisPorHectarea !== "" && !form.dosisUnidadUuid) {
+      setFormError("Si registras la Dosis por hectárea, también debes indicar su unidad.");
+      return;
+    }
     setSaving(true);
     try {
       const body = {
@@ -190,8 +227,8 @@ export default function ArticulosInventarioPage() {
         precioVenta: Number(form.precioVenta),
         stockMinimo: form.stockMinimo === "" ? null : Number(form.stockMinimo),
         stockMaximo: form.stockMaximo === "" ? null : Number(form.stockMaximo),
-        dosisMaximaPorHectarea: form.dosisMaximaPorHectarea === "" ? null : Number(form.dosisMaximaPorHectarea),
-        dosisMaximaUnidadUuid: form.dosisMaximaUnidadUuid || null,
+        dosisPorHectarea: form.dosisPorHectarea === "" ? null : Number(form.dosisPorHectarea),
+        dosisUnidadUuid: form.dosisUnidadUuid || null,
         almacenUuids: form.almacenes.map((a) => a.uuid),
       };
       delete body.almacenes;
@@ -279,7 +316,7 @@ export default function ArticulosInventarioPage() {
             aparecer en el listado normal, hasta que se restauren.
           </div>
         ) : (
-          <div className="mb-3">
+          <div className="mb-3 d-flex flex-wrap gap-2">
             <input
               type="text"
               className="form-control rounded-3"
@@ -289,6 +326,32 @@ export default function ArticulosInventarioPage() {
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearchSubmit()}
             />
+            <select
+              className="form-select rounded-3"
+              style={{ maxWidth: 220 }}
+              value={categoriaFiltro}
+              onChange={(e) => handleCategoriaFiltroChange(e.target.value)}
+            >
+              <option value="">Todas las categorías</option>
+              {categorias.map((c) => (
+                <option key={c.uuid} value={c.uuid}>
+                  {c.nombre} ({c.tipo})
+                </option>
+              ))}
+            </select>
+            <select
+              className="form-select rounded-3"
+              style={{ maxWidth: 180 }}
+              value={tipoFiltro}
+              onChange={(e) => handleTipoFiltroChange(e.target.value)}
+            >
+              <option value="">Todos los tipos</option>
+              {TIPOS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
@@ -578,16 +641,16 @@ export default function ArticulosInventarioPage() {
                       step="0.0001"
                       min="0"
                       className="form-control rounded-3"
-                      value={form.dosisMaximaPorHectarea}
-                      onChange={(e) => setForm((f) => ({ ...f, dosisMaximaPorHectarea: e.target.value }))}
+                      value={form.dosisPorHectarea}
+                      onChange={(e) => setForm((f) => ({ ...f, dosisPorHectarea: e.target.value }))}
                     />
                   </div>
                   <div className="col-6">
                     <label className="form-label small fw-medium">Unidad</label>
                     <select
                       className="form-select rounded-3"
-                      value={form.dosisMaximaUnidadUuid}
-                      onChange={(e) => setForm((f) => ({ ...f, dosisMaximaUnidadUuid: e.target.value }))}
+                      value={form.dosisUnidadUuid}
+                      onChange={(e) => setForm((f) => ({ ...f, dosisUnidadUuid: e.target.value }))}
                     >
                       <option value="">Sin unidad</option>
                       {unidades.map((u) => (
