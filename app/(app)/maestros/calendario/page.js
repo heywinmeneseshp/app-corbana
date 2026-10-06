@@ -90,7 +90,7 @@ export default function CalendarioPage() {
             </div>
             <button
               type="button"
-              className="btn btn-outline-success rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-outline-success btn-sm rounded-3 d-flex align-items-center gap-2"
               onClick={handleExportExcel}
               disabled={!!exporting || loading}
             >
@@ -98,7 +98,7 @@ export default function CalendarioPage() {
             </button>
             <button
               type="button"
-              className="btn btn-outline-danger rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-outline-danger btn-sm rounded-3 d-flex align-items-center gap-2"
               onClick={handleExportPdf}
               disabled={!!exporting || loading}
             >

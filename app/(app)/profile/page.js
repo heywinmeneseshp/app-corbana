@@ -152,7 +152,7 @@ export default function ProfilePage() {
               />
             </div>
             <div className="d-flex gap-2">
-              <button type="submit" disabled={saving} className="btn btn-brand rounded-3 d-flex align-items-center gap-1">
+              <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1">
                 <FiSave /> {saving ? "Guardando..." : "Guardar cambios"}
               </button>
               {saved && (
@@ -209,7 +209,7 @@ export default function ProfilePage() {
               )}
             </div>
             <div className="d-flex gap-2">
-              <button type="submit" disabled={changingPassword} className="btn btn-brand rounded-3 d-flex align-items-center gap-1">
+              <button type="submit" disabled={changingPassword} className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1">
                 <FiLock /> {changingPassword ? "Cambiando..." : "Cambiar contraseña"}
               </button>
               {passwordSaved && (

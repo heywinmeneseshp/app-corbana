@@ -201,12 +201,12 @@ export default function MovimientosPage() {
           </div>
           <div className="d-flex gap-2">
             {hasPermission("inventario.movimientos.crear") && (
-              <button type="button" className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2" onClick={openTransfer}>
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openTransfer}>
                 <FiRepeat /> Transferencia
               </button>
             )}
             {hasPermission("inventario.movimientos.crear") && (
-              <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
+              <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
                 <FiPlus /> Nuevo movimiento
               </button>
             )}
@@ -533,10 +533,10 @@ export default function MovimientosPage() {
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Guardando..." : "Guardar"}
                 </button>
               </div>
@@ -692,10 +692,10 @@ export default function MovimientosPage() {
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setTransferModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setTransferModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Guardando..." : "Guardar"}
                 </button>
               </div>

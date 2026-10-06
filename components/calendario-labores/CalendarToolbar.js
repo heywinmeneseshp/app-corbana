@@ -35,12 +35,12 @@ export default function CalendarToolbar({
       </div>
 
       <div className="d-flex align-items-center gap-2">
-        <button type="button" className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2" onClick={onAbrirFiltros}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={onAbrirFiltros}>
           <FiFilter /> Filtros
           {filtrosActivos > 0 && <span className="badge rounded-pill bg-brand">{filtrosActivos}</span>}
         </button>
         {puedeCrear && (
-          <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={onNuevaLabor}>
+          <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={onNuevaLabor}>
             <FiPlus /> Nueva labor
           </button>
         )}

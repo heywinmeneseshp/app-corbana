@@ -34,7 +34,7 @@ export default function ReportesPage() {
             <li className="nav-item" key={t.key}>
               <button
                 type="button"
-                className={`nav-link rounded-3 ${tab === t.key ? "btn-brand text-white" : "btn btn-outline-secondary"}`}
+                className={`nav-link rounded-3 ${tab === t.key ? "btn-brand text-white" : "btn btn-outline-secondary btn-sm"}`}
                 onClick={() => setTab(t.key)}
               >
                 {t.label}
@@ -134,7 +134,7 @@ function ReporteSemanalRacimos() {
           <div className="col-6 col-md-3" key={f.tipo}>
             <button
               type="button"
-              className="btn btn-outline-success rounded-3 w-100 d-flex align-items-center justify-content-center gap-2 py-3"
+              className="btn btn-outline-success btn-sm rounded-3 w-100 d-flex align-items-center justify-content-center gap-2"
               disabled={!semanaUuid || descargando === f.tipo}
               onClick={() => descargar(f.tipo, f.archivo)}
             >
@@ -206,7 +206,7 @@ function ReportePrecipitaciones() {
             <input type="date" className="form-control rounded-3" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
           </div>
           <div className="col-12 col-md-2">
-            <button type="button" className="btn btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={loadReporte}>
+            <button type="button" className="btn btn-brand btn-sm rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={loadReporte}>
               <FiFilter /> Filtrar
             </button>
           </div>

@@ -125,7 +125,7 @@ export default function ProduccionSemanalPage() {
               </select>
             </div>
             <div className={hasPermission("produccion.actualizar_masivo") ? "col-6 col-md-2" : "col-12 col-md-2"}>
-              <button type="button" className="btn btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={() => loadReporte(1)}>
+              <button type="button" className="btn btn-brand btn-sm rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={() => loadReporte(1)}>
                 <FiFilter /> Filtrar
               </button>
             </div>
@@ -140,7 +140,7 @@ export default function ProduccionSemanalPage() {
                 />
                 <button
                   type="button"
-                  className="btn btn-outline-warning rounded-3 w-100 d-flex align-items-center justify-content-center gap-1"
+                  className="btn btn-outline-warning btn-sm rounded-3 w-100 d-flex align-items-center justify-content-center gap-1"
                   disabled={actualizando}
                   onClick={() => inputActualizarRef.current?.click()}
                   title="Solo Administrador: sobrescribe cajas ya cargadas de finca+semana con el archivo"

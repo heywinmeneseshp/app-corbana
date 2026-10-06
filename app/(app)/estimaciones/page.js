@@ -1585,7 +1585,7 @@ export default function EstimacionesPage() {
                     <div className="d-flex align-items-center gap-2">
                       <button
                         type="button"
-                        className="btn btn-brand rounded-3 d-flex align-items-center gap-2"
+                        className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2"
                         onClick={handleGuardar}
                         disabled={!puedeUsarGrillaBasica || guardando}
                       >
@@ -1676,7 +1676,7 @@ export default function EstimacionesPage() {
                   )}
                   <div className="col-auto">
                     <label className="form-label small fw-medium invisible d-block">.</label>
-                    <button type="button" className="btn btn-outline-secondary rounded-3" onClick={cargarEscalera} disabled={escaleraLoading}>
+                    <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={cargarEscalera} disabled={escaleraLoading}>
                       {escaleraLoading ? "Cargando..." : "Actualizar"}
                     </button>
                   </div>
@@ -1727,7 +1727,7 @@ export default function EstimacionesPage() {
                 </div>
                 <div className="col-auto">
                   <label className="form-label small fw-medium invisible d-block">.</label>
-                  <button type="button" className="btn btn-outline-secondary rounded-3" onClick={cargarPivote} disabled={pivoteLoading}>
+                  <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={cargarPivote} disabled={pivoteLoading}>
                     {pivoteLoading ? "Cargando..." : "Actualizar"}
                   </button>
                 </div>
@@ -1970,7 +1970,7 @@ export default function EstimacionesPage() {
                   )}
                   <div className="col-auto">
                     <label className="form-label small fw-medium invisible d-block">.</label>
-                    <button type="button" className="btn btn-outline-secondary rounded-3" onClick={cargarComparativo} disabled={comparativoLoading}>
+                    <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={cargarComparativo} disabled={comparativoLoading}>
                       {comparativoLoading ? "Cargando..." : "Actualizar"}
                     </button>
                   </div>

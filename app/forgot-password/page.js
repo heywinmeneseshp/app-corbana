@@ -53,7 +53,7 @@ export default function ForgotPasswordPage() {
               Si el usuario o correo que ingresaste existe en el sistema, te enviamos una nueva contraseña
               temporal. Ingresá con ella y cambiala apenas puedas.
             </p>
-            <Link href="/login" className="btn btn-brand w-100 rounded-3 py-2 d-inline-block text-center">
+            <Link href="/login" className="btn btn-brand btn-sm w-100 rounded-3 d-inline-block text-center">
               Volver a iniciar sesión
             </Link>
           </>
@@ -86,7 +86,7 @@ export default function ForgotPasswordPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="btn btn-brand w-100 rounded-3 py-2 mb-3"
+                className="btn btn-brand btn-sm w-100 rounded-3 mb-3"
               >
                 {loading ? "Enviando..." : "Enviar nueva contraseña"}
               </button>

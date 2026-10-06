@@ -80,7 +80,7 @@ export default function BackupDatabaseForm() {
             <p className="text-secondary small">Descarga un dump completo (.sql) de toda la base de datos actual.</p>
             <button
               type="button"
-              className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
               disabled={exportando}
               onClick={handleExportar}
             >
@@ -129,7 +129,7 @@ export default function BackupDatabaseForm() {
               {importOk && <div className="alert alert-success py-2 small">{importOk}</div>}
               <button
                 type="submit"
-                className="btn btn-danger rounded-3 d-flex align-items-center gap-2"
+                className="btn btn-danger btn-sm rounded-3 d-flex align-items-center gap-2"
                 disabled={importando || !archivo || confirmacion !== FRASE_CONFIRMACION}
               >
                 <FiUploadCloud /> {importando ? `Subiendo... ${progreso}%` : "Reemplazar base de datos"}

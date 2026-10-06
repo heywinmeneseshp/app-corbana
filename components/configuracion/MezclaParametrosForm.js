@@ -180,7 +180,7 @@ export default function MezclaParametrosForm() {
             {error && <div className="alert alert-danger py-2 small">{error}</div>}
             {ok && <div className="alert alert-success py-2 small">{ok}</div>}
 
-            <button type="submit" disabled={saving} className="btn btn-brand rounded-3 d-flex align-items-center gap-1">
+            <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1">
               <FiSave /> {saving ? "Guardando..." : "Guardar"}
             </button>
           </form>

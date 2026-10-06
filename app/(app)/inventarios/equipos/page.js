@@ -195,7 +195,7 @@ export default function EquiposInventarioPage() {
             <p className="text-secondary mb-0">Tractores, vehículos, maquinaria y bombas — con repuestos compatibles.</p>
           </div>
           {hasPermission("inventario.equipos.crear") && (
-            <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
+            <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
               <FiPlus /> Nuevo equipo
             </button>
           )}
@@ -492,10 +492,10 @@ export default function EquiposInventarioPage() {
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Guardando..." : "Guardar"}
                 </button>
               </div>
@@ -568,10 +568,10 @@ function TipoModal({ onClose, onCreated }) {
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
         <div className="d-flex justify-content-end gap-2">
-          <button type="button" className="btn btn-outline-secondary rounded-3" onClick={onClose}>
+          <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
             Cancelar
           </button>
-          <button type="submit" className="btn btn-brand rounded-3" disabled={saving || !nombre.trim()}>
+          <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving || !nombre.trim()}>
             {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>

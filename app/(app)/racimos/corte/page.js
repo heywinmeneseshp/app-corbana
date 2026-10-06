@@ -443,7 +443,7 @@ export default function RegistrarCortePage() {
 
                 <button
                   type="button"
-                  className="btn btn-link text-decoration-none d-inline-flex align-items-center gap-1 px-0 mt-2"
+                  className="btn btn-link btn-sm text-decoration-none d-inline-flex align-items-center gap-1 px-0 mt-2"
                   onClick={() => setProcesadoRows((prev) => [...prev, emptyProcesadoRow()])}
                   style={{ width: "fit-content", color: "#16a34a" }}
                 >
@@ -553,7 +553,7 @@ export default function RegistrarCortePage() {
 
                 <button
                   type="button"
-                  className="btn btn-link text-decoration-none d-inline-flex align-items-center gap-1 px-0 mt-2"
+                  className="btn btn-link btn-sm text-decoration-none d-inline-flex align-items-center gap-1 px-0 mt-2"
                   onClick={() => setRecusadoRows((prev) => [...prev, emptyRecusadoRow()])}
                   style={{ width: "fit-content", color: "#a16207" }}
                 >
@@ -574,12 +574,12 @@ export default function RegistrarCortePage() {
                 </div>
               )}
               <div className="d-flex justify-content-end gap-2 mt-3">
-                <button type="button" className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2" onClick={handleLimpiar}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={handleLimpiar}>
                   <FiRotateCcw /> Limpiar
                 </button>
                 <button
                   type="button"
-                  className="btn btn-brand rounded-3 d-flex align-items-center gap-2"
+                  className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2"
                   onClick={() => handleSubmit()}
                   disabled={!puedeRegistrar || saving}
                 >

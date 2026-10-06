@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { FiCloudRain, FiThermometer, FiDroplet, FiWind, FiRefreshCw } from "react-icons/fi";
+import BotonConfiguracion from "@/components/BotonConfiguracion";
 import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
+import EstacionConfigModal from "@/components/EstacionConfigModal";
+import OpenMeteoPanel from "@/components/OpenMeteoPanel";
+import { esAdministrador } from "@/lib/laborEstados";
 
 // Estación meteorológica WeatherLink ("Pantoja 01 Norte") — módulo aparte,
 // de solo consulta: NO alimenta Clima ni Precipitación Diaria (esos
@@ -35,6 +39,17 @@ function Stat({ icon: Icon, label, value, unidad }) {
   );
 }
 
+// Misma altura que un form-control-sm (los botones sin borde no deben quedar
+// más bajos que los inputs de fecha que tienen al lado).
+const ALTO_CONTROL = "calc(1.5em + 0.5rem + 2px)";
+
+// Unidades calóricas del día: (Tmáx + Tmín) / 2 − base (negativo tal cual).
+function calcularUc(h, base) {
+  if (h.temperaturaMaxima == null || h.temperaturaMinima == null) return null;
+  const uc = (Number(h.temperaturaMaxima) + Number(h.temperaturaMinima)) / 2 - base;
+  return Math.round(uc * 100) / 100;
+}
+
 function hoyIso() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "America/Bogota" }); // AAAA-MM-DD
 }
@@ -53,6 +68,10 @@ export default function EstacionMeteorologicaPage() {
   const [sincronizando, setSincronizando] = useState(false);
   const [sincError, setSincError] = useState("");
   const [rellenandoFaltantes, setRellenandoFaltantes] = useState(false);
+  const [modalConfig, setModalConfig] = useState(false);
+  const [tab, setTab] = useState("estacion"); // "estacion" | "openmeteo"
+  const [ucBases, setUcBases] = useState([14]);
+  const esAdmin = esAdministrador();
 
   // Rango para la sincronización manual — arranca en el último mes, mismo
   // criterio que el auto-relleno de faltantes al abrir el módulo.
@@ -63,11 +82,13 @@ export default function EstacionMeteorologicaPage() {
     setLoading(true);
     setError("");
     try {
-      const [actualData, historicoData] = await Promise.all([
+      const [actualData, historicoData, basesData] = await Promise.all([
         apiFetch("/estacion-meteorologica/actual"),
         apiFetch("/estacion-meteorologica/historico"),
+        apiFetch("/estacion-meteorologica/uc-bases").catch(() => [14]),
       ]);
       setActual(actualData);
+      if (Array.isArray(basesData) && basesData.length) setUcBases(basesData);
       setHistorico((historicoData.items || []).slice().reverse());
     } catch (err) {
       setError(err.message);
@@ -118,6 +139,23 @@ export default function EstacionMeteorologicaPage() {
   return (
     <RequirePermission code="estacion_meteorologica.ver">
       <div className="p-3 p-md-4">
+        <ul className="nav nav-tabs mb-3">
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 ${tab === "estacion" ? "active" : ""}`} onClick={() => setTab("estacion")}>
+              Estación
+            </button>
+          </li>
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 ${tab === "openmeteo" ? "active" : ""}`} onClick={() => setTab("openmeteo")}>
+              Open-Meteo
+            </button>
+          </li>
+        </ul>
+
+        {tab === "openmeteo" && <OpenMeteoPanel ucBases={ucBases} esAdmin={esAdmin} onConfigurar={() => setModalConfig(true)} />}
+
+        {tab === "estacion" && (
+          <>
         <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
           <div>
             <h1 className="h4 fw-bold mb-1">Estación Meteorológica</h1>
@@ -147,13 +185,21 @@ export default function EstacionMeteorologicaPage() {
             </div>
             <button
               type="button"
-              className="btn btn-outline-secondary btn-sm rounded-3 d-inline-flex align-items-center gap-1"
+              className="btn btn-light btn-sm border-0 rounded-3 d-inline-flex align-items-center gap-1"
+              style={{ height: ALTO_CONTROL }}
               disabled={sincronizando || !fechaDesde || !fechaHasta}
               onClick={handleSincronizar}
             >
               <FiRefreshCw size={14} className={sincronizando ? "spin" : ""} />
               {sincronizando ? "Sincronizando..." : "Sincronizar rango"}
             </button>
+            {esAdmin && (
+              <BotonConfiguracion
+                alto={ALTO_CONTROL}
+                onClick={() => setModalConfig(true)}
+                title="Configuración: unidades calóricas y alerta cuando la estación no envíe datos"
+              />
+            )}
           </div>
         </div>
 
@@ -218,12 +264,22 @@ export default function EstacionMeteorologicaPage() {
                         <th className="text-center" style={{ color: "#166534" }}>Humedad (%)</th>
                         <th className="text-center" style={{ color: "#166534" }}>Viento (km/h)</th>
                         <th className="text-center" style={{ color: "#166534" }}>Viento máx. (km/h)</th>
+                        {ucBases.map((b) => (
+                          <th
+                            key={b}
+                            className="text-center"
+                            style={{ color: "#166534" }}
+                            title={`Unidades calóricas = (Temp. máx. + Temp. mín.) / 2 − ${b}`}
+                          >
+                            UC (base {b})
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {historico.length === 0 && (
                         <tr>
-                          <td colSpan={8} className="text-center text-secondary small py-3">
+                          <td colSpan={8 + ucBases.length} className="text-center text-secondary small py-3">
                             Sin registros todavía — se sincroniza solo, una vez al día.
                           </td>
                         </tr>
@@ -238,6 +294,11 @@ export default function EstacionMeteorologicaPage() {
                           <td className="small text-center">{h.humedadRelativa ?? "—"}</td>
                           <td className="small text-center">{h.vientoVelocidad ?? "—"}</td>
                           <td className="small text-center">{h.vientoMax ?? "—"}</td>
+                          {ucBases.map((b) => (
+                            <td key={b} className="small text-center">
+                              {calcularUc(h, b) ?? "—"}
+                            </td>
+                          ))}
                         </tr>
                       ))}
                     </tbody>
@@ -245,6 +306,8 @@ export default function EstacionMeteorologicaPage() {
                 </div>
               </div>
             </div>
+          </>
+        )}
           </>
         )}
       </div>
@@ -257,6 +320,7 @@ export default function EstacionMeteorologicaPage() {
           to { transform: rotate(360deg); }
         }
       `}</style>
+      {modalConfig && <EstacionConfigModal ucBases={ucBases} onUcGuardado={(b) => setUcBases(b)} onClose={() => setModalConfig(false)} />}
     </RequirePermission>
   );
 }

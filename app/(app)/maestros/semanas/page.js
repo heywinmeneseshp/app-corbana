@@ -176,7 +176,7 @@ export default function SemanasPage() {
               <button
                 type="submit"
                 disabled={generating}
-                className="btn btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1"
+                className="btn btn-brand btn-sm rounded-3 w-100 d-flex align-items-center justify-content-center gap-1"
               >
                 <FiRefreshCw /> {generating ? "Generando..." : "Generar"}
               </button>

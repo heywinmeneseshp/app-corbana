@@ -185,7 +185,7 @@ export default function LiquidacionRacimosPage() {
               <div className="col-12 col-md-6">
                 <button
                   type="button"
-                  className="btn btn-danger rounded-3 w-100"
+                  className="btn btn-danger btn-sm rounded-3 w-100"
                   disabled={!semanaHastaMasivoUuid || liquidandoMasivo}
                   onClick={liquidarMasivo}
                 >

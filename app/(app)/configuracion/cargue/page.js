@@ -733,7 +733,7 @@ function BulkUploadCard({
       </label>
 
       <div className="d-flex align-items-center justify-content-between">
-        <button type="button" className="btn btn-link text-brand text-decoration-none p-0 small d-inline-flex align-items-center gap-1" onClick={() => inputRef.current?.click()}>
+        <button type="button" className="btn btn-link btn-sm text-brand text-decoration-none p-0 small d-inline-flex align-items-center gap-1" onClick={() => inputRef.current?.click()}>
           Elegir archivo <FiArrowRight />
         </button>
         <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={downloadTemplate}>
@@ -757,7 +757,7 @@ function BulkUploadCard({
       {selectedFile && !parseandoArchivo && !uploading && !result && !preview && (
         <button
           type="button"
-          className="btn btn-brand rounded-3 w-100 mt-3 d-flex align-items-center justify-content-center gap-2"
+          className="btn btn-brand btn-sm rounded-3 w-100 mt-3 d-flex align-items-center justify-content-center gap-2"
           onClick={() => (chunkSize && rawFileRows.length > chunkSize ? handleUploadChunked() : handleUpload())}
         >
           <FiUploadCloud /> Iniciar carga

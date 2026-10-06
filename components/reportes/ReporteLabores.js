@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiCalendar, FiChevronRight, FiAlertTriangle, FiFilter, FiTrash2, FiSettings, FiPlus, FiX } from "react-icons/fi";
+import { FiCalendar, FiChevronRight, FiAlertTriangle, FiFilter, FiTrash2, FiPlus, FiX } from "react-icons/fi";
+import BotonConfiguracion from "@/components/BotonConfiguracion";
 import { GiFarmTractor } from "react-icons/gi";
 import { apiFetch } from "@/lib/api";
 import { esAdministrador } from "@/lib/laborEstados";
@@ -95,14 +96,7 @@ export default function ReporteLabores() {
     <div>
       {esAdministrador() && (
         <div className="d-flex justify-content-end mb-2">
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-secondary rounded-3 d-flex align-items-center gap-1"
-            onClick={() => setModalConfig(true)}
-            title="Configurar rol revisor"
-          >
-            <FiSettings /> Configurar rol revisor
-          </button>
+          <BotonConfiguracion onClick={() => setModalConfig(true)} title="Configurar rol revisor" label="Configurar rol revisor" />
         </div>
       )}
       <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
@@ -422,7 +416,7 @@ function RevisorConfigModal({ onClose }) {
             ))}
           </datalist>
         </div>
-        <button type="submit" className="btn btn-brand rounded-3 d-flex align-items-center gap-1" disabled={creando}>
+        <button type="submit" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1" disabled={creando}>
           <FiPlus /> {creando ? "..." : "Agregar"}
         </button>
       </form>
@@ -520,14 +514,14 @@ function RevisorConfigModal({ onClose }) {
           />
         </div>
 
-        <button type="submit" className="btn btn-outline-secondary rounded-3 w-100 mt-3" disabled={guardandoCc}>
+        <button type="submit" className="btn btn-outline-secondary btn-sm rounded-3 w-100 mt-3" disabled={guardandoCc}>
           {guardandoCc ? "Guardando..." : "Guardar copia (CC)"}
         </button>
         {ccGuardado && <p className="small text-success mb-0 mt-1">Guardado.</p>}
       </form>
 
       <div className="d-flex mt-3">
-        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
           <FiX /> Cerrar
         </button>
       </div>

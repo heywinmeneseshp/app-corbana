@@ -295,7 +295,7 @@ export default function ArticulosInventarioPage() {
             {!verEliminados && hasPermission("inventario.articulos.ver") && (
               <button
                 type="button"
-                className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
+                className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
                 onClick={handleExportar}
                 disabled={exportando}
               >
@@ -303,7 +303,7 @@ export default function ArticulosInventarioPage() {
               </button>
             )}
             {!verEliminados && hasPermission("inventario.articulos.crear") && (
-              <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
+              <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
                 <FiPlus /> Nuevo artículo
               </button>
             )}
@@ -705,10 +705,10 @@ export default function ArticulosInventarioPage() {
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Guardando..." : "Guardar"}
                 </button>
               </div>

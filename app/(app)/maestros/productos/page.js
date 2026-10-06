@@ -67,14 +67,14 @@ export default function ProductosPage() {
             />
           </div>
           {hasPermission("producto.crear") && (
-            <button type="button" className="btn btn-brand rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setProductoModal({})}>
+            <button type="button" className="btn btn-brand btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setProductoModal({})}>
               <FiPlus /> Nuevo Producto
             </button>
           )}
           {hasPermission("producto.crear") && (
             <button
               type="button"
-              className="btn btn-outline-secondary rounded-3 text-nowrap d-flex align-items-center gap-1"
+              className="btn btn-outline-secondary btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1"
               onClick={() => setSyncModal(true)}
             >
               <FiRefreshCw /> Sincronización con Logística
@@ -288,10 +288,10 @@ function ProductoModal({ producto, onClose, onSaved }) {
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
         <div className="d-flex gap-2">
-          <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+          <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
             <FiX /> Cancelar
           </button>
-          <button type="submit" disabled={saving} className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
+          <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
             <FiSave /> {saving ? "Guardando..." : "Guardar Producto"}
           </button>
         </div>
@@ -400,12 +400,12 @@ function SyncModal({ onClose, onSynced }) {
       {result && <div className="alert alert-success py-2 small">{result}</div>}
 
       <div className="d-flex gap-2">
-        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1" onClick={onClose}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1" onClick={onClose}>
           Cerrar
         </button>
         <button
           type="button"
-          className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+          className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
           disabled={syncing || loading}
           onClick={handleSync}
         >

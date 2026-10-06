@@ -104,7 +104,7 @@ export default function PrecipitacionDiariaModal() {
             </div>
           )}
 
-          <button type="submit" className="btn btn-brand w-100 rounded-3 py-2" disabled={!listo || saving}>
+          <button type="submit" className="btn btn-brand btn-sm w-100 rounded-3" disabled={!listo || saving}>
             {saving ? "Guardando..." : "Guardar y continuar"}
           </button>
         </form>

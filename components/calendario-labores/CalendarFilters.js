@@ -97,10 +97,10 @@ export default function CalendarFilters({ lotes, categorias, labores, filtros, o
       </div>
 
       <div className="d-flex justify-content-between gap-2">
-        <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => onChange(FILTROS_VACIOS)}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => onChange(FILTROS_VACIOS)}>
           Limpiar filtros
         </button>
-        <button type="button" className="btn btn-brand rounded-3" onClick={onClose}>
+        <button type="button" className="btn btn-brand btn-sm rounded-3" onClick={onClose}>
           Cerrar
         </button>
       </div>

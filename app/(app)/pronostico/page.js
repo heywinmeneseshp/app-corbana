@@ -191,7 +191,7 @@ export default function PronosticoPage() {
           <div className="d-flex align-items-center gap-2">
             <button
               type="button"
-              className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
               onClick={handleExportar}
               disabled={!data || data.rows.length === 0}
             >

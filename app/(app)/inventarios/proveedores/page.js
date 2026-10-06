@@ -110,7 +110,7 @@ export default function ProveedoresInventarioPage() {
             <p className="text-secondary mb-0">Proveedores de repuestos, insumos y servicios de mantenimiento.</p>
           </div>
           {hasPermission("inventario.proveedores.crear") && (
-            <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
+            <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
               <FiPlus /> Nuevo proveedor
             </button>
           )}
@@ -284,10 +284,10 @@ export default function ProveedoresInventarioPage() {
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Guardando..." : "Guardar"}
                 </button>
               </div>

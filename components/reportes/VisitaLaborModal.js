@@ -195,7 +195,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
               {!visita.revisadoEn && (
                 <button
                   type="button"
-                  className="btn btn-outline-success rounded-3 d-flex align-items-center gap-1 text-nowrap"
+                  className="btn btn-outline-success btn-sm rounded-3 d-flex align-items-center gap-1 text-nowrap"
                   onClick={handleMarcarRevisada}
                   disabled={revisando}
                 >
@@ -204,7 +204,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
               )}
               <button
                 type="button"
-                className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-1 text-nowrap"
+                className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-1 text-nowrap"
                 onClick={handleExportarPdf}
                 disabled={generandoPdf}
               >
@@ -212,7 +212,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
               </button>
               <button
                 type="button"
-                className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-1 text-nowrap"
+                className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-1 text-nowrap"
                 onClick={handleExportarWord}
                 disabled={generandoWord}
               >

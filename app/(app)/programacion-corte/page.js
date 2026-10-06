@@ -138,7 +138,7 @@ export default function ProgramacionCortePage() {
             {hasPermission("programacion_corte.crear") && (
               <button
                 type="button"
-                className="btn btn-outline-secondary rounded-3 text-nowrap d-flex align-items-center gap-1"
+                className="btn btn-outline-secondary btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1"
                 onClick={() => setSyncModal(true)}
               >
                 <FiRefreshCw /> Sincronización con Logística
@@ -172,7 +172,7 @@ export default function ProgramacionCortePage() {
               </select>
             </div>
             <div className="col-12 col-md-4">
-              <button type="button" className="btn btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={() => loadReporte(1)}>
+              <button type="button" className="btn btn-brand btn-sm rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={() => loadReporte(1)}>
                 <FiFilter /> Filtrar
               </button>
             </div>
@@ -362,12 +362,12 @@ function SyncModal({ semanas, onClose, onSynced }) {
           {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
           <div className="d-flex gap-2">
-            <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+            <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
               <FiX /> Cancelar
             </button>
             <button
               type="button"
-              className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+              className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
               disabled={sincronizando || !semanaUuid}
               onClick={handleSincronizar}
             >
@@ -410,7 +410,7 @@ function SyncModal({ semanas, onClose, onSynced }) {
             </div>
           )}
           <div className="d-flex justify-content-end">
-            <button type="button" className="btn btn-brand rounded-3" onClick={onClose}>
+            <button type="button" className="btn btn-brand btn-sm rounded-3" onClick={onClose}>
               Cerrar
             </button>
           </div>

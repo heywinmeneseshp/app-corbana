@@ -333,7 +333,7 @@ export default function ImportarPendientesPage() {
                   </span>
                 )}
               </p>
-              <button type="button" className="btn btn-brand rounded-3" onClick={handleImportarTodo}>
+              <button type="button" className="btn btn-brand btn-sm rounded-3" onClick={handleImportarTodo}>
                 <FiUploadCloud className="me-2" /> Importar {filas.length} pendiente(s)
               </button>
             </>

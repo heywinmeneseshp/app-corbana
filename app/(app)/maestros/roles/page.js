@@ -94,7 +94,7 @@ export default function RolesPage() {
           />
         </div>
         {hasPermission("roles.crear") && (
-          <button type="button" className="btn btn-brand rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setRoleModal({})}>
+          <button type="button" className="btn btn-brand btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setRoleModal({})}>
             <FiPlus /> Nuevo Rol
           </button>
         )}
@@ -290,10 +290,10 @@ function RoleModal({ rol, onClose, onSaved }) {
         </div>
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
         <div className="d-flex gap-2">
-          <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+          <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
             <FiX /> Cancelar
           </button>
-          <button type="submit" disabled={saving} className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
+          <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
             <FiSave /> {saving ? "Guardando..." : "Guardar Rol"}
           </button>
         </div>
@@ -382,13 +382,13 @@ function PermisosModal({ rol, onClose }) {
       )}
 
       <div className="d-flex gap-2 mt-3">
-        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
           <FiX /> Cancelar
         </button>
         <button
           type="button"
           disabled={saving || loading}
-          className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+          className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
           onClick={handleGuardar}
         >
           <FiSave /> {saving ? "Guardando..." : "Guardar"}

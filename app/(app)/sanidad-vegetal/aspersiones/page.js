@@ -2,7 +2,8 @@
 
 import { useEffect, useId, useMemo, useState, useRef } from "react";
 import ExcelJS from "exceljs";
-import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSettings, FiSend, FiAlertTriangle, FiInfo } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSend, FiAlertTriangle, FiInfo } from "react-icons/fi";
+import BotonConfiguracion from "@/components/BotonConfiguracion";
 import { apiFetch, apiFetchFormData, apiUpload } from "@/lib/api";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
@@ -1735,14 +1736,10 @@ export default function AspersionesPage() {
             </button>
           </div>
           {esAdmin && (
-            <button
-              type="button"
-              className="btn btn-link p-1 d-inline-flex align-items-center justify-content-center text-secondary"
+            <BotonConfiguracion
               onClick={() => setModalDestinatarios(true)}
               title="Configurar destinatarios del correo de aviso y cancelación"
-            >
-              <FiSettings size={18} />
-            </button>
+            />
           )}
         </div>
 
@@ -2040,7 +2037,7 @@ export default function AspersionesPage() {
                 </div>
                 <button
                   type="button"
-                  className="btn btn-link text-secondary p-1"
+                  className="btn btn-link btn-sm text-secondary p-1"
                   disabled={!semanaActiva || semanas.findIndex((s) => s.uuid === semanaActivaUuid) <= 0}
                   onClick={() => irSemana(-1)}
                   aria-label="Semana anterior"
@@ -2057,7 +2054,7 @@ export default function AspersionesPage() {
                 </div>
                 <button
                   type="button"
-                  className="btn btn-link text-secondary p-1"
+                  className="btn btn-link btn-sm text-secondary p-1"
                   disabled={!semanaActiva || semanas.findIndex((s) => s.uuid === semanaActivaUuid) >= semanas.length - 1}
                   onClick={() => irSemana(1)}
                   aria-label="Semana siguiente"
@@ -3138,10 +3135,10 @@ export default function AspersionesPage() {
               {formError && <div className="alert alert-danger py-2 small mb-3">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Guardando..." : editingUuid ? "Guardar cambios" : "Programar"}
                 </button>
               </div>
@@ -3298,12 +3295,12 @@ export default function AspersionesPage() {
             )}
 
             <div className="d-flex justify-content-end gap-2 mt-3">
-              <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setCargueModalOpen(false)}>
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setCargueModalOpen(false)}>
                 Cerrar
               </button>
               <button
                 type="button"
-                className="btn btn-brand rounded-3"
+                className="btn btn-brand btn-sm rounded-3"
                 disabled={!cargueArchivo || cargando}
                 onClick={handleSubirCargue}
               >
@@ -3524,10 +3521,10 @@ function ModalConfigDestinatarios({ onClose }) {
           </div>
 
           <div className="d-flex gap-2 mt-4">
-            <button type="submit" className="btn btn-brand rounded-3 flex-grow-1" disabled={guardando}>
+            <button type="submit" className="btn btn-brand btn-sm rounded-3 flex-grow-1" disabled={guardando}>
               {guardando ? "Guardando..." : "Guardar"}
             </button>
-            <button type="button" className="btn btn-outline-secondary rounded-3" onClick={onClose}>
+            <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
               Cerrar
             </button>
           </div>

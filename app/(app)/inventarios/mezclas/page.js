@@ -153,13 +153,13 @@ export default function MezclasPage() {
           <div className="d-flex gap-2">
             <button
               type="button"
-              className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
               onClick={() => router.push("/inventarios/mezclas/historial")}
             >
               <FiClock /> Historial
             </button>
             {hasPermission("inventario.mezclas.crear") && (
-              <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
+              <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
                 <FiPlus /> Nueva prueba
               </button>
             )}
@@ -349,10 +349,10 @@ export default function MezclasPage() {
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Creando..." : "Crear y continuar"}
                 </button>
               </div>

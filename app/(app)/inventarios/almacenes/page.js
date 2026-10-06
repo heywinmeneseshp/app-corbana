@@ -135,7 +135,7 @@ export default function AlmacenesInventarioPage() {
             <p className="text-secondary mb-0">Ubicaciones físicas y centros de costo donde se controla el inventario.</p>
           </div>
           {hasPermission("inventario.almacenes.crear") && (
-            <button type="button" className="btn btn-brand rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
+            <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
               <FiPlus /> Nuevo almacén
             </button>
           )}
@@ -349,10 +349,10 @@ export default function AlmacenesInventarioPage() {
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Guardando..." : "Guardar"}
                 </button>
               </div>

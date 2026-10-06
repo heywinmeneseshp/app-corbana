@@ -147,7 +147,7 @@ export default function UsuariosPage() {
             onKeyDown={(e) => e.key === "Enter" && loadUsuarios()}
           />
         </div>
-        <button type="button" className="btn btn-brand rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setUsuarioModal({})}>
+        <button type="button" className="btn btn-brand btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setUsuarioModal({})}>
           <FiPlus /> Nuevo Usuario
         </button>
       </div>
@@ -360,7 +360,7 @@ export default function UsuariosPage() {
               <div className="d-flex">
                 <button
                   type="button"
-                  className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+                  className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
                   onClick={closeResetModal}
                 >
                   <FiCheck /> Listo
@@ -377,7 +377,7 @@ export default function UsuariosPage() {
               <div className="d-flex gap-2">
                 <button
                   type="button"
-                  className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+                  className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
                   onClick={() => setResetModal(false)}
                 >
                   <FiX /> Cancelar
@@ -385,7 +385,7 @@ export default function UsuariosPage() {
                 <button
                   type="button"
                   disabled={resetting}
-                  className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+                  className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
                   onClick={handleBulkReset}
                 >
                   <FiRefreshCw /> {resetting ? "Restableciendo..." : "Sí, restablecer"}
@@ -561,10 +561,10 @@ function UsuarioModal({ usuario, onClose, onSaved }) {
         </div>
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
         <div className="d-flex gap-2">
-          <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+          <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
             <FiX /> Cancelar
           </button>
-          <button type="submit" disabled={saving} className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
+          <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
             <FiSave /> {saving ? "Guardando..." : "Guardar Usuario"}
           </button>
         </div>
@@ -645,13 +645,13 @@ function RolesModal({ usuario, onClose, onChanged }) {
       )}
 
       <div className="d-flex gap-2 mt-3">
-        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
           <FiX /> Cancelar
         </button>
         <button
           type="button"
           disabled={saving || loading}
-          className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+          className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
           onClick={handleGuardar}
         >
           <FiSave /> {saving ? "Guardando..." : "Guardar"}
@@ -739,13 +739,13 @@ function FincasModal({ usuario, onClose, onChanged }) {
       )}
 
       <div className="d-flex gap-2 mt-3">
-        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
           <FiX /> Cancelar
         </button>
         <button
           type="button"
           disabled={saving || loading}
-          className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+          className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
           onClick={handleGuardar}
         >
           <FiSave /> {saving ? "Guardando..." : "Guardar"}
@@ -830,13 +830,13 @@ function AlmacenesModal({ usuario, onClose, onChanged }) {
       )}
 
       <div className="d-flex gap-2 mt-3">
-        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
           <FiX /> Cancelar
         </button>
         <button
           type="button"
           disabled={saving || loading}
-          className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+          className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
           onClick={handleGuardar}
         >
           <FiSave /> {saving ? "Guardando..." : "Guardar"}

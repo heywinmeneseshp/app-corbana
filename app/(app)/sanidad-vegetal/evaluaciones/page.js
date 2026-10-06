@@ -43,7 +43,7 @@ export default function SanidadEvaluacionesPage() {
           <li className="nav-item">
             <button
               type="button"
-              className={`nav-link rounded-3 ${tab === TAB_INDICADORES ? "btn-brand text-white" : "btn btn-outline-secondary"}`}
+              className={`nav-link rounded-3 ${tab === TAB_INDICADORES ? "btn-brand text-white" : "btn btn-outline-secondary btn-sm"}`}
               onClick={() => setTab(TAB_INDICADORES)}
             >
               <FiTrendingUp className="me-1" /> Indicadores
@@ -53,7 +53,7 @@ export default function SanidadEvaluacionesPage() {
             <li className="nav-item" key={t.key}>
               <button
                 type="button"
-                className={`nav-link rounded-3 ${tab === t.key ? "btn-brand text-white" : "btn btn-outline-secondary"}`}
+                className={`nav-link rounded-3 ${tab === t.key ? "btn-brand text-white" : "btn btn-outline-secondary btn-sm"}`}
                 onClick={() => setTab(t.key)}
               >
                 {t.label}

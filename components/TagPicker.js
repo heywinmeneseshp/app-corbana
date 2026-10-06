@@ -83,7 +83,7 @@ export default function TagPicker({ items, selected, onChange, placeholder }) {
                 <button
                   key={item.uuid}
                   type="button"
-                  className="btn btn-light w-100 text-start rounded-0 border-0 py-2 px-3 small"
+                  className="btn btn-light btn-sm w-100 text-start rounded-0 border-0 py-2 px-3 small"
                   onClick={() => addItem(item)}
                 >
                   {item.label}

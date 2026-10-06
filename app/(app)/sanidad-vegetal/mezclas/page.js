@@ -1857,7 +1857,7 @@ export default function ElaboracionesPage() {
               </div>
               <button
                 type="button"
-                className="btn btn-link text-decoration-none d-inline-flex align-items-center gap-1 px-0 mb-3"
+                className="btn btn-link btn-sm text-decoration-none d-inline-flex align-items-center gap-1 px-0 mb-3"
                 onClick={addInsumoRow}
               >
                 <FiPlus size={14} /> Agregar insumo
@@ -1901,10 +1901,10 @@ export default function ElaboracionesPage() {
               </div>
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Creando..." : "Crear receta"}
                 </button>
               </div>
@@ -2123,13 +2123,13 @@ export default function ElaboracionesPage() {
               {detalleMezcla?.versiones?.[0]?.esDirecta === false && (
                 <button
                   type="button"
-                  className="btn btn-outline-secondary rounded-3"
+                  className="btn btn-outline-secondary btn-sm rounded-3"
                   onClick={() => router.push(`/inventarios/mezclas/${detalleMezcla.uuid}`)}
                 >
                   Ver prueba de laboratorio
                 </button>
               )}
-              <button type="button" className="btn btn-brand rounded-3" onClick={() => setDetalleOpen(false)}>
+              <button type="button" className="btn btn-brand btn-sm rounded-3" onClick={() => setDetalleOpen(false)}>
                 Cerrar
               </button>
             </div>
@@ -2464,7 +2464,7 @@ export default function ElaboracionesPage() {
                   </div>
                   <button
                     type="button"
-                    className="btn btn-link text-decoration-none d-inline-flex align-items-center gap-1 px-0 mb-3"
+                    className="btn btn-link btn-sm text-decoration-none d-inline-flex align-items-center gap-1 px-0 mb-3"
                     onClick={addEditarInsumoRow}
                   >
                     <FiPlus size={14} /> Agregar insumo

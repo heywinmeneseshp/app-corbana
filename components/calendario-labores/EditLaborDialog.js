@@ -199,7 +199,7 @@ export default function EditLaborDialog({ ocurrencia, onClose, onChanged }) {
           {puedeEliminar ? (
             <button
               type="button"
-              className="btn btn-outline-danger rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-outline-danger btn-sm rounded-3 d-flex align-items-center gap-2"
               onClick={handleDelete}
               disabled={saving}
             >
@@ -209,11 +209,11 @@ export default function EditLaborDialog({ ocurrencia, onClose, onChanged }) {
             <span />
           )}
           <div className="d-flex gap-2">
-            <button type="button" className="btn btn-outline-secondary rounded-3" onClick={onClose}>
+            <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
               Cerrar
             </button>
             {puedeEditar && (
-              <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+              <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                 {saving ? "Guardando..." : "Guardar"}
               </button>
             )}

@@ -463,7 +463,7 @@ export default function ComunicadosPage() {
                 <div className="d-flex justify-content-end mt-4">
                   <button
                     type="submit"
-                    className="btn btn-brand rounded-3 d-flex align-items-center gap-2 px-4"
+                    className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2 px-4"
                     disabled={enviando || !formularioListo}
                   >
                     <FiSend /> {enviando ? "Enviando..." : "Enviar comunicado"}
@@ -746,7 +746,7 @@ export default function ComunicadosPage() {
               )
             )}
             <div className="d-flex justify-content-end mt-3">
-              <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setDetalleOpen(false)}>
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setDetalleOpen(false)}>
                 Cerrar
               </button>
             </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiAlertTriangle, FiCheckCircle, FiCalendar, FiTrendingDown, FiTrendingUp, FiSettings, FiSend, FiX } from "react-icons/fi";
+import { FiAlertTriangle, FiCheckCircle, FiCalendar, FiTrendingDown, FiTrendingUp, FiSend, FiX } from "react-icons/fi";
+import BotonConfiguracion from "@/components/BotonConfiguracion";
 import { apiFetch } from "@/lib/api";
 import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
@@ -105,22 +106,18 @@ export default function SanidadAlertasPage() {
               <>
                 <button
                   type="button"
-                  className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-1"
+                  className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-1"
                   onClick={handleEnviarAhora}
                   disabled={enviando || !data?.semana}
                   title="Enviar por correo las alertas de la semana seleccionada, ahora mismo"
                 >
                   <FiSend /> {enviando ? "Enviando..." : "Enviar ahora"}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary rounded-3 d-flex align-items-center justify-content-center"
-                  style={{ width: 38 }}
+                <BotonConfiguracion
+                  alto={38}
                   onClick={() => setModalConfig(true)}
                   title="Configurar destinatarios del correo de alertas"
-                >
-                  <FiSettings />
-                </button>
+                />
               </>
             )}
             <div>
@@ -371,10 +368,10 @@ function ModalConfigDestinatarios({ onClose }) {
           </div>
 
           <div className="d-flex gap-2 mt-4">
-            <button type="submit" className="btn btn-brand rounded-3 flex-grow-1" disabled={guardando}>
+            <button type="submit" className="btn btn-brand btn-sm rounded-3 flex-grow-1" disabled={guardando}>
               {guardando ? "Guardando..." : "Guardar"}
             </button>
-            <button type="button" className="btn btn-outline-secondary rounded-3" onClick={onClose}>
+            <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
               Cerrar
             </button>
           </div>

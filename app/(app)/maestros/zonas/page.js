@@ -107,7 +107,7 @@ export default function ZonasPage() {
             />
           </div>
           {hasPermission("zona.crear") && (
-            <button type="button" className="btn btn-brand rounded-3 text-nowrap d-flex align-items-center gap-2 px-3" onClick={openCreate}>
+            <button type="button" className="btn btn-brand btn-sm rounded-3 text-nowrap d-flex align-items-center gap-2 px-3" onClick={openCreate}>
               <FiPlus size={15} /> Nueva Zona
             </button>
           )}
@@ -238,10 +238,10 @@ export default function ZonasPage() {
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-light rounded-3" onClick={() => setZonaModal(null)}>
+                <button type="button" className="btn btn-light btn-sm rounded-3" onClick={() => setZonaModal(null)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={saving}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Guardando..." : "Guardar"}
                 </button>
               </div>
@@ -329,13 +329,13 @@ function FincasZonaModal({ zona, onClose, onChanged }) {
       )}
 
       <div className="d-flex gap-2 mt-3">
-        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
           <FiX /> Cancelar
         </button>
         <button
           type="button"
           disabled={saving || loading}
-          className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+          className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
           onClick={handleGuardar}
         >
           <FiSave /> {saving ? "Guardando..." : "Guardar"}

@@ -216,10 +216,10 @@ function ModalUmbralesSbHoja({ umbrales, onClose, onGuardado }) {
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
         <div className="d-flex justify-content-end gap-2">
-          <button type="button" className="btn btn-light rounded-3" onClick={onClose}>
+          <button type="button" className="btn btn-light btn-sm rounded-3" onClick={onClose}>
             <FiX className="me-1" /> Cancelar
           </button>
-          <button type="submit" className="btn btn-brand rounded-3" disabled={guardando}>
+          <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={guardando}>
             {guardando ? "Guardando..." : "Guardar"}
           </button>
         </div>
@@ -264,7 +264,7 @@ export default function SanidadGraficosPage() {
             <li className="nav-item" key={t.key}>
               <button
                 type="button"
-                className={`nav-link rounded-3 ${tab === t.key ? "btn-brand text-white" : "btn btn-outline-secondary"}`}
+                className={`nav-link rounded-3 ${tab === t.key ? "btn-brand text-white" : "btn btn-outline-secondary btn-sm"}`}
                 onClick={() => setTab(t.key)}
               >
                 {t.label}

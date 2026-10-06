@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { FiMaximize2, FiSettings } from "react-icons/fi";
+import { FiMaximize2 } from "react-icons/fi";
+import BotonConfiguracion from "@/components/BotonConfiguracion";
 import { apiFetch } from "@/lib/api";
 import { TooltipEdad } from "@/components/reportes/PromedioPorEdadChart";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
@@ -92,15 +93,7 @@ export default function PromedioSumaBrutaPorHojaChart({
         </span>
         <div className="d-flex align-items-center gap-2">
           {onConfigurar && (
-            <button
-              type="button"
-              className="btn btn-sm p-0 border-0 text-secondary"
-              title="Configurar líneas de referencia"
-              onClick={onConfigurar}
-              style={{ fontSize: "0.9rem" }}
-            >
-              <FiSettings />
-            </button>
+            <BotonConfiguracion compacto title="Configurar líneas de referencia" onClick={onConfigurar} />
           )}
           {onExpand && (
             <button

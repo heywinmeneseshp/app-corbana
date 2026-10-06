@@ -277,7 +277,7 @@ export default function PrecipitacionDiariaPage() {
           {hasPermission("precipitacion_diaria.configurar") && (
             <button
               type="button"
-              className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-1 text-nowrap"
+              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-1 text-nowrap"
               onClick={() => setModalConfig(true)}
               title="Configuración de captura obligatoria"
             >
@@ -383,7 +383,7 @@ export default function PrecipitacionDiariaPage() {
                 <button
                   type="button"
                   onClick={() => setMostrarInconsistencias((v) => !v)}
-                  className="btn btn-link p-0 text-decoration-none text-reset w-100 d-flex align-items-center justify-content-between"
+                  className="btn btn-link btn-sm p-0 text-decoration-none text-reset w-100 d-flex align-items-center justify-content-between"
                 >
                   <h2 className="h6 fw-semibold mb-0 d-flex align-items-center gap-2">
                     <FiAlertTriangle className="text-warning" /> Inconsistencias con Clima
@@ -593,7 +593,7 @@ export default function PrecipitacionDiariaPage() {
                   </datalist>
                 </div>
                 <div className="col-md-2">
-                  <button type="submit" className="btn btn-brand w-100 rounded-3 d-flex align-items-center justify-content-center gap-1" disabled={creando}>
+                  <button type="submit" className="btn btn-brand btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-1" disabled={creando}>
                     <FiPlus /> {creando ? "..." : "Agregar"}
                   </button>
                 </div>

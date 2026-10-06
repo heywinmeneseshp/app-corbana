@@ -1244,7 +1244,7 @@ export default function MezclaPruebaDetallePage() {
     return (
       <div className="p-4 p-md-5">
         <div className="alert alert-danger py-2 small">{error || "Prueba no encontrada."}</div>
-        <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => router.push("/inventarios/mezclas")}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => router.push("/inventarios/mezclas")}>
           <FiArrowLeft className="me-1" /> Volver
         </button>
       </div>
@@ -1871,7 +1871,7 @@ export default function MezclaPruebaDetallePage() {
 
         <div className="mb-4 d-flex justify-content-end gap-2">
             {version.estadoPrueba === "OPTIMA" && !version.elaboracionGenerada && puedeElaborar && (
-              <button type="button" className="btn btn-success rounded-3 d-flex align-items-center gap-2" onClick={openElaboradoModal}>
+              <button type="button" className="btn btn-success btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openElaboradoModal}>
                 <FiCheckCircle /> Aprobar
               </button>
             )}
@@ -1883,7 +1883,7 @@ export default function MezclaPruebaDetallePage() {
             {version.estadoPrueba === "PENDIENTE_APROBACION" && (
               <button
                 type="button"
-                className="btn btn-brand rounded-3 d-flex align-items-center gap-2"
+                className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2"
                 disabled={aprobando}
                 onClick={handleAprobar}
               >
@@ -2510,12 +2510,12 @@ export default function MezclaPruebaDetallePage() {
               </div>
               {elaboradoError && <div className="alert alert-danger py-2 small">{elaboradoError}</div>}
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setElaboradoModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setElaboradoModalOpen(false)}>
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-brand rounded-3"
+                  className="btn btn-brand btn-sm rounded-3"
                   disabled={creandoElaborado || (!mezcla.articuloElaborado && categoriasElaborado.length === 0)}
                 >
                   {creandoElaborado ? "Aprobando..." : "Crear elaborado y aprobar"}
@@ -2548,10 +2548,10 @@ export default function MezclaPruebaDetallePage() {
               </div>
               {categoriaError && <div className="alert alert-danger py-2 small">{categoriaError}</div>}
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary rounded-3" onClick={() => setCategoriaModalOpen(false)}>
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setCategoriaModalOpen(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-brand rounded-3" disabled={guardandoCategoria}>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={guardandoCategoria}>
                   {guardandoCategoria ? "Creando..." : "Crear categoría"}
                 </button>
               </div>

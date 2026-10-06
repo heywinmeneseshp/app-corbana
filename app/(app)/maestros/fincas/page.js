@@ -15,7 +15,7 @@ import {
   FiUpload,
   FiDownload,
 } from "react-icons/fi";
-import { MapContainer, TileLayer, Polygon } from "react-leaflet";
+import { MapContainer, TileLayer, Polygon, CircleMarker, Tooltip } from "react-leaflet";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 import RequirePermission from "@/components/RequirePermission";
@@ -32,6 +32,7 @@ export default function FincasPage() {
   const [fincaModal, setFincaModal] = useState(null); // null | {} | finca
   const [lotesModal, setLotesModal] = useState(null); // null | finca
   const [syncModal, setSyncModal] = useState(false);
+  const [mapaFincasOpen, setMapaFincasOpen] = useState(false); // mapa con las coordenadas de todas las fincas
   const [perimetroModal, setPerimetroModal] = useState(null); // null | finca (a visualizar en el mapa)
   const [importandoUuid, setImportandoUuid] = useState(""); // finca.uuid en curso de importar un .kml
   const [perimetroError, setPerimetroError] = useState("");
@@ -141,14 +142,14 @@ export default function FincasPage() {
           />
         </div>
         {hasPermission("finca.crear") && (
-          <button type="button" className="btn btn-brand rounded-3 text-nowrap d-flex align-items-center gap-2 px-3" onClick={() => setFincaModal({})}>
+          <button type="button" className="btn btn-brand btn-sm rounded-3 text-nowrap d-flex align-items-center gap-2 px-3" onClick={() => setFincaModal({})}>
             <FiPlus size={15} /> Nueva Finca
           </button>
         )}
         {hasPermission("finca.crear") && (
           <button
             type="button"
-            className="btn btn-light rounded-3 text-nowrap d-flex align-items-center gap-2 px-3 text-secondary"
+            className="btn btn-light btn-sm rounded-3 text-nowrap d-flex align-items-center gap-2 px-3 text-secondary"
             onClick={() => setSyncModal(true)}
           >
             <FiRefreshCw size={15} /> Sincronización con Logística
@@ -186,6 +187,16 @@ export default function FincasPage() {
                   />
                 </th>
                 <th className="fw-medium">Finca</th>
+                <th className="fw-medium text-center">
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm p-0 fw-medium text-secondary text-decoration-none"
+                    onClick={() => setMapaFincasOpen(true)}
+                    title="Ver todas las fincas en un mapa"
+                  >
+                    Coordenadas
+                  </button>
+                </th>
                 <th className="fw-medium text-center">Plot</th>
                 <th className="fw-medium text-center">Acciones</th>
                 <th className="fw-medium text-center">Estado</th>
@@ -194,14 +205,14 @@ export default function FincasPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={5} className="text-center text-secondary py-4">
+                  <td colSpan={6} className="text-center text-secondary py-4">
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && fincas.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center text-secondary py-4">
+                  <td colSpan={6} className="text-center text-secondary py-4">
                     No hay fincas registradas todavía.
                   </td>
                 </tr>
@@ -227,6 +238,20 @@ export default function FincasPage() {
                         )}
                       </p>
                       <p className="small text-secondary mb-0">Código: {finca.codigo}</p>
+                    </td>
+                    <td className="text-center small text-nowrap">
+                      {finca.latitud != null && finca.longitud != null ? (
+                        <a
+                          href={`https://www.google.com/maps?q=${Number(finca.latitud)},${Number(finca.longitud)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Ver ubicación en Google Maps"
+                        >
+                          {Number(finca.latitud).toFixed(6)}, {Number(finca.longitud).toFixed(6)}
+                        </a>
+                      ) : (
+                        <span className="text-secondary">—</span>
+                      )}
                     </td>
                     <td className="text-center">
                       <div className="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
@@ -353,6 +378,7 @@ export default function FincasPage() {
 
       {syncModal && <SyncModal onClose={() => setSyncModal(false)} onSynced={loadFincas} />}
 
+      {mapaFincasOpen && <MapaFincasModal fincas={fincas} onClose={() => setMapaFincasOpen(false)} />}
       {perimetroModal && <VerPerimetroModal finca={perimetroModal} onClose={() => setPerimetroModal(null)} />}
     </div>
     </RequirePermission>
@@ -366,6 +392,9 @@ function FincaModal({ finca, onClose, onSaved }) {
   const [estado, setEstado] = useState(finca ? finca.estado : true);
   const [esExterna, setEsExterna] = useState(finca?.esExterna || false);
   const [grupoFincaUuid, setGrupoFincaUuid] = useState(finca?.grupoFinca?.uuid || "");
+  // Coordenadas de la finca (grados decimales) — las usa Open-Meteo.
+  const [latitud, setLatitud] = useState(finca?.latitud != null ? String(finca.latitud) : "");
+  const [longitud, setLongitud] = useState(finca?.longitud != null ? String(finca.longitud) : "");
   const [grupos, setGrupos] = useState([]);
   const [fincasHermanas, setFincasHermanas] = useState([]);
   const [error, setError] = useState("");
@@ -394,7 +423,20 @@ function FincaModal({ finca, onClose, onSaved }) {
     setError("");
     setSaving(true);
     try {
-      const payload = { nombre, codigo, estado, esExterna, grupoFincaUuid: grupoFincaUuid || null };
+      const num = (v) => (String(v).trim() === "" ? null : Number(String(v).replace(",", ".")));
+      const lat = num(latitud);
+      const lng = num(longitud);
+      if ((lat === null) !== (lng === null)) {
+        setError("Para guardar las coordenadas completa latitud y longitud.");
+        setSaving(false);
+        return;
+      }
+      if (lat !== null && (Number.isNaN(lat) || Number.isNaN(lng))) {
+        setError("Las coordenadas deben ser números (ej. 7.8800 y -76.6300).");
+        setSaving(false);
+        return;
+      }
+      const payload = { nombre, codigo, estado, esExterna, grupoFincaUuid: grupoFincaUuid || null, latitud: lat, longitud: lng };
       await apiFetch(finca ? `/fincas/${finca.uuid}` : "/fincas", {
         method: finca ? "PUT" : "POST",
         body: JSON.stringify(payload),
@@ -456,6 +498,36 @@ function FincaModal({ finca, onClose, onSaved }) {
             </div>
           )}
         </div>
+        <div className="mb-3">
+          <label className="form-label small fw-medium">Coordenadas (opcional)</label>
+          <div className="row g-2">
+            <div className="col-6">
+              <input
+                type="number"
+                step="any"
+                min="-90"
+                max="90"
+                className="form-control rounded-3"
+                placeholder="Latitud (ej. 7.8800)"
+                value={latitud}
+                onChange={(e) => setLatitud(e.target.value)}
+              />
+            </div>
+            <div className="col-6">
+              <input
+                type="number"
+                step="any"
+                min="-180"
+                max="180"
+                className="form-control rounded-3"
+                placeholder="Longitud (ej. -76.6300)"
+                value={longitud}
+                onChange={(e) => setLongitud(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="form-text">Se usan para consultar el clima de la finca en Estación Meteorológica &gt; Open-Meteo.</div>
+        </div>
         <div className="form-check mb-3">
           <input
             type="checkbox"
@@ -486,14 +558,46 @@ function FincaModal({ finca, onClose, onSaved }) {
         </div>
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
         <div className="d-flex gap-2">
-          <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+          <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
             <FiX /> Cancelar
           </button>
-          <button type="submit" disabled={saving} className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
+          <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
             <FiSave /> {saving ? "Guardando..." : "Guardar Finca"}
           </button>
         </div>
       </form>
+    </ModalShell>
+  );
+}
+
+// ─── Modal: mapa con las coordenadas de todas las fincas ───
+function MapaFincasModal({ fincas, onClose }) {
+  const puntos = fincas
+    .filter((f) => f.latitud != null && f.longitud != null)
+    .map((f) => ({ uuid: f.uuid, nombre: f.nombre, pos: [Number(f.latitud), Number(f.longitud)] }));
+
+  return (
+    <ModalShell title={`Ubicación de las fincas (${puntos.length})`} onClose={onClose} fullscreen>
+      <div className="flex-grow-1" style={{ minHeight: 0 }}>
+        {puntos.length === 0 ? (
+          <div className="text-secondary small p-4 text-center">Ninguna finca tiene coordenadas todavía.</div>
+        ) : (
+          <MapContainer bounds={puntos.map((p) => p.pos)} boundsOptions={{ padding: [50, 50] }} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+            <TileLayer
+              attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+            {puntos.map((p) => (
+              <CircleMarker key={p.uuid} center={p.pos} radius={6} pathOptions={{ color: "#ffffff", weight: 2, fillColor: "#dc2626", fillOpacity: 1 }}>
+                <Tooltip permanent direction="right" offset={[8, 0]}>
+                  {p.nombre}
+                </Tooltip>
+              </CircleMarker>
+            ))}
+          </MapContainer>
+        )}
+      </div>
     </ModalShell>
   );
 }
@@ -1137,10 +1241,10 @@ function SyncModal({ onClose, onSynced }) {
       {result && <div className="alert alert-success py-2 small">{result}</div>}
 
       <div className="d-flex gap-2">
-        <button type="button" className="btn btn-outline-secondary rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
           <FiX /> Cancelar
         </button>
-        <button type="button" disabled={syncing} className="btn btn-brand rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={handleSync}>
+        <button type="button" disabled={syncing} className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={handleSync}>
           <FiRefreshCw /> {syncing ? "Sincronizando..." : "Sincronizar seleccionados"}
         </button>
       </div>

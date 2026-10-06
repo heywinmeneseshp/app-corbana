@@ -229,7 +229,7 @@ export default function MovimientosPage() {
           <div className="d-flex align-items-center gap-2">
             <button
               type="button"
-              className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
               onClick={exportToExcel}
             >
               <FiDownload /> Exportar Excel
@@ -237,7 +237,7 @@ export default function MovimientosPage() {
             <div className="position-relative">
               <button
                 type="button"
-                className="btn btn-brand rounded-3 d-flex align-items-center gap-2"
+                className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2"
                 onClick={() => setNuevoOpen((v) => !v)}
               >
                 <FiPlus /> Nuevo Movimiento
