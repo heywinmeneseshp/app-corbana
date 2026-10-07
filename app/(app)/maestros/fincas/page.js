@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   FiPlus,
   FiRefreshCw,
@@ -10,12 +10,14 @@ import {
   FiTrash2,
   FiSave,
   FiX,
+  FiClock,
   FiMap,
   FiUpload,
   FiDownload,
 } from "react-icons/fi";
 import { MapContainer, TileLayer, Polygon, CircleMarker, Tooltip } from "react-leaflet";
-import { apiFetch } from "@/lib/api";
+import ExcelJS from "exceljs";
+import { apiFetch, apiFetchFormData } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 import RequirePermission from "@/components/RequirePermission";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
@@ -31,6 +33,7 @@ export default function FincasPage() {
   const [fincaModal, setFincaModal] = useState(null); // null | {} | finca
   const [lotesModal, setLotesModal] = useState(null); // null | finca
   const [syncModal, setSyncModal] = useState(false);
+  const [areasMasivoModal, setAreasMasivoModal] = useState(false);
   const [mapaFincasOpen, setMapaFincasOpen] = useState(false); // mapa con las coordenadas de todas las fincas
   const [perimetroModal, setPerimetroModal] = useState(null); // null | finca (a visualizar en el mapa)
   const [importandoUuid, setImportandoUuid] = useState(""); // finca.uuid en curso de importar un .kml
@@ -69,7 +72,7 @@ export default function FincasPage() {
     setError("");
     setSelected(new Set());
     try {
-      const { items } = await apiFetch(`/fincas?limit=100${search ? `&search=${encodeURIComponent(search)}` : ""}`);
+      const { items } = await apiFetch(`/fincas?limit=100&incluirAreas=true${search ? `&search=${encodeURIComponent(search)}` : ""}`);
       setFincas(items);
     } catch (err) {
       setError(err.message);
@@ -145,6 +148,16 @@ export default function FincasPage() {
             <FiPlus size={15} /> Nueva Finca
           </button>
         )}
+        {hasPermission("area_lote.actualizar_masivo") && (
+          <button
+            type="button"
+            className="btn btn-light btn-sm rounded-3 text-nowrap d-flex align-items-center gap-2 px-3 text-secondary"
+            onClick={() => setAreasMasivoModal(true)}
+            title="Actualizar el área de muchos lotes a la vez con un Excel"
+          >
+            <FiUpload size={15} /> Actualizar áreas
+          </button>
+        )}
         {hasPermission("finca.crear") && (
           <button
             type="button"
@@ -196,6 +209,8 @@ export default function FincasPage() {
                     Coordenadas
                   </button>
                 </th>
+                <th className="fw-medium text-end">Área total (Ha)</th>
+                <th className="fw-medium text-end">En producción (Ha)</th>
                 <th className="fw-medium text-center">Plot</th>
                 <th className="fw-medium text-center">Acciones</th>
                 <th className="fw-medium text-center">Estado</th>
@@ -204,14 +219,14 @@ export default function FincasPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={6} className="text-center text-secondary py-4">
+                  <td colSpan={8} className="text-center text-secondary py-4">
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && fincas.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-secondary py-4">
+                  <td colSpan={8} className="text-center text-secondary py-4">
                     No hay fincas registradas todavía.
                   </td>
                 </tr>
@@ -251,6 +266,12 @@ export default function FincasPage() {
                       ) : (
                         <span className="text-secondary">—</span>
                       )}
+                    </td>
+                    <td className="text-end small text-nowrap" title={`Suma de los ${finca.totalLotes ?? 0} lote(s) activos`}>
+                      {Number(finca.areaTotal) > 0 ? Number(finca.areaTotal).toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
+                    </td>
+                    <td className="text-end small text-nowrap" title="Suma de la última área en producción registrada de cada lote activo">
+                      {Number(finca.areaProduccion) > 0 ? Number(finca.areaProduccion).toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
                     </td>
                     <td className="text-center">
                       <div className="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
@@ -376,6 +397,7 @@ export default function FincasPage() {
       {lotesModal && <LotesModal finca={lotesModal} onClose={() => setLotesModal(null)} />}
 
       {syncModal && <SyncModal onClose={() => setSyncModal(false)} onSynced={loadFincas} />}
+      {areasMasivoModal && <AreasMasivoModal onClose={() => setAreasMasivoModal(false)} onDone={loadFincas} />}
 
       {mapaFincasOpen && <MapaFincasModal fincas={fincas} onClose={() => setMapaFincasOpen(false)} />}
       {perimetroModal && <VerPerimetroModal finca={perimetroModal} onClose={() => setPerimetroModal(null)} />}
@@ -640,53 +662,83 @@ function LotesModal({ finca, onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
-  const [areaProdMap, setAreaProdMap] = useState({}); // loteUuid -> último registro de área en producción
+  const [eventos, setEventos] = useState([]); // todas las actualizaciones de área de la finca (semana desc, último primero)
   const [valores, setValores] = useState({}); // `${loteUuid}|total|produccion` -> string
+  const [base, setBase] = useState({}); // valores originales de la semana elegida (para detectar cambios)
   const [guardando, setGuardando] = useState(false);
   const [editando, setEditando] = useState(null); // loteUuid con el formulario de nombre/código abierto
   const [agregando, setAgregando] = useState(false);
   const [nuevoLote, setNuevoLote] = useState("");
   const [mostrarOcultos, setMostrarOcultos] = useState(false);
+  const [tab, setTab] = useState("lotes"); // "lotes" | "historico"
+  const [semanas, setSemanas] = useState([]); // semanas hasta la actual, de la más reciente a la más antigua
+  const [semanaSel, setSemanaSel] = useState(""); // uuid de la semana que se está editando
+  const [filtroLote, setFiltroLote] = useState("");
+  const [filtroSemana, setFiltroSemana] = useState("");
+  const [detalleAbierto, setDetalleAbierto] = useState(null); // `${loteUuid}|${semanaUuid}` con el detalle por día abierto
   const esAdmin = (getCurrentUser()?.roles || []).includes("Administrador");
   const puedeEditar = hasPermission("lote.editar");
   const puedeCrear = hasPermission("lote.crear");
+  // Sin este permiso solo se edita la semana actual (el Administrador ya los tiene todos).
+  const puedeSemanasAnteriores = hasPermission("area_lote.editar_semanas_anteriores");
 
-  // Mismo diseño que el modal "Área de lotes pendiente de confirmar": una fila
-  // por lote con Total y En producción, y la papelera OCULTA el lote (queda
-  // inactivo; no se borra y sigue en estadísticas e informes).
+  // Cada registro de área pertenece a una SEMANA: lo que se guarda hoy queda en
+  // la semana actual; con permiso se puede editar una semana anterior. La
+  // papelera OCULTA el lote (queda inactivo; no se borra).
+  const semanaActual = semanas[0] || null;
+  const semanaElegida = semanas.find((s) => s.uuid === semanaSel) || semanaActual;
+  const editandoActual = !semanaElegida || !semanaActual || semanaElegida.uuid === semanaActual.uuid;
   const ocultos = lotes.filter((l) => !l.estado || l.deletedAt);
   const visibles = mostrarOcultos ? lotes : lotes.filter((l) => l.estado && !l.deletedAt);
+  const lotePorUuid = new Map(lotes.map((l) => [l.uuid, l]));
 
   const setValor = (loteUuid, campo, valor) => setValores((prev) => ({ ...prev, [`${loteUuid}|${campo}`]: valor }));
 
-  function precargar(items, areaMap) {
-    const next = {};
-    for (const l of items) {
-      next[`${l.uuid}|total`] = l.area != null ? String(Number(l.area)) : "";
-      const ult = areaMap[l.uuid];
-      next[`${l.uuid}|produccion`] = ult ? String(Number(ult.area)) : "";
-    }
-    return next;
+  // Valor vigente de un lote en una semana: el último registro de esa semana o,
+  // si no tiene, el de la última semana anterior que sí tenga. `eventos` viene
+  // ordenado de la semana más reciente a la más antigua.
+  function vigenteEn(loteUuid, semana) {
+    if (!semana) return null;
+    return eventos.find((e) => e.lote?.uuid === loteUuid && e.semana && e.semana.fechaInicio <= semana.fechaInicio) || null;
   }
 
-  async function loadLotes() {
+  // Valores de las filas para la semana elegida.
+  function calcularValores(items, evs, semana, esActual) {
+    const out = {};
+    for (const l of items) {
+      const ev = semana ? evs.find((e) => e.lote?.uuid === l.uuid && e.semana && e.semana.fechaInicio <= semana.fechaInicio) : null;
+      // Semana actual: el total es el del lote; semana anterior: el total que tenía ese registro.
+      const total = esActual ? (l.area != null ? String(Number(l.area)) : "") : ev && ev.areaTotal != null ? String(Number(ev.areaTotal)) : "";
+      out[`${l.uuid}|total`] = total;
+      out[`${l.uuid}|produccion`] = ev ? String(Number(ev.area)) : "";
+    }
+    return out;
+  }
+
+  async function loadTodo(semanaParaCalcular) {
     setLoading(true);
     setError("");
     try {
       const incluirParam = esAdmin && mostrarOcultos ? "&incluirEliminados=true" : "";
-      const { items } = await apiFetch(`/fincas/${finca.uuid}/lotes?limit=100${incluirParam}`);
-      const entries = await Promise.all(
-        items
-          .filter((lote) => !lote.deletedAt)
-          .map(async (lote) => {
-            const { items: historial } = await apiFetch(`/lotes/${lote.uuid}/area-produccion?limit=1`);
-            return [lote.uuid, historial[0] || null];
-          }),
-      );
-      const areaMap = Object.fromEntries(entries);
+      const [{ items }, historial, semanasRes] = await Promise.all([
+        apiFetch(`/fincas/${finca.uuid}/lotes?limit=100${incluirParam}`),
+        apiFetch(`/fincas/${finca.uuid}/lotes/area-historial?limit=1000`),
+        semanas.length ? Promise.resolve(null) : apiFetch(`/semanas?limit=100&anio=${new Date().getFullYear()}`),
+      ]);
+      let lista = semanas;
+      if (semanasRes) {
+        const hoy = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Bogota" });
+        lista = (semanasRes.items || []).filter((s) => s.fechaInicio <= hoy).sort((a, b) => (a.fechaInicio < b.fechaInicio ? 1 : -1));
+        setSemanas(lista);
+      }
+      const actual = lista[0] || null;
+      const elegida = semanaParaCalcular || lista.find((s) => s.uuid === semanaSel) || actual;
+      const esActual = !elegida || !actual || elegida.uuid === actual.uuid;
+      const vals = calcularValores(items, historial.items, elegida, esActual);
       setLotes(items);
-      setAreaProdMap(areaMap);
-      setValores(precargar(items, areaMap));
+      setEventos(historial.items);
+      setValores(vals);
+      setBase(vals);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -695,16 +747,23 @@ function LotesModal({ finca, onClose }) {
   }
 
   useEffect(() => {
-    loadLotes();
+    loadTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mostrarOcultos]);
 
-  // ¿La fila tiene cambios sin guardar?
-  const cambioTotal = (l) => (valores[`${l.uuid}|total`] ?? "") !== (l.area != null ? String(Number(l.area)) : "");
-  const cambioProd = (l) => {
-    const ult = areaProdMap[l.uuid];
-    return (valores[`${l.uuid}|produccion`] ?? "") !== (ult ? String(Number(ult.area)) : "");
-  };
+  // Cambiar de semana: precarga las filas con lo vigente en esa semana.
+  function elegirSemana(uuid) {
+    setSemanaSel(uuid);
+    setAviso("");
+    const sem = semanas.find((s) => s.uuid === uuid) || semanaActual;
+    const esActual = !semanaActual || sem.uuid === semanaActual.uuid;
+    const vals = calcularValores(lotes, eventos, sem, esActual);
+    setValores(vals);
+    setBase(vals);
+  }
+
+  const cambioTotal = (l) => (valores[`${l.uuid}|total`] ?? "") !== (base[`${l.uuid}|total`] ?? "");
+  const cambioProd = (l) => (valores[`${l.uuid}|produccion`] ?? "") !== (base[`${l.uuid}|produccion`] ?? "");
   const hayCambios = lotes.some((l) => !l.deletedAt && (cambioTotal(l) || cambioProd(l)));
 
   async function handleGuardar(e) {
@@ -713,25 +772,36 @@ function LotesModal({ finca, onClose }) {
     setAviso("");
     setGuardando(true);
     try {
-      const hoy = new Date().toISOString().slice(0, 10);
       let guardados = 0;
       for (const l of lotes) {
         if (l.deletedAt) continue;
-        if (cambioTotal(l)) {
-          const t = valores[`${l.uuid}|total`];
+        const cT = cambioTotal(l);
+        const cP = cambioProd(l);
+        if (!cT && !cP) continue;
+        const t = valores[`${l.uuid}|total`];
+        const p = valores[`${l.uuid}|produccion`];
+        // El total del lote solo se actualiza al editar la semana actual.
+        if (cT && editandoActual) {
           await apiFetch(`/lotes/${l.uuid}`, { method: "PUT", body: JSON.stringify({ area: t === "" ? null : Number(t) }) });
-          guardados++;
         }
-        if (cambioProd(l)) {
-          const p = valores[`${l.uuid}|produccion`];
-          if (p !== "" && !Number.isNaN(Number(p))) {
-            await apiFetch(`/lotes/${l.uuid}/area-produccion`, { method: "POST", body: JSON.stringify({ area: Number(p), fecha: hoy }) });
-            guardados++;
-          }
+        // Cada actualización queda en el histórico, en la semana elegida; si el
+        // campo de producción está vacío se conserva la vigente en esa semana.
+        const vig = vigenteEn(l.uuid, semanaElegida);
+        const prodVal = p !== "" && !Number.isNaN(Number(p)) ? Number(p) : vig ? Number(vig.area) : null;
+        if (prodVal !== null) {
+          await apiFetch(`/lotes/${l.uuid}/area-produccion`, {
+            method: "POST",
+            body: JSON.stringify({
+              area: prodVal,
+              areaTotal: t === "" ? null : Number(t),
+              ...(editandoActual ? {} : { semanaUuid: semanaElegida.uuid }),
+            }),
+          });
         }
+        guardados++;
       }
-      await loadLotes();
-      setAviso(guardados > 0 ? "Cambios guardados." : "No había cambios por guardar.");
+      await loadTodo(semanaElegida);
+      setAviso(guardados > 0 ? `Cambios guardados en la semana ${semanaElegida?.codigo || "actual"}.` : "No había cambios por guardar.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -783,7 +853,9 @@ function LotesModal({ finca, onClose }) {
       } else {
         const nuevo = await apiFetch("/lotes", { method: "POST", body: JSON.stringify({ fincaUuid: finca.uuid, nombre, estado: true }) });
         setLotes((prev) => [...prev, nuevo]);
-        setValores((prev) => ({ ...prev, [`${nuevo.uuid}|total`]: "", [`${nuevo.uuid}|produccion`]: "" }));
+        const vacios = { [`${nuevo.uuid}|total`]: "", [`${nuevo.uuid}|produccion`]: "" };
+        setValores((prev) => ({ ...prev, ...vacios }));
+        setBase((prev) => ({ ...prev, ...vacios }));
       }
       setNuevoLote("");
       setAgregando(false);
@@ -792,12 +864,28 @@ function LotesModal({ finca, onClose }) {
     }
   }
 
+  // ── Histórico semanal: una fila por lote y semana con el dato más
+  // actualizado de esa semana; el reloj abre el detalle de ediciones por día.
+  const grupos = (() => {
+    const mapa = new Map();
+    for (const ev of eventos) {
+      if (!ev.lote) continue;
+      const clave = `${ev.lote.uuid}|${ev.semana?.uuid || "sin"}`;
+      if (!mapa.has(clave)) mapa.set(clave, { clave, lote: ev.lote, semana: ev.semana, ultimo: ev, ediciones: [] });
+      mapa.get(clave).ediciones.push(ev);
+    }
+    return [...mapa.values()];
+  })();
+  const gruposFiltrados = grupos.filter((g) => (!filtroLote || g.lote.uuid === filtroLote) && (!filtroSemana || (g.semana?.uuid || "sin") === filtroSemana));
+  const nombreUsuario = (u) => (u ? `${u.nombre || ""} ${u.apellido || ""}`.trim() || u.usuario : "—");
+  const semanasConDatos = [...new Map(grupos.filter((g) => g.semana).map((g) => [g.semana.uuid, g.semana])).values()];
+
   return (
     <div
       className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
       style={{ backgroundColor: "rgba(0,0,0,0.55)", zIndex: 1050 }}
     >
-      <div className="bg-white rounded-4 shadow-lg p-4 p-md-5" style={{ maxWidth: 640, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+      <div className="bg-white rounded-4 shadow-lg p-4 p-md-5" style={{ maxWidth: tab === "historico" ? 820 : 640, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
         <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
           <div className="d-flex align-items-center gap-2">
             <FiMap className="text-primary" size={22} />
@@ -807,152 +895,306 @@ function LotesModal({ finca, onClose }) {
             <FiX size={18} />
           </button>
         </div>
-        <p className="text-secondary small mb-4">
-          Código de la finca: {finca.codigo}. Edita el área total y el área en producción de cada lote.
-        </p>
 
-        <form onSubmit={handleGuardar}>
-          {loading && <p className="text-secondary small">Cargando...</p>}
-          {!loading && visibles.length === 0 && <p className="text-secondary small">Esta finca todavía no tiene lotes.</p>}
+        <ul className="nav nav-tabs mb-3">
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 ${tab === "lotes" ? "active" : ""}`} onClick={() => setTab("lotes")}>
+              Lotes
+            </button>
+          </li>
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 ${tab === "historico" ? "active" : ""}`} onClick={() => setTab("historico")}>
+              Histórico de áreas
+            </button>
+          </li>
+        </ul>
 
-          <div className="d-flex flex-column gap-2">
-            {!loading &&
-              visibles.map((l) => {
-                const oculto = !l.estado || l.deletedAt;
-                return (
-                  <div key={l.uuid}>
-                    <div className={`row g-2 align-items-center ${oculto ? "opacity-50" : ""}`}>
-                      <div className="col-12 col-md-3">
-                        <span className="d-flex align-items-center gap-2">
-                          <span className="text-secondary small fw-medium d-block">Lote {l.nombre}</span>
-                          {!l.deletedAt && !oculto && puedeEditar && (
-                            <>
-                              <button type="button" className="btn btn-sm p-0 border-0 text-secondary" title="Editar nombre y código" onClick={() => setEditando(editando === l.uuid ? null : l.uuid)}>
-                                <FiEdit2 size={13} />
-                              </button>
-                              <button type="button" className="btn btn-sm p-0 border-0 text-danger" title="Ocultar lote (no lo borra)" onClick={() => handleOcultar(l)}>
-                                <FiTrash2 size={14} />
-                              </button>
-                            </>
-                          )}
-                          {oculto && !l.deletedAt && puedeEditar && (
-                            <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none small" onClick={() => handleMostrar(l)}>
-                              Mostrar
-                            </button>
-                          )}
-                          {l.deletedAt && esAdmin && (
-                            <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none small" onClick={() => handleRestaurar(l)}>
-                              Restaurar
-                            </button>
-                          )}
-                        </span>
-                      </div>
-                      <div className="col-12 col-md-4">
-                        <div className="input-group input-group-sm">
-                          <span className="input-group-text">Total</span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            className="form-control"
-                            placeholder="0.00"
-                            disabled={!puedeEditar || oculto}
-                            value={valores[`${l.uuid}|total`] ?? ""}
-                            onChange={(e) => setValor(l.uuid, "total", e.target.value)}
-                          />
-                          <span className="input-group-text">Ha</span>
-                        </div>
-                      </div>
-                      <div className="col-12 col-md-5">
-                        <div className="input-group input-group-sm">
-                          <span className="input-group-text">En producción</span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            className="form-control"
-                            placeholder="0.00"
-                            disabled={!puedeEditar || oculto}
-                            value={valores[`${l.uuid}|produccion`] ?? ""}
-                            onChange={(e) => setValor(l.uuid, "produccion", e.target.value)}
-                          />
-                          <span className="input-group-text">Ha</span>
-                        </div>
-                      </div>
-                    </div>
-                    {editando === l.uuid && (
-                      <div className="bg-light rounded-3 px-3 mt-1">
-                        <EditarLoteForm
-                          lote={l}
-                          onSaved={(actualizado) => {
-                            setLotes((prev) => prev.map((x) => (x.uuid === actualizado.uuid ? actualizado : x)));
-                            setEditando(null);
-                          }}
-                        />
-                      </div>
+        {tab === "historico" && (
+          <div>
+            <p className="text-secondary small mb-2">
+              Área semanal de cada lote: se muestra el dato más actualizado de la semana. Con el reloj ves las ediciones de esa semana, día por día.
+            </p>
+            <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+              <select className="form-select form-select-sm bg-white" style={{ width: "auto" }} value={filtroLote} onChange={(e) => setFiltroLote(e.target.value)}>
+                <option value="">Todos los lotes</option>
+                {lotes
+                  .slice()
+                  .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es", { numeric: true }))
+                  .map((l) => (
+                    <option key={l.uuid} value={l.uuid}>
+                      Lote {l.nombre}
+                    </option>
+                  ))}
+              </select>
+              <select className="form-select form-select-sm bg-white" style={{ width: "auto" }} value={filtroSemana} onChange={(e) => setFiltroSemana(e.target.value)}>
+                <option value="">Todas las semanas</option>
+                {semanasConDatos.map((s) => (
+                  <option key={s.uuid} value={s.uuid}>
+                    {s.codigo}
+                  </option>
+                ))}
+              </select>
+              <span className="small text-secondary">{gruposFiltrados.length} registro(s)</span>
+            </div>
+            {loading && <p className="small text-secondary">Cargando...</p>}
+            {!loading && (
+              <div className="table-responsive" style={{ maxHeight: "55vh" }}>
+                <table className="table table-sm table-hover align-middle mb-0" style={{ fontSize: "0.8125rem" }}>
+                  <thead>
+                    <tr className="table-light small text-secondary">
+                      <th>Semana</th>
+                      <th>Lote</th>
+                      <th className="text-end">Total (Ha)</th>
+                      <th className="text-end">En producción (Ha)</th>
+                      <th>Última edición</th>
+                      <th style={{ width: "2rem" }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gruposFiltrados.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="text-center text-secondary py-3">
+                          Todavía no hay actualizaciones de área registradas.
+                        </td>
+                      </tr>
                     )}
-                  </div>
-                );
-              })}
+                    {gruposFiltrados.map((g) => (
+                      <Fragment key={g.clave}>
+                        <tr>
+                          <td className="text-nowrap fw-medium">{g.semana?.codigo || "—"}</td>
+                          <td>Lote {g.lote.nombre}</td>
+                          <td className="text-end">{g.ultimo.areaTotal != null ? Number(g.ultimo.areaTotal).toFixed(2) : ""}</td>
+                          <td className="text-end">{Number(g.ultimo.area).toFixed(2)}</td>
+                          <td className="small text-secondary">
+                            {g.ultimo.fechaRegistro} · {nombreUsuario(g.ultimo.creadoPor)}
+                          </td>
+                          <td className="text-end">
+                            <button
+                              type="button"
+                              className={`btn btn-sm p-0 border-0 ${detalleAbierto === g.clave ? "text-primary" : "text-secondary"}`}
+                              title={`Ver las ${g.ediciones.length} edición(es) de esta semana`}
+                              onClick={() => setDetalleAbierto(detalleAbierto === g.clave ? null : g.clave)}
+                            >
+                              <FiClock size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                        {detalleAbierto === g.clave && (
+                          <tr>
+                            <td colSpan={6} className="bg-light p-2">
+                              <div className="small fw-medium text-secondary mb-1">
+                                Ediciones de la semana {g.semana?.codigo || "—"} — Lote {g.lote.nombre} (día por día)
+                              </div>
+                              <table className="table table-sm mb-0" style={{ fontSize: "0.75rem" }}>
+                                <thead>
+                                  <tr className="text-secondary">
+                                    <th>Día</th>
+                                    <th className="text-end">Total (Ha)</th>
+                                    <th className="text-end">En producción (Ha)</th>
+                                    <th>Registró</th>
+                                    <th></th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {g.ediciones.map((ev) => (
+                                    <tr key={ev.uuid || ev.id}>
+                                      <td className="text-nowrap">{ev.fechaRegistro}</td>
+                                      <td className="text-end">{ev.areaTotal != null ? Number(ev.areaTotal).toFixed(2) : ""}</td>
+                                      <td className="text-end">{Number(ev.area).toFixed(2)}</td>
+                                      <td>{nombreUsuario(ev.creadoPor)}</td>
+                                      <td>
+                                        {ev.semana && ev.fechaRegistro > ev.semana.fechaFin && (
+                                          <span className="badge text-bg-warning" title="Se guardó después de terminar esa semana">
+                                            Retroactiva
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
+        )}
 
-          {(puedeCrear || esAdmin) && (
-            <div className="mt-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
-              {puedeCrear && (
-                <div>
-                  {agregando ? (
-                    <div className="d-flex gap-2 align-items-center">
-                      <div className="input-group input-group-sm" style={{ maxWidth: 220 }}>
-                        <span className="input-group-text">Lote</span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          className="form-control"
-                          placeholder="N.º (ej: 09)"
-                          value={nuevoLote}
-                          onChange={(e) => setNuevoLote(e.target.value.replace(/\D/g, ""))}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleAgregar();
-                            }
-                          }}
-                        />
+        {tab === "lotes" && (
+          <>
+            <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+              <span className="small text-secondary">Semana:</span>
+              <select
+                className="form-select form-select-sm bg-white"
+                style={{ width: "auto" }}
+                value={semanaElegida?.uuid || ""}
+                onChange={(e) => elegirSemana(e.target.value)}
+                disabled={!puedeSemanasAnteriores || semanas.length <= 1}
+                title={puedeSemanasAnteriores ? "Elige la semana que quieres editar" : "Solo puedes editar la semana actual"}
+              >
+                {semanas.map((s, i) => (
+                  <option key={s.uuid} value={s.uuid}>
+                    {s.codigo}
+                    {i === 0 ? " (actual)" : ""}
+                  </option>
+                ))}
+              </select>
+              {!editandoActual && (
+                <span className="badge text-bg-warning">Editando una semana anterior: el cambio queda en {semanaElegida.codigo}</span>
+              )}
+            </div>
+            <p className="text-secondary small mb-4">
+              Código de la finca: {finca.codigo}. Edita el área total y el área en producción de cada lote
+              {editandoActual ? " (se guarda en la semana actual)" : ` (semana ${semanaElegida?.codigo})`}.
+            </p>
+
+            <form onSubmit={handleGuardar}>
+              {loading && <p className="text-secondary small">Cargando...</p>}
+              {!loading && visibles.length === 0 && <p className="text-secondary small">Esta finca todavía no tiene lotes.</p>}
+
+              <div className="d-flex flex-column gap-2">
+                {!loading &&
+                  visibles.map((l) => {
+                    const oculto = !l.estado || l.deletedAt;
+                    return (
+                      <div key={l.uuid}>
+                        <div className={`row g-2 align-items-center ${oculto ? "opacity-50" : ""}`}>
+                          <div className="col-12 col-md-3">
+                            <span className="d-flex align-items-center gap-2">
+                              <span className="text-secondary small fw-medium d-block">Lote {l.nombre}</span>
+                              {!l.deletedAt && !oculto && puedeEditar && (
+                                <>
+                                  <button type="button" className="btn btn-sm p-0 border-0 text-secondary" title="Editar nombre y código" onClick={() => setEditando(editando === l.uuid ? null : l.uuid)}>
+                                    <FiEdit2 size={13} />
+                                  </button>
+                                  <button type="button" className="btn btn-sm p-0 border-0 text-danger" title="Ocultar lote (no lo borra)" onClick={() => handleOcultar(l)}>
+                                    <FiTrash2 size={14} />
+                                  </button>
+                                </>
+                              )}
+                              {oculto && !l.deletedAt && puedeEditar && (
+                                <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none small" onClick={() => handleMostrar(l)}>
+                                  Mostrar
+                                </button>
+                              )}
+                              {l.deletedAt && esAdmin && (
+                                <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none small" onClick={() => handleRestaurar(l)}>
+                                  Restaurar
+                                </button>
+                              )}
+                            </span>
+                          </div>
+                          <div className="col-12 col-md-4">
+                            <div className="input-group input-group-sm">
+                              <span className="input-group-text">Total</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="form-control"
+                                placeholder="0.00"
+                                disabled={!puedeEditar || oculto}
+                                value={valores[`${l.uuid}|total`] ?? ""}
+                                onChange={(e) => setValor(l.uuid, "total", e.target.value)}
+                              />
+                              <span className="input-group-text">Ha</span>
+                            </div>
+                          </div>
+                          <div className="col-12 col-md-5">
+                            <div className="input-group input-group-sm">
+                              <span className="input-group-text">En producción</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="form-control"
+                                placeholder="0.00"
+                                disabled={!puedeEditar || oculto}
+                                value={valores[`${l.uuid}|produccion`] ?? ""}
+                                onChange={(e) => setValor(l.uuid, "produccion", e.target.value)}
+                              />
+                              <span className="input-group-text">Ha</span>
+                            </div>
+                          </div>
+                        </div>
+                        {editando === l.uuid && (
+                          <div className="bg-light rounded-3 px-3 mt-1">
+                            <EditarLoteForm
+                              lote={l}
+                              onSaved={(actualizado) => {
+                                setLotes((prev) => prev.map((x) => (x.uuid === actualizado.uuid ? actualizado : x)));
+                                setEditando(null);
+                              }}
+                            />
+                          </div>
+                        )}
                       </div>
-                      <button type="button" className="btn btn-sm btn-brand rounded-3" onClick={handleAgregar}>
-                        Agregar
-                      </button>
-                      <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setAgregando(false)}>
-                        Cancelar
-                      </button>
+                    );
+                  })}
+              </div>
+
+              {(puedeCrear || esAdmin) && (
+                <div className="mt-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  {puedeCrear && (
+                    <div>
+                      {agregando ? (
+                        <div className="d-flex gap-2 align-items-center">
+                          <div className="input-group input-group-sm" style={{ maxWidth: 220 }}>
+                            <span className="input-group-text">Lote</span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              className="form-control"
+                              placeholder="N.º (ej: 09)"
+                              value={nuevoLote}
+                              onChange={(e) => setNuevoLote(e.target.value.replace(/\D/g, ""))}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAgregar();
+                                }
+                              }}
+                            />
+                          </div>
+                          <button type="button" className="btn btn-sm btn-brand rounded-3" onClick={handleAgregar}>
+                            Agregar
+                          </button>
+                          <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setAgregando(false)}>
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button type="button" className="btn btn-sm btn-link text-decoration-none p-0 small d-flex align-items-center gap-1" onClick={() => setAgregando(true)}>
+                          <FiPlus size={14} /> Agregar lote
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <button type="button" className="btn btn-sm btn-link text-decoration-none p-0 small d-flex align-items-center gap-1" onClick={() => setAgregando(true)}>
-                      <FiPlus size={14} /> Agregar lote
-                    </button>
+                  )}
+                  {(esAdmin || ocultos.length > 0) && (
+                    <label className="form-check small text-secondary mb-0">
+                      <input type="checkbox" className="form-check-input" checked={mostrarOcultos} onChange={(e) => setMostrarOcultos(e.target.checked)} />{" "}
+                      <span className="form-check-label">Mostrar ocultos{ocultos.length > 0 ? ` (${ocultos.length})` : ""}</span>
+                    </label>
                   )}
                 </div>
               )}
-              {(esAdmin || ocultos.length > 0) && (
-                <label className="form-check small text-secondary mb-0">
-                  <input type="checkbox" className="form-check-input" checked={mostrarOcultos} onChange={(e) => setMostrarOcultos(e.target.checked)} />{" "}
-                  <span className="form-check-label">Mostrar ocultos{ocultos.length > 0 ? ` (${ocultos.length})` : ""}</span>
-                </label>
+
+              {error && <div className="alert alert-danger py-2 small mt-3 mb-0">{error}</div>}
+              {aviso && !error && <div className="alert alert-success py-2 small mt-3 mb-0">{aviso}</div>}
+
+              {puedeEditar && (
+                <button type="submit" className="btn btn-brand btn-sm w-100 rounded-3 mt-4" disabled={!hayCambios || guardando}>
+                  {guardando ? "Guardando..." : editandoActual ? "Guardar cambios" : `Guardar cambios en ${semanaElegida?.codigo}`}
+                </button>
               )}
-            </div>
-          )}
-
-          {error && (
-            <div className="alert alert-danger py-2 small mt-3 mb-0 d-flex align-items-center gap-2">{error}</div>
-          )}
-          {aviso && !error && <div className="alert alert-success py-2 small mt-3 mb-0">{aviso}</div>}
-
-          {puedeEditar && (
-            <button type="submit" className="btn btn-brand btn-sm w-100 rounded-3 mt-4" disabled={!hayCambios || guardando}>
-              {guardando ? "Guardando..." : "Guardar cambios"}
-            </button>
-          )}
-        </form>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1044,6 +1286,198 @@ function EditarLoteForm({ lote, onSaved }) {
       </button>
       {error && <div className="alert alert-danger py-1 px-2 small mb-0 w-100">{error}</div>}
     </form>
+  );
+}
+
+// ─── Modal: actualización masiva de áreas (Excel) ───
+// La SEMANA a actualizar va en el propio Excel: columna `semana` obligatoria en
+// cada fila (ej. S41-2026). Pasos: 1) descargar la plantilla, 2) editarla
+// (escribiendo la semana en cada fila), 3) subirla, 4) validar (vista previa
+// con errores) y 5) aplicar.
+function AreasMasivoModal({ onClose, onDone }) {
+  const [archivo, setArchivo] = useState(null);
+  const [resultado, setResultado] = useState(null); // respuesta de la validación o de la aplicación
+  const [aplicado, setAplicado] = useState(false);
+  const [trabajando, setTrabajando] = useState("");
+  const [error, setError] = useState("");
+
+  async function descargarPlantilla() {
+    setError("");
+    setTrabajando("plantilla");
+    try {
+      const { filas, semanaActual } = await apiFetch("/lotes/area-plantilla");
+      const BRAND = "FF15803D";
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Corbana";
+      const ws = wb.addWorksheet("Áreas", { views: [{ state: "frozen", ySplit: 1 }] });
+      ws.columns = [
+        { header: "codigo_finca", key: "codigoFinca", width: 14 },
+        { header: "finca", key: "finca", width: 22 },
+        { header: "lote", key: "lote", width: 10 },
+        { header: "semana", key: "semana", width: 14 },
+        { header: "area_total", key: "areaTotal", width: 14 },
+        { header: "area_en_produccion", key: "areaProduccion", width: 20 },
+      ];
+      ws.getRow(1).eachCell((c) => {
+        c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND } };
+        c.alignment = { vertical: "middle", horizontal: "center" };
+      });
+      // La semana va vacía a propósito: hay que escribirla en cada fila a actualizar.
+      ws.getCell("D1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFB45309" } };
+      for (const f of filas) ws.addRow({ ...f, semana: "" });
+      ws.getColumn("finca").font = { color: { argb: "FF64748B" } };
+
+      const ins = wb.addWorksheet("Instrucciones");
+      ins.getColumn(1).width = 115;
+      [
+        "Actualización masiva de áreas por semana",
+        `La columna semana es OBLIGATORIA en cada fila que quieras actualizar: escribe el código de la semana (ej. ${semanaActual || "S41-2026"}). Una misma carga puede incluir semanas distintas.`,
+        "Edita area_total y area_en_produccion (en hectáreas). No cambies codigo_finca ni lote: con eso se identifica cada lote. La columna finca es solo informativa.",
+        "Los valores de la plantilla son los vigentes hoy. Si dejas una celda de área vacía, se conserva el valor vigente de la semana escrita. El 0 es un valor válido.",
+        "Las filas sin semana se reportan como error al validar; las filas sin cambios de área se omiten.",
+        "El área total del lote solo se actualiza cuando la semana escrita es la actual; en semanas anteriores solo queda en el histórico de esa semana.",
+        "No se pueden actualizar semanas futuras.",
+      ].forEach((t, i) => {
+        const r = ins.getRow(i + 1);
+        r.getCell(1).value = t;
+        r.getCell(1).alignment = { wrapText: true, vertical: "top" };
+        if (i === 0) r.getCell(1).font = { bold: true, size: 13 };
+      });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([buffer], { type: "application/octet-stream" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "plantilla_areas.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTrabajando("");
+    }
+  }
+
+  async function enviar(dryRun) {
+    setError("");
+    setTrabajando(dryRun ? "validar" : "aplicar");
+    try {
+      const fd = new FormData();
+      fd.append("file", archivo);
+      fd.append("dryRun", dryRun ? "true" : "false");
+      const res = await apiFetchFormData("/lotes/area-bulk-upload", fd);
+      setResultado(res);
+      if (!dryRun) {
+        setAplicado(true);
+        onDone?.();
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTrabajando("");
+    }
+  }
+
+  const puedeAplicar = resultado?.dryRun && resultado.actualizados > 0 && !aplicado;
+
+  return (
+    <ModalShell title="Actualizar áreas de lotes (masivo)" onClose={onClose} size="lg">
+      <p className="small text-secondary mb-3">
+        Actualiza el área total y el área en producción de muchos lotes a la vez con un Excel. En el Excel es <strong>obligatorio escribir la semana</strong>{" "}
+        a actualizar en cada fila (columna <code>semana</code>, ej. S41-2026); el cambio queda en el histórico de esa semana.
+      </p>
+
+      <div className="mb-3">
+        <label className="form-label small fw-medium d-block">1. Descarga la plantilla</label>
+        <button type="button" className="btn btn-light btn-sm rounded-3 d-inline-flex align-items-center gap-2" disabled={trabajando === "plantilla"} onClick={descargarPlantilla}>
+          <FiDownload size={14} /> {trabajando === "plantilla" ? "Generando..." : "Descargar plantilla con las áreas vigentes"}
+        </button>
+      </div>
+
+      <div className="mb-3">
+        <label className="form-label small fw-medium">2. Sube el Excel editado</label>
+        <input
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="form-control form-control-sm"
+          onChange={(e) => {
+            setArchivo(e.target.files?.[0] || null);
+            setResultado(null);
+            setAplicado(false);
+          }}
+        />
+      </div>
+
+      {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+      <div className="d-flex gap-2 mb-3">
+        <button type="button" className="btn btn-light btn-sm rounded-3" disabled={!archivo || trabajando !== "" || aplicado} onClick={() => enviar(true)}>
+          {trabajando === "validar" ? "Validando..." : "3. Validar"}
+        </button>
+        <button type="button" className="btn btn-brand btn-sm rounded-3" disabled={!puedeAplicar || trabajando !== ""} onClick={() => enviar(false)}>
+          {trabajando === "aplicar" ? "Aplicando..." : "4. Aplicar actualización"}
+        </button>
+      </div>
+
+      {resultado && (
+        <div>
+          <div className={`alert py-2 small ${aplicado ? "alert-success" : resultado.actualizados > 0 ? "alert-info" : "alert-warning"}`}>
+            {aplicado
+              ? `Listo: se actualizaron ${resultado.actualizados} registro(s) en ${resultado.semanas.join(", ")}.`
+              : `Validación: ${resultado.actualizados} registro(s) listos para actualizar${resultado.semanas.length ? ` (${resultado.semanas.join(", ")})` : ""}, ${resultado.errores.length} fila(s) con error (se omiten).`}
+          </div>
+
+          {resultado.errores.length > 0 && (
+            <div className="mb-3">
+              <div className="small fw-medium text-danger mb-1">Filas con error</div>
+              <ul className="small text-secondary mb-0" style={{ maxHeight: "9rem", overflowY: "auto" }}>
+                {resultado.errores.map((e) => (
+                  <li key={`${e.fila}-${e.error}`}>
+                    Fila {e.fila}: {e.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {resultado.vistaPrevia.length > 0 && (
+            <div className="table-responsive" style={{ maxHeight: "14rem" }}>
+              <table className="table table-sm mb-0" style={{ fontSize: "0.78rem" }}>
+                <thead>
+                  <tr className="text-secondary">
+                    <th>Fila</th>
+                    <th>Semana</th>
+                    <th>Finca</th>
+                    <th>Lote</th>
+                    <th className="text-end">Total (Ha)</th>
+                    <th className="text-end">En producción (Ha)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resultado.vistaPrevia.map((r) => (
+                    <tr key={r.fila}>
+                      <td>{r.fila}</td>
+                      <td className="fw-medium">{r.semana}</td>
+                      <td>{r.codigoFinca}</td>
+                      <td>{r.lote}</td>
+                      <td className="text-end">{r.areaTotal !== null && r.areaTotal !== undefined ? Number(r.areaTotal).toFixed(2) : ""}</td>
+                      <td className="text-end">{Number(r.areaProduccion).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="d-flex justify-content-end mt-3">
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
+          {aplicado ? "Cerrar" : "Cancelar"}
+        </button>
+      </div>
+    </ModalShell>
   );
 }
 
