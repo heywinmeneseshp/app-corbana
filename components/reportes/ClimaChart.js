@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api";
 import ClimaCompareModal from "@/components/reportes/ClimaCompareModal";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
 
-const INFO_CLIMA = (
+export const INFO_CLIMA = (
   <>
     <p className="fw-semibold mb-1">Precipitación promedio (mm)</p>
     <p className="mb-2">
@@ -24,7 +24,7 @@ const INFO_CLIMA = (
 // muy distintas — en vez de una sola gráfica con tres líneas ilegibles, se
 // elige una métrica a la vez (mismo patrón de pestañas que ya usa la página
 // de Sanidad Vegetal — Gráficos).
-const METRICAS = [
+export const METRICAS = [
   { key: "mm", label: "Precipitación promedio (mm)", campo: "totalMm", color: "#2563eb", unidad: "mm" },
   { key: "temperatura", label: "Temperatura (°C)", campo: "promedioTemperatura", color: "#dc2626", unidad: "°C" },
   { key: "humedad", label: "Humedad relativa (%)", campo: "promedioHumedad", color: "#16a34a", unidad: "%" },

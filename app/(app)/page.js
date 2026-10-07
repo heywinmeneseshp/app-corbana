@@ -12,16 +12,12 @@ import {
   FiFilter,
   FiChevronDown,
   FiChevronUp,
-  FiMaximize2,
   FiCheck,
 } from "react-icons/fi";
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
-} from "recharts";
 import { apiFetch } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
-import ChartCompareModal from "@/components/dashboard/ChartCompareModal";
+import GraficosInicio from "@/components/dashboard/GraficosInicio";
 import { COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 
 const FILAS_CONCEPTO = [
@@ -55,7 +51,6 @@ export default function InicioPage() {
   const [fincasParam, setFincasParam] = useState(() => localStorage.getItem(LS_KEY) || "");
   const [fetchParam, setFetchParam] = useState(() => localStorage.getItem(LS_KEY) || "");
   const [fincasOpen, setFincasOpen] = useState(false);
-  const [expandedChart, setExpandedChart] = useState(null);
   const [anioGraficos, setAnioGraficos] = useState("");
   const [fetchAnio, setFetchAnio] = useState("");
   const [semanaUuid, setSemanaUuid] = useState("");
@@ -422,138 +417,11 @@ export default function InicioPage() {
         </div>
       )}
 
-      {hayDatosDeRatio && (() => {
-        function ChartTooltip({ active, payload, label, dataKey, prefix, decimal }) {
-          if (!active || !payload || payload.length === 0) return null;
-          const entry = payload.find((p) => p.dataKey === dataKey);
-          if (!entry) return null;
-          return (
-            <div className="bg-white border rounded-3 shadow-sm p-2 small">
-              <div className="fw-semibold mb-1">{label}</div>
-              <div className="d-flex align-items-center gap-2">
-                <span style={{ color: entry.color }}>●</span>
-                <span>{prefix}:</span>
-                <span className="fw-bold">{entry.value != null ? (decimal ? entry.value : Number(entry.value).toLocaleString("es")) : "—"}</span>
-              </div>
-            </div>
-          );
-        }
-        const cajasData = data.ratioAnual || [];
-        const embolseData = data.embolseAnual || [];
-        return (
-          <>
-            {(() => {
-              const aproData = (data.aprovechamientoAnual || []).filter((s) => {
-                if (!data.primeraSemanaEmbolse) return true;
-                return s.numeroSemana >= data.primeraSemanaEmbolse.numeroSemana;
-              });
-
-              function ChartCard({ id, title, subtitle, children, height }) {
-                return (
-                  <div className="card border-0 shadow-sm rounded-4 p-3 h-100">
-                    <div className="d-flex align-items-start justify-content-between">
-                      <div>
-                        <h2 className="h6 fw-bold mb-0">{title}</h2>
-                        <p className="text-secondary small mb-2">{subtitle}</p>
-                      </div>
-                      <button className="btn btn-sm p-0 border-0 text-secondary" onClick={() => setExpandedChart(id)} style={{ fontSize: "0.8rem" }}>
-                        <FiMaximize2 />
-                      </button>
-                    </div>
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                      {children}
-                    </div>
-                  </div>
-                );
-              }
-
-              function ChartLine({ data, dataKey, color, yDomain, yUnit, decimal, prefix }) {
-                return (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={data} margin={{ top: 5, right: 10, left: -5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="numeroSemana" tick={{ fontSize: 10 }} domain={[1, 53]} ticks={[1,10,20,30,40,50]} />
-                      <YAxis tick={{ fontSize: 10 }} width={35} domain={yDomain || ['auto', 'auto']} unit={yUnit || ''} />
-                      <Tooltip content={<ChartTooltip dataKey={dataKey} prefix={prefix} decimal={decimal} />} labelFormatter={(l) => {
-                        const s = data.find((r) => r.numeroSemana === l);
-                        return s ? s.semanaCodigo : `Semana ${l}`;
-                      }} />
-                      {dataKey === 'ratio' && <ReferenceLine y={1} stroke="#b45309" strokeDasharray="3 3" />}
-                      <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={(p) => p.payload?.[dataKey] != null ? <circle cx={p.cx} cy={p.cy} r={3} fill={color} stroke="#374151" strokeWidth={1} /> : null} connectNulls={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                );
-              }
-
-              const charts = [
-                { id: "ratio", title: "Ratio", subtitle: "Cajas producidas / racimos procesados, por semana", data: ratioFiltrado, metricKey: "ratio", arrayField: "ratioAnual", color: "#6d28d9", decimal: true, prefix: "Ratio" },
-                { id: "cajas", title: "Cajas Producidas", subtitle: "Por semana de registro", data: cajasData, metricKey: "cajas", arrayField: "ratioAnual", color: "#16a34a", prefix: "Cajas" },
-                { id: "embolses", title: "Embolses", subtitle: "Por semana de embolse", data: embolseData, metricKey: "embolse", arrayField: "embolseAnual", color: "#2563eb", prefix: "Embolses" },
-                { id: "aprovechamiento", title: "Aprovechamiento", subtitle: "(RECUSE + PROCESADO) / embolsado", data: aproData, metricKey: "aprovechamiento", arrayField: "aprovechamientoAnual", color: "#047857", yDomain: [0, 100], yUnit: "%", decimal: true, prefix: "Aprov." },
-              ];
-
-              const fincaBaseLabel = fetchParam
-                ? `${fetchParam.split(",").length} finca(s) seleccionada(s)`
-                : "Todas las fincas activas";
-
-              return (
-                <>
-                  <div className="row g-3 mt-0">
-                    <div className="col-md-6" style={{ height: "280px" }}>
-                      <ChartCard id="ratio" title="Ratio" subtitle="Cajas producidas / racimos procesados, por semana">
-                        {hayDatosDeRatio && <ChartLine data={ratioFiltrado} dataKey="ratio" color="#6d28d9" decimal prefix="Ratio" />}
-                      </ChartCard>
-                    </div>
-                    <div className="col-md-6" style={{ height: "280px" }}>
-                      <ChartCard id="cajas" title="Cajas Producidas" subtitle="Por semana de registro">
-                        {cajasData.length > 0 && <ChartLine data={cajasData} dataKey="cajas" color="#16a34a" prefix="Cajas" />}
-                      </ChartCard>
-                    </div>
-                  </div>
-                  <div className="row g-3 mt-0">
-                    <div className="col-md-6" style={{ height: "280px" }}>
-                      <ChartCard id="embolses" title="Embolses" subtitle="Por semana de embolse">
-                        {embolseData.length > 0 && <ChartLine data={embolseData} dataKey="embolse" color="#2563eb" prefix="Embolses" />}
-                      </ChartCard>
-                    </div>
-                    <div className="col-md-6" style={{ height: "280px" }}>
-                      <ChartCard id="aprovechamiento" title="Aprovechamiento" subtitle="(RECUSE + PROCESADO) / embolsado">
-                        {aproData.length > 0
-                          ? <ChartLine data={aproData} dataKey="aprovechamiento" color="#047857" yDomain={[0, 100]} yUnit="%" decimal prefix="Aprov." />
-                          : <div className="text-secondary small d-flex align-items-center justify-content-center" style={{ height: "100%" }}>Sin datos</div>}
-                      </ChartCard>
-                    </div>
-                  </div>
-
-                  {expandedChart && (() => {
-                    const cfg = charts.find((c) => c.id === expandedChart);
-                    if (!cfg) return null;
-                    return (
-                      <ChartCompareModal
-                        open
-                        onClose={() => setExpandedChart(null)}
-                        title={cfg.title}
-                        subtitle={cfg.subtitle}
-                        metricKey={cfg.metricKey}
-                        arrayField={cfg.arrayField}
-                        baseData={cfg.data}
-                        baseColor={cfg.color}
-                        decimal={cfg.decimal}
-                        prefix={cfg.prefix}
-                        yDomain={cfg.yDomain}
-                        yUnit={cfg.yUnit}
-                        aniosDisponibles={data.aniosDisponibles}
-                        anioBase={data.anioSeleccionado}
-                        fincaBaseLabel={fincaBaseLabel}
-                      />
-                    );
-                  })()}
-                </>
-              );
-            })()}
-        </>
-      );
-      })()}
+      {/* Gráficos: se ven según el filtro de Inicio; al expandirlos tienen el filtro de selecciones de Reportes > Producción */}
+      <GraficosInicio
+        dashboard={data}
+        etiquetaBase={fetchParam && fetchParam !== "none" ? `${fetchParam.split(",").length} finca(s) seleccionada(s)` : "Todas las fincas activas"}
+      />
 
       <div className="card border-0 shadow-sm rounded-4 p-0 overflow-auto mt-4">
         <div style={{ minWidth: totAncho + "px" }}>

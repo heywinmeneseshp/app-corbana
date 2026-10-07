@@ -23,6 +23,7 @@ import ReportesTabs from "@/components/ReportesTabs";
 import SelectorCanastas from "@/components/reportes/SelectorCanastas";
 import CollapsibleCard from "@/components/reportes/CollapsibleCard";
 import SortableTh, { ordenarFilas } from "@/components/reportes/SortableTh";
+import RangoSemanasSlider, { filtrarSemanas } from "@/components/reportes/RangoSemanasSlider";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 import { COLOR_HEX } from "@/lib/semanaColor";
 
@@ -102,6 +103,8 @@ export default function GraficoMovimientoAnual({
   // no tiene motivo, así que este bloque va oculto por defecto.
   mostrarMotivos = false,
 }) {
+  // Rango de semanas visible (slider bajo la gráfica): null = todo el año.
+  const [rangoSemanas, setRangoSemanas] = useState(null);
   const [fincas, setFincas] = useState([]);
   const [canastas, setCanastas] = useState([{ id: "c0", nombre: "", objetivos: [], anios: [new Date().getFullYear()] }]);
   const [semanas, setSemanas] = useState([]);
@@ -391,15 +394,15 @@ export default function GraficoMovimientoAnual({
 
         {!modoComparacion && data && (
           <>
-            <CollapsibleCard titulo="Gráfico" subtitulo={etiquetaMetrica + " por semana"}>
+            <CollapsibleCard titulo="Gráfico" subtitulo={etiquetaMetrica + " por semana"} expandible>
               <ResponsiveContainer width="100%" height={420}>
-                <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                <LineChart data={filtrarSemanas(chartData, rangoSemanas)} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis
                     dataKey="numeroSemana"
                     tickFormatter={(v) => `S${v}`}
                     tick={{ fontSize: 11 }}
-                    interval={3}
+                    interval={rangoSemanas && rangoSemanas[1] - rangoSemanas[0] < 20 ? 0 : 3}
                   />
                   <YAxis tick={{ fontSize: 11 }} width={60} domain={['auto', 'auto']} />
                   <Tooltip content={<TooltipPersonalizado />} />
@@ -457,6 +460,7 @@ export default function GraficoMovimientoAnual({
                   })}
                 </LineChart>
               </ResponsiveContainer>
+              <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} />
             </CollapsibleCard>
 
             {mostrarMotivos && data.motivosRepique?.length > 0 && (
@@ -610,12 +614,12 @@ export default function GraficoMovimientoAnual({
         )}
 
         {modoComparacion && seriesResultado && (
-          <CollapsibleCard titulo="Comparación" subtitulo={etiquetaMetrica + " por semana"}>
+          <CollapsibleCard titulo="Comparación" subtitulo={etiquetaMetrica + " por semana"} expandible>
             <ResponsiveContainer width="100%" height={460}>
-              <LineChart data={chartDataComparacion} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+              <LineChart data={filtrarSemanas(chartDataComparacion, rangoSemanas)} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="numeroSemana" tickFormatter={(v) => `S${v}`} tick={{ fontSize: 11 }} interval={3} />
-                <YAxis tick={{ fontSize: 11 }} width={60} domain={["auto", "auto"]} />
+                <XAxis dataKey="numeroSemana" tickFormatter={(v) => `S${v}`} tick={{ fontSize: 11 }} interval={rangoSemanas && rangoSemanas[1] - rangoSemanas[0] < 20 ? 0 : 3} />
+                <YAxis tick={{ fontSize: 11 }} width={60} domain={['auto', 'auto']} />
                 <Tooltip content={<TooltipPersonalizado />} />
                 <Legend wrapperStyle={{ fontSize: "0.75rem" }} />
                 {seriesList.map((serie, i) => (
@@ -632,6 +636,7 @@ export default function GraficoMovimientoAnual({
                 ))}
               </LineChart>
             </ResponsiveContainer>
+            <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} />
           </CollapsibleCard>
         )}
 

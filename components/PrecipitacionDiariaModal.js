@@ -1,18 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiCloudRain, FiAlertTriangle } from "react-icons/fi";
+import { FiCloudRain, FiAlertTriangle, FiX } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
+import { getSesionSeq } from "@/lib/auth";
+import { esAdministrador } from "@/lib/laborEstados";
 
 // Modal bloqueante: si el usuario tiene un rol programado para capturar la
 // precipitación diaria de alguna finca (ver Maestros > Precipitación Diaria)
 // y quedó atrasado, no puede usar el resto del sistema hasta ponerse al día
-// — sin botón de cerrar, sin click-fuera-para-cerrar.
+// — sin click-fuera-para-cerrar. Solo el rol Administrador ve el botón de
+// cerrar (vuelve a mostrarse en el próximo inicio de sesión), igual que el
+// modal de Área de Lotes.
 export default function PrecipitacionDiariaModal() {
   const [pendientes, setPendientes] = useState(null); // null = todavía no se sabe
   const [valores, setValores] = useState({}); // `${fincaUuid}|${fecha}` -> string
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [cerradoSeq, setCerradoSeq] = useState(null); // secuencia de sesión en que se cerró
+  const esAdmin = esAdministrador();
+  // El cierre dura solo la sesión actual: al cerrar se guarda la secuencia de
+  // login vigente; con un login nuevo la secuencia cambia y el modal vuelve
+  // a mostrarse (ver marcarNuevaSesion en lib/auth.js).
+  const seqActual = getSesionSeq();
+  const cerrado = cerradoSeq !== null && (seqActual === null || cerradoSeq === seqActual);
 
   const cargar = () => {
     apiFetch("/precipitacion-diaria/pendientes")
@@ -22,7 +33,7 @@ export default function PrecipitacionDiariaModal() {
 
   useEffect(cargar, []);
 
-  if (!pendientes || pendientes.length === 0) return null;
+  if (cerrado || !pendientes || pendientes.length === 0) return null;
 
   const totalCampos = pendientes.reduce((acc, f) => acc + f.fechas.length, 0);
   const completos = Object.values(valores).filter((v) => v !== undefined && v !== "" && !isNaN(Number(v))).length;
@@ -61,9 +72,21 @@ export default function PrecipitacionDiariaModal() {
       style={{ backgroundColor: "rgba(0,0,0,0.55)", zIndex: 2000 }}
     >
       <div className="bg-white rounded-4 shadow-lg p-4 p-md-5" style={{ maxWidth: 560, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
-        <div className="d-flex align-items-center gap-2 mb-2">
-          <FiCloudRain className="text-primary" size={22} />
-          <h2 className="h5 fw-bold mb-0">Precipitación pendiente de registrar</h2>
+        <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
+          <div className="d-flex align-items-center gap-2">
+            <FiCloudRain className="text-primary" size={22} />
+            <h2 className="h5 fw-bold mb-0">Precipitación pendiente de registrar</h2>
+          </div>
+          {esAdmin && (
+            <button
+              type="button"
+              className="btn btn-sm p-1 border-0 text-secondary"
+              title="Cerrar (solo Administrador, vuelve a mostrarse en el próximo inicio de sesión)"
+              onClick={() => setCerradoSeq(seqActual ?? "sin-secuencia")}
+            >
+              <FiX size={18} />
+            </button>
+          )}
         </div>
         <p className="text-secondary small mb-4">
           Tienes días sin registrar. Completa la precipitación (mm) de cada día para poder continuar.

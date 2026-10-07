@@ -13,7 +13,7 @@ import { usePrecipitacionOverlay, conPrecipitacion, PrecipitacionControls, Preci
 export const COLORES_EDAD = ["#2563eb", "#16a34a", "#f59e0b", "#9333ea", "#dc2626", "#0891b2", "#db2777", "#65a30d", "#7c3aed", "#92400e"];
 const colorDeEdad = (indice) => COLORES_EDAD[indice % COLORES_EDAD.length];
 
-const INFO_CONTEO = (
+export const INFO_CONTEO = (
   <>
     <p className="mb-2">Promedio de hojas funcionales por planta, agrupado por edad (semanas transcurridas desde la semana de embolse de su cinta hasta la semana en que se evaluó).</p>
     <p className="mb-0">Cada línea es una edad distinta, promediada entre todas las plantas de esa edad evaluadas esa semana — se muestran todas las edades evaluadas, sin límite. El tooltip indica a qué semana de embolse corresponde cada edad.</p>

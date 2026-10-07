@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FiPlus,
   FiRefreshCw,
@@ -10,7 +10,6 @@ import {
   FiTrash2,
   FiSave,
   FiX,
-  FiRotateCcw,
   FiMap,
   FiUpload,
   FiDownload,
@@ -640,83 +639,42 @@ function LotesModal({ finca, onClose }) {
   const [lotes, setLotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [areaProdMap, setAreaProdMap] = useState({});
-  const [expanded, setExpanded] = useState(null);
-  const [editMode, setEditMode] = useState(false);
-  const [editDraft, setEditDraft] = useState({});
-  const [mostrarEliminados, setMostrarEliminados] = useState(false);
+  const [aviso, setAviso] = useState("");
+  const [areaProdMap, setAreaProdMap] = useState({}); // loteUuid -> último registro de área en producción
+  const [valores, setValores] = useState({}); // `${loteUuid}|total|produccion` -> string
+  const [guardando, setGuardando] = useState(false);
+  const [editando, setEditando] = useState(null); // loteUuid con el formulario de nombre/código abierto
+  const [agregando, setAgregando] = useState(false);
+  const [nuevoLote, setNuevoLote] = useState("");
+  const [mostrarOcultos, setMostrarOcultos] = useState(false);
   const esAdmin = (getCurrentUser()?.roles || []).includes("Administrador");
+  const puedeEditar = hasPermission("lote.editar");
+  const puedeCrear = hasPermission("lote.crear");
 
-  const enableEditMode = () => {
-    const draft = {};
-    for (const l of lotes) {
-      draft[l.uuid] = { nombre: l.nombre, codigo: l.codigo, area: l.area ?? "", estado: l.estado };
+  // Mismo diseño que el modal "Área de lotes pendiente de confirmar": una fila
+  // por lote con Total y En producción, y la papelera OCULTA el lote (queda
+  // inactivo; no se borra y sigue en estadísticas e informes).
+  const ocultos = lotes.filter((l) => !l.estado || l.deletedAt);
+  const visibles = mostrarOcultos ? lotes : lotes.filter((l) => l.estado && !l.deletedAt);
+
+  const setValor = (loteUuid, campo, valor) => setValores((prev) => ({ ...prev, [`${loteUuid}|${campo}`]: valor }));
+
+  function precargar(items, areaMap) {
+    const next = {};
+    for (const l of items) {
+      next[`${l.uuid}|total`] = l.area != null ? String(Number(l.area)) : "";
+      const ult = areaMap[l.uuid];
+      next[`${l.uuid}|produccion`] = ult ? String(Number(ult.area)) : "";
     }
-    setEditDraft(draft);
-    setEditMode(true);
-    setExpanded(null);
-  };
-
-  const cancelEditMode = () => {
-    setEditMode(false);
-    setEditDraft({});
-  };
-
-  const handleDeleteLote = async (lote) => {
-    if (!confirm(`¿Eliminar el lote "${lote.nombre}" (${lote.codigo})? Esta acción no se puede deshacer.`)) return;
-    try {
-      await apiFetch(`/lotes/${lote.uuid}`, { method: "DELETE" });
-      setLotes((prev) => prev.filter((l) => l.uuid !== lote.uuid));
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const handleRestoreLote = async (lote) => {
-    if (!confirm(`¿Restaurar el lote "${lote.nombre}" (${lote.codigo})?`)) return;
-    try {
-      const restaurado = await apiFetch(`/lotes/${lote.uuid}/restore`, { method: "POST" });
-      setLotes((prev) => prev.map((l) => (l.uuid === lote.uuid ? restaurado : l)));
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const handleSaveRow = async (uuid) => {
-    const values = editDraft[uuid];
-    if (!values) return;
-    try {
-      const res = await apiFetch(`/lotes/${uuid}`, {
-        method: "PUT",
-        body: JSON.stringify(
-          values.area !== "" ? values : { ...values, area: null },
-        ),
-      });
-      setLotes((prev) => prev.map((l) => (l.uuid === uuid ? res : l)));
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const setDraftField = (uuid, field, value) => {
-    setEditDraft((prev) => ({ ...prev, [uuid]: { ...prev[uuid], [field]: value } }));
-  };
-
-  const toggle = (uuid, type) => {
-    setExpanded((prev) => (prev && prev.uuid === uuid && prev.type === type ? null : { uuid, type }));
-  };
+    return next;
+  }
 
   async function loadLotes() {
     setLoading(true);
     setError("");
     try {
-      const incluirParam = esAdmin && mostrarEliminados ? "&incluirEliminados=true" : "";
+      const incluirParam = esAdmin && mostrarOcultos ? "&incluirEliminados=true" : "";
       const { items } = await apiFetch(`/fincas/${finca.uuid}/lotes?limit=100${incluirParam}`);
-      setLotes(items);
-      // Los lotes eliminados no existen para el endpoint de historial (lo
-      // excluye por ser soft-delete), así que se omiten aquí — de todas
-      // formas no se les muestra esa columna en la tabla.
       const entries = await Promise.all(
         items
           .filter((lote) => !lote.deletedAt)
@@ -725,7 +683,10 @@ function LotesModal({ finca, onClose }) {
             return [lote.uuid, historial[0] || null];
           }),
       );
-      setAreaProdMap(Object.fromEntries(entries));
+      const areaMap = Object.fromEntries(entries);
+      setLotes(items);
+      setAreaProdMap(areaMap);
+      setValores(precargar(items, areaMap));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -736,199 +697,264 @@ function LotesModal({ finca, onClose }) {
   useEffect(() => {
     loadLotes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mostrarEliminados]);
+  }, [mostrarOcultos]);
+
+  // ¿La fila tiene cambios sin guardar?
+  const cambioTotal = (l) => (valores[`${l.uuid}|total`] ?? "") !== (l.area != null ? String(Number(l.area)) : "");
+  const cambioProd = (l) => {
+    const ult = areaProdMap[l.uuid];
+    return (valores[`${l.uuid}|produccion`] ?? "") !== (ult ? String(Number(ult.area)) : "");
+  };
+  const hayCambios = lotes.some((l) => !l.deletedAt && (cambioTotal(l) || cambioProd(l)));
+
+  async function handleGuardar(e) {
+    e.preventDefault();
+    setError("");
+    setAviso("");
+    setGuardando(true);
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+      let guardados = 0;
+      for (const l of lotes) {
+        if (l.deletedAt) continue;
+        if (cambioTotal(l)) {
+          const t = valores[`${l.uuid}|total`];
+          await apiFetch(`/lotes/${l.uuid}`, { method: "PUT", body: JSON.stringify({ area: t === "" ? null : Number(t) }) });
+          guardados++;
+        }
+        if (cambioProd(l)) {
+          const p = valores[`${l.uuid}|produccion`];
+          if (p !== "" && !Number.isNaN(Number(p))) {
+            await apiFetch(`/lotes/${l.uuid}/area-produccion`, { method: "POST", body: JSON.stringify({ area: Number(p), fecha: hoy }) });
+            guardados++;
+          }
+        }
+      }
+      await loadLotes();
+      setAviso(guardados > 0 ? "Cambios guardados." : "No había cambios por guardar.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  // Ocultar = dejar el lote inactivo: no se borra, solo deja de mostrarse.
+  async function handleOcultar(lote) {
+    if (!confirm(`¿Ocultar el lote ${lote.nombre}? Solo hazlo si no pertenece a esta finca. El lote seguirá existiendo.`)) return;
+    setError("");
+    try {
+      const res = await apiFetch(`/lotes/${lote.uuid}`, { method: "PUT", body: JSON.stringify({ estado: false }) });
+      setLotes((prev) => prev.map((l) => (l.uuid === lote.uuid ? res : l)));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleMostrar(lote) {
+    setError("");
+    try {
+      const res = await apiFetch(`/lotes/${lote.uuid}`, { method: "PUT", body: JSON.stringify({ estado: true }) });
+      setLotes((prev) => prev.map((l) => (l.uuid === lote.uuid ? res : l)));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleRestaurar(lote) {
+    if (!confirm(`¿Restaurar el lote ${lote.nombre}?`)) return;
+    try {
+      const restaurado = await apiFetch(`/lotes/${lote.uuid}/restore`, { method: "POST" });
+      setLotes((prev) => prev.map((l) => (l.uuid === lote.uuid ? restaurado : l)));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // Agregar un lote; si ya existía uno con ese nombre oculto, se vuelve a mostrar.
+  async function handleAgregar() {
+    const nombre = nuevoLote.trim();
+    if (!nombre) return;
+    setError("");
+    try {
+      const oculto = lotes.find((l) => l.nombre === nombre && !l.deletedAt && !l.estado);
+      if (oculto) {
+        await handleMostrar(oculto);
+      } else {
+        const nuevo = await apiFetch("/lotes", { method: "POST", body: JSON.stringify({ fincaUuid: finca.uuid, nombre, estado: true }) });
+        setLotes((prev) => [...prev, nuevo]);
+        setValores((prev) => ({ ...prev, [`${nuevo.uuid}|total`]: "", [`${nuevo.uuid}|produccion`]: "" }));
+      }
+      setNuevoLote("");
+      setAgregando(false);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   return (
-    <ModalShell title={`Lotes de ${finca.nombre}`} onClose={onClose} size="lg">
-      {error && <div className="alert alert-danger py-2 small border-0 rounded-3">{error}</div>}
-
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div className="d-flex align-items-center gap-3">
-          <span className="small text-secondary">Código: {finca.codigo}</span>
-          {esAdmin && (
-            <div className="form-check mb-0">
-              <input
-                type="checkbox"
-                className="form-check-input"
-                id="mostrar-eliminados"
-                checked={mostrarEliminados}
-                onChange={(e) => setMostrarEliminados(e.target.checked)}
-              />
-              <label className="form-check-label small text-secondary" htmlFor="mostrar-eliminados">
-                Mostrar eliminados
-              </label>
-            </div>
-          )}
+    <div
+      className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+      style={{ backgroundColor: "rgba(0,0,0,0.55)", zIndex: 1050 }}
+    >
+      <div className="bg-white rounded-4 shadow-lg p-4 p-md-5" style={{ maxWidth: 640, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
+          <div className="d-flex align-items-center gap-2">
+            <FiMap className="text-primary" size={22} />
+            <h2 className="h5 fw-bold mb-0">Lotes de {finca.nombre}</h2>
+          </div>
+          <button type="button" className="btn btn-sm p-1 border-0 text-secondary" title="Cerrar" onClick={onClose}>
+            <FiX size={18} />
+          </button>
         </div>
-        <div className="d-flex gap-2">
-          {!editMode && (
-            <>
-              {hasPermission("lote.editar") && (
-                <button type="button" className="btn btn-sm btn-light rounded-3 d-inline-flex align-items-center gap-1 text-secondary" onClick={enableEditMode}>
-                  <FiEdit2 size={14} /> Modo edición
-                </button>
-              )}
-              {hasPermission("lote.crear") && (
-                <button type="button" className="btn btn-sm btn-brand rounded-3 d-inline-flex align-items-center gap-1" onClick={() => setShowForm((v) => !v)}>
-                  {showForm ? <><FiX size={14} /> Cancelar</> : <><FiPlus size={14} /> Nuevo Lote</>}
-                </button>
-              )}
-            </>
-          )}
-          {editMode && (
-            <button type="button" className="btn btn-sm btn-light rounded-3 d-inline-flex align-items-center gap-1 text-secondary" onClick={cancelEditMode}>
-              <FiX size={14} /> Salir de edición
-            </button>
-          )}
-        </div>
-      </div>
+        <p className="text-secondary small mb-4">
+          Código de la finca: {finca.codigo}. Edita el área total y el área en producción de cada lote.
+        </p>
 
-      {showForm && (
-        <NuevoLoteForm
-          fincaUuid={finca.uuid}
-          onCreated={(nuevo) => {
-            setLotes((prev) => [...prev, nuevo]);
-            setShowForm(false);
-          }}
-        />
-      )}
+        <form onSubmit={handleGuardar}>
+          {loading && <p className="text-secondary small">Cargando...</p>}
+          {!loading && visibles.length === 0 && <p className="text-secondary small">Esta finca todavía no tiene lotes.</p>}
 
-      <div className="table-responsive">
-        <table className="table table-sm table-hover align-middle mb-0">
-          <thead>
-            <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
-              <th className="fw-medium">Lote</th>
-              <th className="fw-medium">Área Disponible</th>
-              <th className="fw-medium">Área en Producción</th>
-              <th className="fw-medium">Estado</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={5} className="text-center text-secondary py-3">Cargando...</td>
-              </tr>
-            )}
-            {!loading && lotes.length === 0 && (
-              <tr>
-                <td colSpan={5} className="text-center text-secondary py-3">Esta finca todavía no tiene lotes.</td>
-              </tr>
-            )}
+          <div className="d-flex flex-column gap-2">
             {!loading &&
-              lotes.map((lote) => {
-                const ultimo = areaProdMap[lote.uuid];
-                const draft = editDraft[lote.uuid];
+              visibles.map((l) => {
+                const oculto = !l.estado || l.deletedAt;
                 return (
-                  <Fragment key={lote.uuid}>
-                    {editMode && draft ? (
-                      <tr>
-                        <td>
-                          <input className="form-control form-control-sm rounded-3 mb-1" inputMode="numeric" pattern="[0-9]*" value={draft.nombre} onChange={(e) => setDraftField(lote.uuid, "nombre", e.target.value.replace(/\D/g, ""))} placeholder="Nombre (ej: 01)" />
-                          <input className="form-control form-control-sm rounded-3" value={draft.codigo} onChange={(e) => setDraftField(lote.uuid, "codigo", e.target.value)} placeholder="Código" />
-                        </td>
-                        <td>
-                          <input className="form-control form-control-sm rounded-3" type="number" step="0.01" min="0" value={draft.area} onChange={(e) => setDraftField(lote.uuid, "area", e.target.value)} placeholder="Ha" style={{ width: "7rem" }} />
-                        </td>
-                        <td>
-                          {ultimo ? (
-                            <><span>{Number(ultimo.area).toFixed(1)} Ha</span><p className="small text-secondary mb-0">{ultimo.fechaRegistro}</p></>
-                          ) : (
-                            <span className="text-secondary small">Sin registrar</span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="form-check">
-                            <input type="checkbox" className="form-check-input" id={`edit-estado-${lote.uuid}`} checked={draft.estado} onChange={(e) => setDraftField(lote.uuid, "estado", e.target.checked)} />
-                            <label className="form-check-label small" htmlFor={`edit-estado-${lote.uuid}`}>{draft.estado ? "Activo" : "Inactivo"}</label>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="d-flex justify-content-end gap-2 flex-nowrap">
-                            <button type="button" className="btn btn-sm btn-brand rounded-3 d-inline-flex align-items-center gap-1 text-nowrap" onClick={() => handleSaveRow(lote.uuid)}>
-                              <FiSave /> Guardar
-                            </button>
-                            {esAdmin && (
-                              <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex" style={{ color: "#dc2626" }} title="Eliminar lote" onClick={() => handleDeleteLote(lote)}>
-                                <FiTrash2 size={15} />
+                  <div key={l.uuid}>
+                    <div className={`row g-2 align-items-center ${oculto ? "opacity-50" : ""}`}>
+                      <div className="col-12 col-md-3">
+                        <span className="d-flex align-items-center gap-2">
+                          <span className="text-secondary small fw-medium d-block">Lote {l.nombre}</span>
+                          {!l.deletedAt && !oculto && puedeEditar && (
+                            <>
+                              <button type="button" className="btn btn-sm p-0 border-0 text-secondary" title="Editar nombre y código" onClick={() => setEditando(editando === l.uuid ? null : l.uuid)}>
+                                <FiEdit2 size={13} />
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      <>
-                        <tr className={lote.deletedAt ? "opacity-50" : undefined}>
-                          <td>
-                            <p className="mb-0">{lote.nombre}</p>
-                            <p className="small text-secondary mb-0">Código: {lote.codigo}</p>
-                          </td>
-                          <td>{lote.area != null ? `${Number(lote.area).toFixed(1)} Ha` : "—"}</td>
-                          <td>
-                            {ultimo ? (
-                              <><span>{Number(ultimo.area).toFixed(1)} Ha</span><p className="small text-secondary mb-0">{ultimo.fechaRegistro}</p></>
-                            ) : (
-                              <span className="text-secondary small">Sin registrar</span>
-                            )}
-                          </td>
-                          <td>
-                            <span className="d-inline-flex align-items-center gap-1 small text-secondary">
-                              <span
-                                className="rounded-circle d-inline-block"
-                                style={{
-                                  width: 6,
-                                  height: 6,
-                                  background: lote.deletedAt ? "#dc2626" : lote.estado ? "#16a34a" : "#cbd5e1",
-                                }}
-                              />
-                              {lote.deletedAt ? "Eliminado" : lote.estado ? "Activo" : "Inactivo"}
-                            </span>
-                          </td>
-                          <td>
-                            {lote.deletedAt ? (
-                              esAdmin && (
-                                <div className="d-flex justify-content-end">
-                                  <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex align-items-center gap-1 text-decoration-none" style={{ color: "#16a34a" }} title="Restaurar lote" onClick={() => handleRestoreLote(lote)}>
-                                    <FiRotateCcw size={14} /> Restaurar
-                                  </button>
-                                </div>
-                              )
-                            ) : (
-                            <div className="d-flex justify-content-end gap-1 flex-nowrap">
-                              {hasPermission("lote.editar") && (
-                                <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex" title={expanded?.uuid === lote.uuid && expanded.type === "editar" ? "Cancelar" : "Editar lote"} onClick={() => toggle(lote.uuid, "editar")}>
-                                  {expanded?.uuid === lote.uuid && expanded.type === "editar" ? <FiX size={15} className="text-secondary" /> : <FiEdit2 size={15} className="text-secondary" />}
-                                </button>
-                              )}
-                              {hasPermission("lote.editar") && (
-                                <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex" style={{ color: "#16a34a" }} title={expanded?.uuid === lote.uuid && expanded.type === "area" ? "Cancelar" : "Registrar área en producción"} onClick={() => toggle(lote.uuid, "area")}>
-                                  {expanded?.uuid === lote.uuid && expanded.type === "area" ? <FiX size={15} /> : <FiRefreshCw size={15} />}
-                                </button>
-                              )}
-                              {esAdmin && (
-                                <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex" style={{ color: "#dc2626" }} title="Eliminar lote" onClick={() => handleDeleteLote(lote)}>
-                                  <FiTrash2 size={15} />
-                                </button>
-                              )}
-                            </div>
-                            )}
-                          </td>
-                        </tr>
-                        {expanded?.uuid === lote.uuid && expanded.type === "area" && (
-                          <tr><td colSpan={5} className="bg-light p-3"><AreaProduccionForm loteUuid={lote.uuid} onRegistered={async () => { const { items: historial } = await apiFetch(`/lotes/${lote.uuid}/area-produccion?limit=1`); setAreaProdMap((prev) => ({ ...prev, [lote.uuid]: historial[0] || null })); setExpanded(null); }} /></td></tr>
-                        )}
-                        {expanded?.uuid === lote.uuid && expanded.type === "editar" && (
-                          <tr><td colSpan={5} className="bg-light p-3"><EditarLoteForm lote={lote} onSaved={(actualizado) => { setLotes((prev) => prev.map((l) => (l.uuid === actualizado.uuid ? actualizado : l))); setExpanded(null); }} /></td></tr>
-                        )}
-                      </>
+                              <button type="button" className="btn btn-sm p-0 border-0 text-danger" title="Ocultar lote (no lo borra)" onClick={() => handleOcultar(l)}>
+                                <FiTrash2 size={14} />
+                              </button>
+                            </>
+                          )}
+                          {oculto && !l.deletedAt && puedeEditar && (
+                            <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none small" onClick={() => handleMostrar(l)}>
+                              Mostrar
+                            </button>
+                          )}
+                          {l.deletedAt && esAdmin && (
+                            <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none small" onClick={() => handleRestaurar(l)}>
+                              Restaurar
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <div className="input-group input-group-sm">
+                          <span className="input-group-text">Total</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="form-control"
+                            placeholder="0.00"
+                            disabled={!puedeEditar || oculto}
+                            value={valores[`${l.uuid}|total`] ?? ""}
+                            onChange={(e) => setValor(l.uuid, "total", e.target.value)}
+                          />
+                          <span className="input-group-text">Ha</span>
+                        </div>
+                      </div>
+                      <div className="col-12 col-md-5">
+                        <div className="input-group input-group-sm">
+                          <span className="input-group-text">En producción</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="form-control"
+                            placeholder="0.00"
+                            disabled={!puedeEditar || oculto}
+                            value={valores[`${l.uuid}|produccion`] ?? ""}
+                            onChange={(e) => setValor(l.uuid, "produccion", e.target.value)}
+                          />
+                          <span className="input-group-text">Ha</span>
+                        </div>
+                      </div>
+                    </div>
+                    {editando === l.uuid && (
+                      <div className="bg-light rounded-3 px-3 mt-1">
+                        <EditarLoteForm
+                          lote={l}
+                          onSaved={(actualizado) => {
+                            setLotes((prev) => prev.map((x) => (x.uuid === actualizado.uuid ? actualizado : x)));
+                            setEditando(null);
+                          }}
+                        />
+                      </div>
                     )}
-                  </Fragment>
+                  </div>
                 );
               })}
-          </tbody>
-        </table>
+          </div>
+
+          {(puedeCrear || esAdmin) && (
+            <div className="mt-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+              {puedeCrear && (
+                <div>
+                  {agregando ? (
+                    <div className="d-flex gap-2 align-items-center">
+                      <div className="input-group input-group-sm" style={{ maxWidth: 220 }}>
+                        <span className="input-group-text">Lote</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className="form-control"
+                          placeholder="N.º (ej: 09)"
+                          value={nuevoLote}
+                          onChange={(e) => setNuevoLote(e.target.value.replace(/\D/g, ""))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAgregar();
+                            }
+                          }}
+                        />
+                      </div>
+                      <button type="button" className="btn btn-sm btn-brand rounded-3" onClick={handleAgregar}>
+                        Agregar
+                      </button>
+                      <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setAgregando(false)}>
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" className="btn btn-sm btn-link text-decoration-none p-0 small d-flex align-items-center gap-1" onClick={() => setAgregando(true)}>
+                      <FiPlus size={14} /> Agregar lote
+                    </button>
+                  )}
+                </div>
+              )}
+              {(esAdmin || ocultos.length > 0) && (
+                <label className="form-check small text-secondary mb-0">
+                  <input type="checkbox" className="form-check-input" checked={mostrarOcultos} onChange={(e) => setMostrarOcultos(e.target.checked)} />{" "}
+                  <span className="form-check-label">Mostrar ocultos{ocultos.length > 0 ? ` (${ocultos.length})` : ""}</span>
+                </label>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <div className="alert alert-danger py-2 small mt-3 mb-0 d-flex align-items-center gap-2">{error}</div>
+          )}
+          {aviso && !error && <div className="alert alert-success py-2 small mt-3 mb-0">{aviso}</div>}
+
+          {puedeEditar && (
+            <button type="submit" className="btn btn-brand btn-sm w-100 rounded-3 mt-4" disabled={!hayCambios || guardando}>
+              {guardando ? "Guardando..." : "Guardar cambios"}
+            </button>
+          )}
+        </form>
       </div>
-    </ModalShell>
+    </div>
   );
 }
 
@@ -1017,127 +1043,6 @@ function EditarLoteForm({ lote, onSaved }) {
         <FiSave /> {saving ? "Guardando..." : "Guardar"}
       </button>
       {error && <div className="alert alert-danger py-1 px-2 small mb-0 w-100">{error}</div>}
-    </form>
-  );
-}
-
-function AreaProduccionForm({ loteUuid, onRegistered }) {
-  const [area, setArea] = useState("");
-  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSaving(true);
-    try {
-      await apiFetch(`/lotes/${loteUuid}/area-produccion`, {
-        method: "POST",
-        body: JSON.stringify({ area: Number(area), fecha }),
-      });
-      onRegistered();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="d-flex flex-wrap align-items-end gap-2 py-2">
-      <div>
-        <label className="form-label small mb-1">Nueva área en producción (Ha)</label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          required
-          className="form-control form-control-sm rounded-3"
-          value={area}
-          onChange={(e) => setArea(e.target.value)}
-        />
-      </div>
-      <div>
-        <label className="form-label small mb-1">Fecha</label>
-        <input
-          type="date"
-          required
-          className="form-control form-control-sm rounded-3"
-          value={fecha}
-          onChange={(e) => setFecha(e.target.value)}
-        />
-      </div>
-      <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 d-inline-flex align-items-center gap-1">
-        <FiSave /> {saving ? "Guardando..." : "Registrar"}
-      </button>
-      {error && <span className="text-danger small ms-2">{error}</span>}
-    </form>
-  );
-}
-
-function NuevoLoteForm({ fincaUuid, onCreated }) {
-  const [nombre, setNombre] = useState("");
-  const [area, setArea] = useState("");
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSaving(true);
-    try {
-      const res = await apiFetch("/lotes", {
-        method: "POST",
-        body: JSON.stringify({
-          fincaUuid,
-          nombre,
-          estado: true,
-          ...(area ? { area: Number(area) } : {}),
-        }),
-      });
-      onCreated(res);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="border rounded-3 p-3 mb-3 bg-light">
-      <p className="small text-secondary mb-2">El código del lote se genera automáticamente (código de la finca + consecutivo).</p>
-      <div className="row g-2 mb-2">
-        <div className="col-12 col-sm-7">
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            required
-            className="form-control form-control-sm rounded-3"
-            placeholder="Nombre del lote (ej: 01)"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value.replace(/\D/g, ""))}
-          />
-        </div>
-        <div className="col-6 col-sm-3">
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            className="form-control form-control-sm rounded-3"
-            placeholder="Área (Ha)"
-            value={area}
-            onChange={(e) => setArea(e.target.value)}
-          />
-        </div>
-        <div className="col-12 col-sm-2">
-          <button type="submit" disabled={saving} className="btn btn-brand btn-sm rounded-3 w-100 d-flex align-items-center justify-content-center gap-1">
-            <FiPlus /> {saving ? "..." : "Agregar"}
-          </button>
-        </div>
-      </div>
-      {error && <div className="alert alert-danger py-1 px-2 small mb-0">{error}</div>}
     </form>
   );
 }

@@ -70,7 +70,7 @@ export default function SelectorObjetivos({ fincas, seleccionados, onChange, sin
       {!sinEtiqueta && <label className="form-label small fw-medium mb-1 d-block">Fincas / Grupos</label>}
       <button
         type="button"
-        className={`btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2 justify-content-between ${sinEtiqueta ? "w-100" : ""}`}
+        className={`btn btn-sm bg-white border text-body rounded-3 d-flex align-items-center gap-2 justify-content-between ${sinEtiqueta ? "w-100" : ""}`}
         style={{ minWidth: sinEtiqueta ? undefined : "14rem" }}
         onClick={() => (abierto ? setAbierto(false) : abrir())}
       >

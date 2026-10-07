@@ -12,7 +12,7 @@ const COLOR_YLI = "#dc2626";
 const COLOR_YLS = "#2563eb";
 const COLOR_INDICE = "#9333ea";
 
-const INFO_YLI_YLS = (
+export const INFO_YLI_YLS = (
   <>
     <p className="fw-semibold mb-1">YLI (Youngest Leaf Infected)</p>
     <p className="mb-2">Número de la hoja más joven que ya muestra infección — se promedia entre las plantas evaluadas de la semana.</p>
@@ -21,11 +21,11 @@ const INFO_YLI_YLS = (
   </>
 );
 
-const INFO_HOJAS_TOTALES = (
+export const INFO_HOJAS_TOTALES = (
   <p className="mb-0">Promedio de hojas funcionales por planta, entre todas las plantas evaluadas de la semana.</p>
 );
 
-const INFO_INDICE = (
+export const INFO_INDICE = (
   <>
     <p className="mb-2">Índice de Infección de cada evaluación: PPI ponderado por la severidad de cada hoja evaluada.</p>
     <p className="mb-0">Se promedia solo entre las evaluaciones que sí tienen hojas registradas — una evaluación sin datos de hojas no arrastra el promedio hacia abajo.</p>

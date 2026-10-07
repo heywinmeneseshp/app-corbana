@@ -6,12 +6,11 @@ import { esAdministrador } from "@/lib/laborEstados";
 import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
-import PromedioPorSemanaChart from "@/components/reportes/PromedioPorSemanaChart";
-import PromedioPorEdadChart from "@/components/reportes/PromedioPorEdadChart";
-import PromedioInfeccionChart from "@/components/reportes/PromedioInfeccionChart";
-import PromedioSumaBrutaPorHojaChart from "@/components/reportes/PromedioSumaBrutaPorHojaChart";
-import EvaluacionCompareModal from "@/components/reportes/EvaluacionCompareModal";
-import ClimaChart from "@/components/reportes/ClimaChart";
+import BotonConfiguracion from "@/components/BotonConfiguracion";
+import InfoTooltip from "@/components/reportes/InfoTooltip";
+import GraficoSemanalComparable from "@/components/reportes/GraficoSemanalComparable";
+import { BarraSelecciones, useSelecciones } from "@/components/reportes/SeleccionesEvaluacion";
+import { ClimaGraficos, ConteoGraficos, InfeccionGraficos } from "@/components/reportes/SanidadGraficosTabs";
 
 const LIMITES_SB_SEMANA = [{ valor: 1200, color: "#dc2626" }];
 const LINEAS_SB_SEMANA = [{ key: "promedio", label: "Promedio", color: "#16a34a" }];
@@ -49,28 +48,20 @@ const INFO_SB_HOJA = (
   </>
 );
 
-// Finca compartida entre los dos gráficos de Suma Bruta (antes cada uno
-// tenía su propio selector independiente). Por defecto los dos muestran el
-// año actual — igual que ClimaChart — y cada uno tiene su botón de
-// expandir para comparar entre fincas y entre años.
-function SumaBrutaGraficos() {
-  const [fincas, setFincas] = useState([]);
-  const [fincaUuid, setFincaUuid] = useState("");
-  const [modalAbierto, setModalAbierto] = useState(null); // null | "semana" | "hoja"
+// Los dos gráficos de Suma Bruta (por semana y por hoja) usan el filtro de
+// selecciones de la página (fincas/grupos y años), con slider de semanas y
+// pantalla completa.
+function SumaBrutaGraficos({ sel }) {
   const [umbralesSbHoja, setUmbralesSbHoja] = useState({ advertencia: 450, alerta: 650 });
   const [modalUmbrales, setModalUmbrales] = useState(false);
   const esAdmin = esAdministrador();
 
   useEffect(() => {
-    apiFetch("/fincas?limit=100")
-      .then((data) => setFincas(data.items))
-      .catch(() => {});
     apiFetch("/evaluaciones/sb-hoja-umbrales")
       .then(setUmbralesSbHoja)
       .catch(() => {});
   }, []);
 
-  const fincaNombre = fincas.find((f) => f.uuid === fincaUuid)?.nombre || "Todas las fincas";
   const limitesSbHoja = [
     { valor: umbralesSbHoja.advertencia, color: "#f59e0b" },
     { valor: umbralesSbHoja.alerta, color: "#dc2626" },
@@ -78,63 +69,25 @@ function SumaBrutaGraficos() {
 
   return (
     <>
-      <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
-        <label className="form-label small fw-medium mb-1">Finca</label>
-        <select
-          className="form-select form-select-sm rounded-3"
-          style={{ width: "auto" }}
-          value={fincaUuid}
-          onChange={(e) => setFincaUuid(e.target.value)}
-        >
-          <option value="">Todas las fincas</option>
-          {fincas.map((f) => (
-            <option key={f.uuid} value={f.uuid}>
-              {f.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <PromedioPorSemanaChart
+      <GraficoSemanalComparable
         titulo="Promedio de Suma Bruta por Semana"
+        info={<InfoTooltip texto={INFO_SB_SEMANA} />}
         endpoint="/evaluaciones/suma-bruta-promedio"
-        colorLinea="#16a34a"
-        mensajeVacio="No hay evaluaciones de Suma Bruta para mostrar."
-        limitesControl={LIMITES_SB_SEMANA}
-        fincaUuid={fincaUuid}
-        onExpand={() => setModalAbierto("semana")}
-        info={INFO_SB_SEMANA}
-      />
-      <PromedioSumaBrutaPorHojaChart
-        titulo="Promedio de Suma Bruta por Hoja"
-        endpoint="/evaluaciones/suma-bruta-promedio-por-hoja"
-        mensajeVacio="No hay evaluaciones de Suma Bruta para mostrar."
-        fincaUuid={fincaUuid}
-        limites={umbralesSbHoja}
-        onExpand={() => setModalAbierto("hoja")}
-        onConfigurar={esAdmin ? () => setModalUmbrales(true) : undefined}
-        info={INFO_SB_HOJA}
-      />
-
-      <EvaluacionCompareModal
-        open={modalAbierto === "semana"}
-        onClose={() => setModalAbierto(null)}
-        titulo="Promedio de Suma Bruta por Semana"
-        endpoint="/evaluaciones/suma-bruta-promedio"
+        series={sel.series}
         lineas={LINEAS_SB_SEMANA}
-        limitesControl={LIMITES_SB_SEMANA}
-        fincaUuidBase={fincaUuid}
-        fincaBaseLabel={fincaNombre}
+        limites={LIMITES_SB_SEMANA}
+        mensajeVacio="No hay evaluaciones de Suma Bruta para mostrar."
+        ayuda="Cada punto es el promedio de Suma Bruta de esa semana de registro."
       />
-      <EvaluacionCompareModal
-        open={modalAbierto === "hoja"}
-        onClose={() => setModalAbierto(null)}
+      <GraficoSemanalComparable
         titulo="Promedio de Suma Bruta por Hoja"
+        info={<InfoTooltip texto={INFO_SB_HOJA} />}
         endpoint="/evaluaciones/suma-bruta-promedio-por-hoja"
+        series={sel.series}
         lineas={LINEAS_SB_HOJA}
-        limitesControl={limitesSbHoja}
-        fincaUuidBase={fincaUuid}
-        fincaBaseLabel={fincaNombre}
+        limites={limitesSbHoja}
+        mensajeVacio="No hay evaluaciones de Suma Bruta para mostrar."
+        acciones={esAdmin ? <BotonConfiguracion compacto title="Configurar líneas de referencia" onClick={() => setModalUmbrales(true)} /> : undefined}
       />
 
       {modalUmbrales && (
@@ -241,6 +194,8 @@ const TIPOS = [
 
 export default function SanidadGraficosPage() {
   const tabsVisibles = TIPOS;
+  // Filtro de selecciones compartido por todas las pestañas.
+  const sel = useSelecciones();
   // El tab por defecto tiene que ser uno que el usuario efectivamente pueda
   // ver — antes siempre arrancaba en "Índice de infección" porque la página
   // entera exigía ese permiso; ahora alguien sin permisos de Sanidad Vegetal
@@ -273,18 +228,16 @@ export default function SanidadGraficosPage() {
           ))}
         </ul>
 
+        <BarraSelecciones sel={sel} />
+
         {tab === "Índice de infección" ? (
-          <PromedioInfeccionChart titulo="Índice de Infección por Semana" mensajeVacio="No hay evaluaciones de infección para mostrar." />
+          <InfeccionGraficos sel={sel} />
         ) : tab === "Conteo de Hojas" ? (
-          <PromedioPorEdadChart
-            titulo="Promedio de Hojas Funcionales por Edad"
-            endpoint="/evaluaciones/conteo-promedio"
-            mensajeVacio="No hay evaluaciones de Conteo de Hojas para mostrar."
-          />
+          <ConteoGraficos sel={sel} />
         ) : tab === "Suma Bruta" ? (
-          <SumaBrutaGraficos />
+          <SumaBrutaGraficos sel={sel} />
         ) : tab === "Clima" ? (
-          <ClimaChart mensajeVacio="No hay registros de clima para mostrar." />
+          <ClimaGraficos sel={sel} />
         ) : null}
       </div>
     </RequirePermission>

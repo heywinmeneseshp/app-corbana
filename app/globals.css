@@ -110,3 +110,10 @@ body {
   height: 0;
 }
 
+
+/* Tarjetas de gráfica a pantalla completa (ver CollapsibleCard `expandible`):
+   la gráfica ocupa el alto de la ventana menos el encabezado y el slider. */
+.grafico-expandido .recharts-responsive-container,
+.grafico-expandido .grafico-alto {
+  height: calc(100vh - 240px) !important;
+}

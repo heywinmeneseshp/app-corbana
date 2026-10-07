@@ -38,7 +38,10 @@ export default function SelectorCanastas({ fincas, anioOpciones, canastas, onCha
 
   if (!varias) {
     return (
-      <div className="d-flex flex-wrap align-items-end gap-2">
+      // display: contents: los selectores y el botón pasan a ser hijos directos
+      // de la fila de filtros de la página, para que el botón de comparar
+      // quede en el extremo derecho de TODA la fila (después de la semana).
+      <div style={{ display: "contents" }}>
         <SelectorObjetivos
           fincas={fincas}
           seleccionados={canastas[0].objetivos}
@@ -49,7 +52,7 @@ export default function SelectorCanastas({ fincas, anioOpciones, canastas, onCha
           seleccionados={canastas[0].anios}
           onChange={(anios) => actualizarCanasta(canastas[0].id, { anios })}
         />
-        <button type="button" className="btn btn-sm btn-outline-secondary rounded-3 d-flex align-items-center gap-1" onClick={agregarCanasta}>
+        <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1 ms-auto" style={{ order: 99 }} onClick={agregarCanasta}>
           <FiPlus /> Comparar con otra selección
         </button>
       </div>
@@ -62,61 +65,60 @@ export default function SelectorCanastas({ fincas, anioOpciones, canastas, onCha
     // flex-wrap junto al título.
     <div style={{ width: "100%", flexBasis: "100%" }}>
       <div
-        className="d-grid gap-2"
+        className="d-grid gap-1"
         style={{ gridTemplateColumns: "repeat(2, minmax(18rem, 1fr))" }}
       >
         {canastas.map((canasta, i) => (
-          <div key={canasta.id} className="card border-0 shadow-sm rounded-4 p-2">
-            <div className="d-flex align-items-center gap-2 mb-2">
-              <span
-                className="rounded-circle flex-shrink-0"
-                style={{ width: "0.65rem", height: "0.65rem", backgroundColor: SERIE_COLORS[i % SERIE_COLORS.length] }}
+          <div key={canasta.id} className="card border-0 bg-transparent shadow-none rounded-0 px-0 py-1 d-flex flex-row flex-wrap align-items-center gap-2">
+            <span
+              className="rounded-circle flex-shrink-0"
+              style={{ width: "0.6rem", height: "0.6rem", backgroundColor: SERIE_COLORS[i % SERIE_COLORS.length] }}
+            />
+            <input
+              type="text"
+              className="form-control form-control-sm rounded-3 bg-white"
+              style={{ width: "8rem" }}
+              placeholder={`Selección ${i + 1}`}
+              value={canasta.nombre}
+              onChange={(e) => actualizarCanasta(canasta.id, { nombre: e.target.value })}
+            />
+            <div className="flex-grow-1" style={{ minWidth: "9rem" }}>
+              <SelectorObjetivos
+                fincas={fincas}
+                seleccionados={canasta.objetivos}
+                onChange={(objetivos) => actualizarCanasta(canasta.id, { objetivos })}
+                sinEtiqueta
               />
-              <input
-                type="text"
-                className="form-control form-control-sm rounded-3"
-                placeholder={`Selección ${i + 1}`}
-                value={canasta.nombre}
-                onChange={(e) => actualizarCanasta(canasta.id, { nombre: e.target.value })}
+            </div>
+            <div style={{ width: "7rem" }}>
+              <SelectorAnios
+                anios={anioOpciones}
+                seleccionados={canasta.anios}
+                onChange={(anios) => actualizarCanasta(canasta.id, { anios })}
+                sinEtiqueta
               />
-              <button
-                type="button"
-                className="btn btn-sm btn-link text-danger p-0 flex-shrink-0"
-                onClick={() => quitarCanasta(canasta.id)}
-                title="Quitar esta selección"
-              >
-                <FiX size={18} />
-              </button>
             </div>
-            <div className="d-flex flex-wrap gap-2">
-              <div className="flex-grow-1" style={{ minWidth: "10rem" }}>
-                <SelectorObjetivos
-                  fincas={fincas}
-                  seleccionados={canasta.objetivos}
-                  onChange={(objetivos) => actualizarCanasta(canasta.id, { objetivos })}
-                  sinEtiqueta
-                />
-              </div>
-              <div style={{ width: "8rem" }}>
-                <SelectorAnios
-                  anios={anioOpciones}
-                  seleccionados={canasta.anios}
-                  onChange={(anios) => actualizarCanasta(canasta.id, { anios })}
-                  sinEtiqueta
-                />
-              </div>
-            </div>
+            <button
+              type="button"
+              className="btn btn-sm btn-link text-danger p-0 flex-shrink-0"
+              onClick={() => quitarCanasta(canasta.id)}
+              title="Quitar esta selección"
+            >
+              <FiX size={16} />
+            </button>
           </div>
         ))}
       </div>
 
+      <div className="d-flex justify-content-end mt-1">
       <button
         type="button"
-        className="btn btn-sm btn-outline-secondary rounded-3 d-flex align-items-center gap-1 mt-2"
+        className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1"
         onClick={agregarCanasta}
       >
         <FiPlus /> Comparar con otra selección
       </button>
+      </div>
     </div>
   );
 }

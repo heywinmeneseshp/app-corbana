@@ -27,8 +27,10 @@ import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import ReportesTabs from "@/components/ReportesTabs";
 import SelectorCanastas from "@/components/reportes/SelectorCanastas";
+import { ejeAjustado } from "@/lib/dominioY";
 import CollapsibleCard from "@/components/reportes/CollapsibleCard";
 import SortableTh, { ordenarFilas } from "@/components/reportes/SortableTh";
+import RangoSemanasSlider, { filtrarSemanas } from "@/components/reportes/RangoSemanasSlider";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 
 const SERIE_COLORS = ["#16a34a", "#2563eb", "#d97706", "#dc2626", "#7c3aed", "#0891b2", "#be185d", "#65a30d"];
@@ -84,6 +86,11 @@ export default function MetricaAnualChart({
   rankingMostrarParticipacion = false,
   rankingSemanalKey,
 }) {
+  // Rango visible del eje X (barra inferior de la gráfica): null = todo el año.
+  // Con el año completo se mantienen los ticks fijos 1, 10, 20...; al acotar el
+  // rango, el eje se adapta solo.
+  const [rangoSemanas, setRangoSemanas] = useState(null);
+  const ejeSemanas = rangoSemanas ? { interval: "preserveStartEnd" } : { domain: [1, 53], ticks: [1, 10, 20, 30, 40, 50] };
   const [fincas, setFincas] = useState([]);
   const [canastas, setCanastas] = useState([{ id: "c0", nombre: "", objetivos: [], anios: [] }]);
   const [semanas, setSemanas] = useState([]);
@@ -261,6 +268,13 @@ export default function MetricaAnualChart({
     };
   }, [seriesData, arrayField, metricKey]);
 
+  // Solo Aprovechamiento ajusta el eje Y del punto más bajo al más alto de lo
+  // visible (con marcas parejas); el resto (Cajas, Ratio) conserva su eje.
+  const ajustarEje = arrayField === "aprovechamientoAnual";
+  const ejeSimple = ajustarEje ? ejeAjustado(filtrarSemanas(puntos, rangoSemanas).map((p) => p[metricKey])) : null;
+  const ejeComparacion = ajustarEje
+    ? ejeAjustado(filtrarSemanas(chartDataComparacion, rangoSemanas).flatMap((f) => seriesList.map((s) => f[s.key])))
+    : null;
   const hayDatosComparacion = chartDataComparacion.some((fila) => seriesList.some((s) => fila[s.key] != null));
 
   return (
@@ -299,8 +313,8 @@ export default function MetricaAnualChart({
           </p>
         )}
 
-        <CollapsibleCard titulo={titulo} subtitulo={modoComparacion ? "Comparación entre selecciones" : undefined}>
-        <div style={{ height: modoComparacion ? "460px" : "420px" }}>
+        <CollapsibleCard titulo={titulo} subtitulo={modoComparacion ? "Comparación entre selecciones" : undefined} expandible>
+        <div className="grafico-alto" style={{ height: modoComparacion ? "460px" : "420px" }}>
           {loading && !data && !seriesData && <p className="text-secondary text-center py-5">Cargando...</p>}
 
           {!modoComparacion && !loading && !hayDatosSimple && (
@@ -310,10 +324,10 @@ export default function MetricaAnualChart({
           )}
           {!modoComparacion && hayDatosSimple && (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={puntos} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <LineChart data={filtrarSemanas(puntos, rangoSemanas)} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="numeroSemana" tick={{ fontSize: 11 }} domain={[1, 53]} ticks={[1, 10, 20, 30, 40, 50]} />
-                <YAxis tick={{ fontSize: 11 }} width={45} domain={yDomain || ["auto", "auto"]} unit={yUnit || ""} />
+                <XAxis dataKey="numeroSemana" tick={{ fontSize: 11 }} {...ejeSemanas} />
+                <YAxis tick={{ fontSize: 11 }} width={45} domain={ejeSimple ? ejeSimple.domain : yDomain || ["auto", "auto"]} ticks={ejeSimple?.ticks} unit={yUnit || ""} />
                 <Tooltip
                   content={
                     <ChartTooltip
@@ -345,10 +359,10 @@ export default function MetricaAnualChart({
           )}
           {modoComparacion && hayDatosComparacion && (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartDataComparacion} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <LineChart data={filtrarSemanas(chartDataComparacion, rangoSemanas)} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="numeroSemana" tick={{ fontSize: 11 }} domain={[1, 53]} ticks={[1, 10, 20, 30, 40, 50]} />
-                <YAxis tick={{ fontSize: 11 }} width={45} domain={yDomain || ["auto", "auto"]} unit={yUnit || ""} />
+                <XAxis dataKey="numeroSemana" tick={{ fontSize: 11 }} {...ejeSemanas} />
+                <YAxis tick={{ fontSize: 11 }} width={45} domain={ejeComparacion ? ejeComparacion.domain : yDomain || ["auto", "auto"]} ticks={ejeComparacion?.ticks} unit={yUnit || ""} />
                 <Tooltip content={<ChartTooltip decimal={decimal} semanaCodigoPorNumero={semanaCodigoPorNumero} />} />
                 <Legend wrapperStyle={{ fontSize: "0.75rem" }} />
                 {referenceLineAt != null && <ReferenceLine y={referenceLineAt} stroke="#b45309" strokeDasharray="3 3" />}
@@ -368,6 +382,9 @@ export default function MetricaAnualChart({
             </ResponsiveContainer>
           )}
         </div>
+        {(modoComparacion ? hayDatosComparacion : hayDatosSimple) && (
+          <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} />
+        )}
         </CollapsibleCard>
 
         {!modoComparacion && ranking.length > 0 && (

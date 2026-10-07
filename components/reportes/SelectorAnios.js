@@ -38,7 +38,7 @@ export default function SelectorAnios({ anios, seleccionados, onChange, sinEtiqu
       {!sinEtiqueta && <label className="form-label small fw-medium mb-1 d-block">Años</label>}
       <button
         type="button"
-        className={`btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2 justify-content-between ${sinEtiqueta ? "w-100" : ""}`}
+        className={`btn btn-sm bg-white border text-body rounded-3 d-flex align-items-center gap-2 justify-content-between ${sinEtiqueta ? "w-100" : ""}`}
         style={{ minWidth: sinEtiqueta ? undefined : "9rem" }}
         onClick={() => (abierto ? setAbierto(false) : abrir())}
       >
