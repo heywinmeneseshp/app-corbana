@@ -1337,6 +1337,7 @@ function AreasMasivoModal({ onClose, onDone }) {
         "Los valores de la plantilla son los vigentes hoy. Si dejas una celda de área vacía, se conserva el valor vigente de la semana escrita. El 0 es un valor válido.",
         "Las filas sin semana se reportan como error al validar; las filas sin cambios de área se omiten.",
         "El área total del lote solo se actualiza cuando la semana escrita es la actual; en semanas anteriores solo queda en el histórico de esa semana.",
+        "Si el lote no existe en la finca, se CREA (activo, sin área total): el nombre del lote debe ser solo números. Si el lote existe pero está oculto, el área se agrega a ese mismo lote.",
         "No se pueden actualizar semanas futuras.",
       ].forEach((t, i) => {
         const r = ins.getRow(i + 1);
@@ -1384,99 +1385,65 @@ function AreasMasivoModal({ onClose, onDone }) {
   return (
     <ModalShell title="Actualizar áreas de lotes (masivo)" onClose={onClose} size="lg">
       <p className="small text-secondary mb-3">
-        Actualiza el área total y el área en producción de muchos lotes a la vez con un Excel. En el Excel es <strong>obligatorio escribir la semana</strong>{" "}
-        a actualizar en cada fila (columna <code>semana</code>, ej. S41-2026); el cambio queda en el histórico de esa semana.
+        Actualiza el área total y en producción de muchos lotes con un Excel. En cada fila es <strong>obligatorio escribir la semana</strong> (columna{" "}
+        <code>semana</code>, ej. S41-2026).
       </p>
 
-      <div className="mb-3">
-        <label className="form-label small fw-medium d-block">1. Descarga la plantilla</label>
-        <button type="button" className="btn btn-light btn-sm rounded-3 d-inline-flex align-items-center gap-2" disabled={trabajando === "plantilla"} onClick={descargarPlantilla}>
-          <FiDownload size={14} /> {trabajando === "plantilla" ? "Generando..." : "Descargar plantilla con las áreas vigentes"}
-        </button>
+      <div className="row g-3 align-items-end mb-3">
+        <div className="col-12 col-md-5">
+          <button
+            type="button"
+            className="btn btn-outline-secondary bg-white btn-sm rounded-3 d-inline-flex align-items-center justify-content-center gap-2 w-100"
+            disabled={trabajando === "plantilla"}
+            onClick={descargarPlantilla}
+          >
+            <FiDownload size={14} /> {trabajando === "plantilla" ? "Generando..." : "Descargar plantilla"}
+          </button>
+        </div>
+        <div className="col-12 col-md-7">
+          <input
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="form-control form-control-sm"
+            onChange={(e) => {
+              setArchivo(e.target.files?.[0] || null);
+              setResultado(null);
+              setAplicado(false);
+            }}
+          />
+        </div>
       </div>
-
-      <div className="mb-3">
-        <label className="form-label small fw-medium">2. Sube el Excel editado</label>
-        <input
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          className="form-control form-control-sm"
-          onChange={(e) => {
-            setArchivo(e.target.files?.[0] || null);
-            setResultado(null);
-            setAplicado(false);
-          }}
-        />
-      </div>
-
-      {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       <div className="d-flex gap-2 mb-3">
-        <button type="button" className="btn btn-light btn-sm rounded-3" disabled={!archivo || trabajando !== "" || aplicado} onClick={() => enviar(true)}>
-          {trabajando === "validar" ? "Validando..." : "3. Validar"}
+        <button type="button" className="btn btn-outline-success btn-sm rounded-3 flex-fill" disabled={!archivo || trabajando !== "" || aplicado} onClick={() => enviar(true)}>
+          {trabajando === "validar" ? "Validando..." : "Validar"}
         </button>
-        <button type="button" className="btn btn-brand btn-sm rounded-3" disabled={!puedeAplicar || trabajando !== ""} onClick={() => enviar(false)}>
-          {trabajando === "aplicar" ? "Aplicando..." : "4. Aplicar actualización"}
+        <button type="button" className="btn btn-brand btn-sm rounded-3 flex-fill" disabled={!puedeAplicar || trabajando !== ""} onClick={() => enviar(false)}>
+          {trabajando === "aplicar" ? "Aplicando..." : "Aplicar"}
         </button>
       </div>
 
+      {error && <div className="alert alert-danger py-2 small mb-2">{error}</div>}
+
       {resultado && (
-        <div>
-          <div className={`alert py-2 small ${aplicado ? "alert-success" : resultado.actualizados > 0 ? "alert-info" : "alert-warning"}`}>
+        <>
+          <div className={`alert py-2 small mb-2 ${aplicado ? "alert-success" : resultado.actualizados > 0 ? "alert-info" : "alert-warning"}`}>
             {aplicado
-              ? `Listo: se actualizaron ${resultado.actualizados} registro(s) en ${resultado.semanas.join(", ")}.`
-              : `Validación: ${resultado.actualizados} registro(s) listos para actualizar${resultado.semanas.length ? ` (${resultado.semanas.join(", ")})` : ""}, ${resultado.errores.length} fila(s) con error (se omiten).`}
+              ? `Listo: se actualizaron ${resultado.actualizados.toLocaleString("es")} registro(s)${resultado.lotesNuevos?.length ? ` y se crearon ${resultado.lotesNuevos.length} lote(s)` : ""}.`
+              : `Validación: ${resultado.actualizados.toLocaleString("es")} registro(s) válido(s), ${resultado.errores.length.toLocaleString("es")} inválido(s).`}
           </div>
 
           {resultado.errores.length > 0 && (
-            <div className="mb-3">
-              <div className="small fw-medium text-danger mb-1">Filas con error</div>
-              <ul className="small text-secondary mb-0" style={{ maxHeight: "9rem", overflowY: "auto" }}>
-                {resultado.errores.map((e) => (
-                  <li key={`${e.fila}-${e.error}`}>
-                    Fila {e.fila}: {e.error}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <ul className="small text-danger-emphasis mb-0 ps-3" style={{ maxHeight: "10rem", overflowY: "auto" }}>
+              {resultado.errores.map((e) => (
+                <li key={`${e.fila}-${e.error}`}>
+                  Fila {e.fila}: {e.error}
+                </li>
+              ))}
+            </ul>
           )}
-
-          {resultado.vistaPrevia.length > 0 && (
-            <div className="table-responsive" style={{ maxHeight: "14rem" }}>
-              <table className="table table-sm mb-0" style={{ fontSize: "0.78rem" }}>
-                <thead>
-                  <tr className="text-secondary">
-                    <th>Fila</th>
-                    <th>Semana</th>
-                    <th>Finca</th>
-                    <th>Lote</th>
-                    <th className="text-end">Total (Ha)</th>
-                    <th className="text-end">En producción (Ha)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resultado.vistaPrevia.map((r) => (
-                    <tr key={r.fila}>
-                      <td>{r.fila}</td>
-                      <td className="fw-medium">{r.semana}</td>
-                      <td>{r.codigoFinca}</td>
-                      <td>{r.lote}</td>
-                      <td className="text-end">{r.areaTotal !== null && r.areaTotal !== undefined ? Number(r.areaTotal).toFixed(2) : ""}</td>
-                      <td className="text-end">{Number(r.areaProduccion).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        </>
       )}
-
-      <div className="d-flex justify-content-end mt-3">
-        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
-          {aplicado ? "Cerrar" : "Cancelar"}
-        </button>
-      </div>
     </ModalShell>
   );
 }

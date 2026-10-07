@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2 } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiRotateCcw } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
@@ -15,6 +15,7 @@ export default function GruposFincaPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -26,7 +27,7 @@ export default function GruposFincaPage() {
     setLoading(true);
     setError("");
     try {
-      const { items: rows } = await apiFetch("/grupos-finca?limit=100");
+      const { items: rows } = await apiFetch(`/grupos-finca?limit=100${mostrarEliminados ? "&incluirEliminados=true" : ""}`);
       setItems(rows);
     } catch (err) {
       setError(err.message);
@@ -37,7 +38,8 @@ export default function GruposFincaPage() {
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mostrarEliminados]);
 
   function openCreate() {
     setEditing(null);
@@ -73,9 +75,19 @@ export default function GruposFincaPage() {
   }
 
   async function handleDelete(grupo) {
-    if (!confirm(`¿Eliminar el grupo "${grupo.nombre}"? Las fincas que lo tengan asignado quedan sin grupo.`)) return;
+    if (!confirm(`¿Eliminar el grupo "${grupo.nombre}"? Sus fincas dejan de estar agrupadas; puedes restaurar el grupo después y se vuelven a agrupar.`)) return;
     try {
       await apiFetch(`/grupos-finca/${grupo.uuid}`, { method: "DELETE" });
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleRestore(grupo) {
+    if (!confirm(`¿Restaurar el grupo "${grupo.nombre}"? Sus fincas (${grupo.totalFincas ?? 0}) vuelven a estar agrupadas.`)) return;
+    try {
+      await apiFetch(`/grupos-finca/${grupo.uuid}/restore`, { method: "POST" });
       load();
     } catch (err) {
       setError(err.message);
@@ -103,12 +115,20 @@ export default function GruposFincaPage() {
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
+        {hasPermission("grupo_finca.eliminar") && (
+          <label className="form-check small text-secondary mb-2">
+            <input type="checkbox" className="form-check-input" checked={mostrarEliminados} onChange={(e) => setMostrarEliminados(e.target.checked)} />{" "}
+            <span className="form-check-label">Mostrar grupos eliminados</span>
+          </label>
+        )}
+
         <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
             <table className="table table-hover mb-0 align-middle">
               <thead className="table-light">
                 <tr>
                   <th>Nombre</th>
+                  <th className="text-center">Fincas</th>
                   <th>Estado</th>
                   <th className="text-end">Acciones</th>
                 </tr>
@@ -116,24 +136,27 @@ export default function GruposFincaPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={3} className="text-center text-secondary py-4">
+                    <td colSpan={4} className="text-center text-secondary py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="text-center text-secondary py-4">
+                    <td colSpan={4} className="text-center text-secondary py-4">
                       No hay grupos de finca registrados todavía.
                     </td>
                   </tr>
                 )}
                 {!loading &&
                   items.map((g) => (
-                    <tr key={g.uuid}>
+                    <tr key={g.uuid} className={g.deletedAt ? "opacity-50" : undefined}>
                       <td className="fw-medium">{g.nombre}</td>
+                      <td className="text-center small">{g.totalFincas ?? 0}</td>
                       <td>
-                        {g.estado ? (
+                        {g.deletedAt ? (
+                          <span className="badge rounded-pill text-bg-danger">Eliminado</span>
+                        ) : g.estado ? (
                           <span className="badge rounded-pill" style={{ backgroundColor: "#d1fae5", color: "#047857" }}>
                             Activo
                           </span>
@@ -143,15 +166,25 @@ export default function GruposFincaPage() {
                       </td>
                       <td>
                         <div className="d-flex justify-content-end gap-2 flex-nowrap">
-                          {hasPermission("grupo_finca.editar") && (
-                            <button type="button" className="btn btn-sm btn-outline-warning" title="Editar" onClick={() => openEdit(g)}>
-                              <FiEdit2 />
-                            </button>
-                          )}
-                          {hasPermission("grupo_finca.eliminar") && (
-                            <button type="button" className="btn btn-sm btn-outline-danger" title="Eliminar" onClick={() => handleDelete(g)}>
-                              <FiTrash2 />
-                            </button>
+                          {g.deletedAt ? (
+                            hasPermission("grupo_finca.eliminar") && (
+                              <button type="button" className="btn btn-sm btn-link text-success text-decoration-none d-inline-flex align-items-center gap-1" title="Restaurar grupo" onClick={() => handleRestore(g)}>
+                                <FiRotateCcw size={14} /> Restaurar
+                              </button>
+                            )
+                          ) : (
+                            <>
+                              {hasPermission("grupo_finca.editar") && (
+                                <button type="button" className="btn btn-sm btn-link text-secondary p-1" title="Editar" onClick={() => openEdit(g)}>
+                                  <FiEdit2 />
+                                </button>
+                              )}
+                              {hasPermission("grupo_finca.eliminar") && (
+                                <button type="button" className="btn btn-sm btn-link text-danger p-1" title="Eliminar" onClick={() => handleDelete(g)}>
+                                  <FiTrash2 />
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
