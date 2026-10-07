@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import EstacionConfigModal from "@/components/EstacionConfigModal";
 import OpenMeteoPanel from "@/components/OpenMeteoPanel";
+import ClimaGraficas from "@/components/ClimaGraficas";
 import { esAdministrador } from "@/lib/laborEstados";
 
 // Estación meteorológica WeatherLink ("Pantoja 01 Norte") — módulo aparte,
@@ -69,7 +70,7 @@ export default function EstacionMeteorologicaPage() {
   const [sincError, setSincError] = useState("");
   const [rellenandoFaltantes, setRellenandoFaltantes] = useState(false);
   const [modalConfig, setModalConfig] = useState(false);
-  const [tab, setTab] = useState("estacion"); // "estacion" | "openmeteo"
+  const [tab, setTab] = useState("estacion"); // "estacion" | "openmeteo" | "graficas"
   const [ucBases, setUcBases] = useState([14]);
   const esAdmin = esAdministrador();
 
@@ -150,9 +151,16 @@ export default function EstacionMeteorologicaPage() {
               Open-Meteo
             </button>
           </li>
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 ${tab === "graficas" ? "active" : ""}`} onClick={() => setTab("graficas")}>
+              Gráficas
+            </button>
+          </li>
         </ul>
 
         {tab === "openmeteo" && <OpenMeteoPanel ucBases={ucBases} esAdmin={esAdmin} onConfigurar={() => setModalConfig(true)} />}
+
+        {tab === "graficas" && <ClimaGraficas ucBases={ucBases} />}
 
         {tab === "estacion" && (
           <>
