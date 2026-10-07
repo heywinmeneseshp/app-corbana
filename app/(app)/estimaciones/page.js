@@ -1805,8 +1805,13 @@ export default function EstimacionesPage() {
                           {Array.from({ length: pivoteData.maxColumnas }, (_, i) => {
                             const c = fila.columnas[i];
                             const valor = fila.valores[i];
+                            const origen = fila.origenes?.[i];
                             return (
-                              <td key={i} title={c?.codigo}>
+                              <td
+                                key={i}
+                                title={origen ? `${c?.codigo} — de la estimación de ${origen} (no cargó en esta semana)` : c?.codigo}
+                                style={origen ? { color: "#c2410c", fontStyle: "italic", fontWeight: 500 } : undefined}
+                              >
                                 {!c ? "" : valor === null || valor === undefined ? "—" : Number(valor).toLocaleString("es")}
                               </td>
                             );
