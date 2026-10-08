@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useState, useRef } from "react";
 import ExcelJS from "exceljs";
-import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSend, FiAlertTriangle, FiInfo } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiLink, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSend, FiAlertTriangle, FiInfo } from "react-icons/fi";
 import BotonConfiguracion from "@/components/BotonConfiguracion";
 import { apiFetch, apiFetchFormData, apiUpload } from "@/lib/api";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
@@ -15,6 +15,7 @@ import { generarAvisoAspersionPdfBlob, verAvisoAspersionPdf } from "@/lib/aspers
 import { ubicarSemana, formatRangoSemana } from "@/lib/laborCalendarBuilder";
 import { descargarExcelProgramador, descargarExcelCalendario, generarExcelCalendarioBlob } from "@/lib/aspersionesExcelExport";
 import { construirGrafoUnidades, convertirCantidad } from "@/lib/unidadConversion";
+import MezclaAutocomplete from "@/components/MezclaAutocomplete";
 
 const NOMBRES_DIA = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MES_ABREV = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -166,6 +167,9 @@ export default function AspersionesPage() {
   // aspersión" — la lista de /inventarios/mezclas no trae componentes, hace
   // falta pedir el detalle puntual para mostrar los insumos de la receta.
   const [mezclaDetalle, setMezclaDetalle] = useState(null);
+  // Aviso por límite de aplicaciones FRAC: grupos que esta mezcla llevaría por encima
+  // de su máximo (últimos 12 meses) en la finca elegida.
+  const [avisosFrac, setAvisosFrac] = useState([]);
   const [existenciasInsumos, setExistenciasInsumos] = useState({});
   // Texto crudo que el operador está tecleando en "Cantidad necesaria", por
   // articuloUuid — se muestra tal cual mientras escribe, en vez de forzar
@@ -299,7 +303,14 @@ export default function AspersionesPage() {
       // Solo mezclas activas y con dosis por hectárea configurada — sin eso
       // no hay forma de calcular cuánto preparar (ver
       // aspersionProgramacion.service.js#resolveMezclaConDosis).
-      setMezclas((mezclasRes.items || []).filter((m) => m.articuloElaborado?.estado && m.dosisPorHectarea != null));
+      // El listado es paginado (máx. 100): se piden las páginas restantes para no dejar mezclas fuera.
+      let todasMezclas = mezclasRes.items || [];
+      const paginasMezclas = mezclasRes.meta?.totalPages || 1;
+      for (let pg = 2; pg <= paginasMezclas; pg += 1) {
+        const mas = await apiFetch(`/inventarios/mezclas?limit=100&page=${pg}`);
+        todasMezclas = todasMezclas.concat(mas.items || []);
+      }
+      setMezclas(todasMezclas.filter((m) => m.articuloElaborado?.estado && m.dosisPorHectarea != null));
       setAlmacenes(almacenesRes.items || []);
       // El backend las devuelve más reciente primero — se reordenan
       // ascendente para que "anterior/siguiente" en el calendario avancen
@@ -776,6 +787,21 @@ export default function AspersionesPage() {
   }
 
   const mezclaSeleccionada = mezclas.find((m) => m.uuid === form.mezclaUuid);
+
+  useEffect(() => {
+    if (!form.fincaUuid || !form.mezclaUuid) return undefined;
+    let cancelado = false;
+    apiFetch(`/frac-limites/verificar?fincaUuid=${form.fincaUuid}&mezclaUuid=${form.mezclaUuid}`)
+      .then((res) => {
+        if (!cancelado) setAvisosFrac(Array.isArray(res) ? res : res?.data || []);
+      })
+      .catch(() => {
+        if (!cancelado) setAvisosFrac([]);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [form.fincaUuid, form.mezclaUuid]);
   const hectareasNum = Number(form.hectareas) || 0;
   // "Volumen / ha" lo puede editar el operador — vacío = el configurado
   // en la mezcla (pedido explícito). Todo lo demás (cantidad a preparar,
@@ -1512,9 +1538,47 @@ export default function AspersionesPage() {
   const [ejecutarModal, setEjecutarModal] = useState(null);
   const [stockModal, setStockModal] = useState(null);
 
+  // Ciclo = una aplicación hecha en varias partes (días). Modal para corregir qué aspersiones son del mismo ciclo.
+  const [cicloModal, setCicloModal] = useState(null);
+
+  async function abrirCiclo(aspersion) {
+    setCicloModal({ aspersion, partes: [], candidatas: [], unirCon: "", cargando: true, error: "" });
+    try {
+      const [partes, candidatas] = await Promise.all([
+        apiFetch(`/aspersiones/${aspersion.uuid}/ciclo`),
+        apiFetch(`/aspersiones/${aspersion.uuid}/candidatas-ciclo`),
+      ]);
+      const lista = (r) => (Array.isArray(r) ? r : r?.data || []);
+      setCicloModal((m) => (m ? { ...m, partes: lista(partes), candidatas: lista(candidatas), cargando: false } : m));
+    } catch (err) {
+      setCicloModal((m) => (m ? { ...m, cargando: false, error: err.message } : m));
+    }
+  }
+
+  async function cicloAccion(ruta, body, aspersion) {
+    try {
+      await apiFetch(`/aspersiones/${aspersion.uuid}/${ruta}`, { method: "POST", body: JSON.stringify(body || {}) });
+      await load();
+      await abrirCiclo(cicloModal.aspersion);
+    } catch (err) {
+      setCicloModal((m) => (m ? { ...m, error: err.message } : m));
+    }
+  }
+
   function abrirEjecutar(aspersion) {
+    const manana = new Date(`${String(aspersion.fecha).slice(0, 10)}T00:00:00Z`);
+    manana.setUTCDate(manana.getUTCDate() + 1);
+    apiFetch(`/aspersiones/${aspersion.uuid}/candidatas-ciclo`)
+      .then((r) => {
+        const lista = Array.isArray(r) ? r : r?.data || [];
+        setEjecutarModal((m) => (m && m.aspersion.uuid === aspersion.uuid ? { ...m, candidatas: lista } : m));
+      })
+      .catch(() => {});
     setEjecutarModal({
       aspersion,
+      fechaParteRestante: manana.toISOString().slice(0, 10),
+      cicloCon: "",
+      candidatas: [],
       piloto: "",
       hectareasAplicadas: String(Number(aspersion.hectareas)),
       // Galones de la programación (cantidad a preparar llevada a galones),
@@ -1542,6 +1606,9 @@ export default function AspersionesPage() {
       hectareasAplicadas: aplicadas,
       ...(m.galonesTotales !== "" ? { galonesTotales: Number(m.galonesTotales) } : {}),
       ...(m.observaciones.trim() ? { observaciones: m.observaciones.trim() } : {}),
+      // Ejecución parcial: lo que falta queda como parte pendiente del mismo ciclo.
+      ...(aplicadas < Number(m.aspersion.hectareas) && m.fechaParteRestante ? { fechaParteRestante: m.fechaParteRestante } : {}),
+      ...(m.cicloCon ? { cicloConAspersionUuid: m.cicloCon } : {}),
     };
     setEjecutarModal(null);
     await handleEjecutar(m.aspersion, false, comprobante);
@@ -1562,8 +1629,14 @@ export default function AspersionesPage() {
       }
       actualizarFila(resultado.aspersion);
       recargarCalendario();
+      if (resultado.parteRestante) load(); // apareció la parte pendiente del ciclo
       if (resultado.comprobante?.numero) {
-        alert(`Aspersión ejecutada. Se guardó el comprobante ${resultado.comprobante.numero} en borrador (Sanidad Vegetal → Comprobante de aspersiones).`);
+        alert(
+          `Aspersión ejecutada. Se guardó el comprobante ${resultado.comprobante.numero} en borrador (Sanidad Vegetal → Comprobante de aspersiones).` +
+            (resultado.parteRestante
+              ? `\n\nQuedaron ${resultado.parteRestante.hectareas} ha pendientes: se creó ${resultado.parteRestante.numero} para el ${resultado.parteRestante.fecha} (mismo ciclo).`
+              : ""),
+        );
       }
     } catch (err) {
       setError(err.message);
@@ -1699,9 +1772,9 @@ export default function AspersionesPage() {
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.aspersiones">
-      <div className="p-4 p-md-5">
+      <div className="p-3 p-md-4">
         <div className="mb-4">
-          <h1 className="fw-bold h3 mb-1">Programación de Aspersiones</h1>
+          <h1 className="fw-bold h4 mb-1">Programación de Aspersiones</h1>
           <p className="text-secondary mb-0">
             Programa a qué finca, qué día y con qué mezcla se hace la aspersión — la semana, la cantidad a preparar
             (dosis × hectáreas) y el aviso para la finca se calculan solos.
@@ -1745,7 +1818,7 @@ export default function AspersionesPage() {
 
         {vista === "programador" && (
           <>
-        <div className="card border-0 rounded-4 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="card-body p-3">
             {/* <form>: Enter en cualquier filtro hace lo mismo que el botón
                 Filtrar. */}
@@ -1821,7 +1894,7 @@ export default function AspersionesPage() {
                     Filtrar
                   </button>
                   {(filtros.fincaUuid || filtros.semanaUuid || filtros.mezclaUuid || filtros.estado || filtros.fecha) && (
-                    <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-shrink-0" onClick={limpiarFiltros}>
+                    <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none flex-shrink-0" onClick={limpiarFiltros}>
                       Limpiar
                     </button>
                   )}
@@ -1860,7 +1933,7 @@ export default function AspersionesPage() {
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-        <div className="card border-0 rounded-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="table-responsive">
             <table className="table table-sm table-hover mb-0 align-middle">
               <thead>
@@ -1896,7 +1969,14 @@ export default function AspersionesPage() {
                     const info = ESTADO_INFO[a.estado] || ESTADO_INFO.PROGRAMADA;
                     return (
                       <tr key={a.uuid}>
-                        <td className="small fw-medium">{a.numero}</td>
+                        <td className="small fw-medium">
+                          {a.numero}
+                          {a.partesCiclo > 1 && (
+                            <span className="ms-1 text-secondary fw-normal" title="Una misma aplicación hecha en varias partes (días): FRAC la cuenta como una sola">
+                              · Parte {a.cicloParte}/{a.partesCiclo}
+                            </span>
+                          )}
+                        </td>
                         <td className="small">{a.finca?.nombre || "—"}</td>
                         <td className="small text-secondary">{a.fecha}</td>
                         <td className="small text-secondary">{a.semana?.codigo || "—"}</td>
@@ -1934,6 +2014,17 @@ export default function AspersionesPage() {
                                 onClick={() => handleEnviarCorreo(a)}
                               >
                                 <FiMail size={15} className={a.correoEnviadoEn ? "" : "text-secondary"} />
+                              </button>
+                            )}
+                            {a.estado !== "CANCELADA" && hasPermission("sanidad_vegetal.aspersiones.editar") && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
+                                style={{ color: a.partesCiclo > 1 ? "#166534" : undefined }}
+                                title="Ciclo: unir con otras aspersiones de la misma aplicación o separarla"
+                                onClick={() => abrirCiclo(a)}
+                              >
+                                <FiLink size={15} />
                               </button>
                             )}
                             {a.estado === "PROGRAMADA" && hasPermission("sanidad_vegetal.aspersiones.editar") && (
@@ -2290,27 +2381,26 @@ export default function AspersionesPage() {
                 </div>
               </div>
 
+              {form.fincaUuid && form.mezclaUuid && avisosFrac.length > 0 && (
+                <div className="alert alert-warning py-2 small mb-2">
+                  <strong>Límite FRAC:</strong>{" "}
+                  {avisosFrac.map((g) => g.mensaje).join(" · ")}
+                </div>
+              )}
               <div className="row g-2 mb-2">
                 <div className="col-4">
                   <label className="form-label small fw-medium mb-1">
                     Mezcla <span className="text-danger">*</span>
                   </label>
-                  <select
-                    className="form-select form-select-sm rounded-3"
-                    required
+                  <MezclaAutocomplete
+                    mezclas={mezclas}
                     value={form.mezclaUuid}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, mezclaUuid: e.target.value, aumentoManual: "", volumenHaManual: "", componentesAjustados: {} }));
+                    required
+                    onChange={(uuid) => {
+                      setForm((f) => ({ ...f, mezclaUuid: uuid, aumentoManual: "", volumenHaManual: "", componentesAjustados: {} }));
                       setTextosCantidadAjustada({});
                     }}
-                  >
-                    <option value="">Selecciona...</option>
-                    {mezclas.map((m) => (
-                      <option key={m.uuid} value={m.uuid}>
-                        {m.nombre || m.codigo} ({Number(m.dosisPorHectarea).toFixed(2)} {m.dosisPorHectareaUnidad?.simbolo || m.unidadRendimiento?.simbolo}/ha)
-                      </option>
-                    ))}
-                  </select>
+                  />
                   {mezclas.length === 0 && (
                     <p className="form-text small text-warning mb-0">
                       No hay mezclas con volumen por hectárea configurado — editalo en Mezclas.
@@ -3135,7 +3225,7 @@ export default function AspersionesPage() {
               {formError && <div className="alert alert-danger py-2 small mb-3">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
@@ -3212,6 +3302,39 @@ export default function AspersionesPage() {
                     onChange={(e) => setEjecutarModal((m) => ({ ...m, galonesTotales: e.target.value }))}
                   />
                 </div>
+                {Number(ejecutarModal.hectareasAplicadas) > 0 && Number(ejecutarModal.hectareasAplicadas) < Number(ejecutarModal.aspersion.hectareas) && (
+                  <div className="col-12">
+                    <div className="small text-secondary mb-1">
+                      Ejecución parcial: quedan{" "}
+                      <strong className="text-dark">{(Number(ejecutarModal.aspersion.hectareas) - Number(ejecutarModal.hectareasAplicadas)).toFixed(2)} ha</strong>.
+                      Se creará una parte pendiente del mismo ciclo (los insumos de esta quedan proporcionales a lo ejecutado).
+                    </div>
+                    <label className="form-label small fw-medium mb-1">Fecha de la parte restante</label>
+                    <input
+                      type="date"
+                      className="form-control form-control-sm rounded-3"
+                      value={ejecutarModal.fechaParteRestante}
+                      onChange={(e) => setEjecutarModal((m) => ({ ...m, fechaParteRestante: e.target.value }))}
+                    />
+                  </div>
+                )}
+                {(ejecutarModal.candidatas || []).length > 0 && (
+                  <div className="col-12">
+                    <label className="form-label small fw-medium mb-1">Es del mismo ciclo que… (opcional)</label>
+                    <select
+                      className="form-select form-select-sm rounded-3"
+                      value={ejecutarModal.cicloCon}
+                      onChange={(e) => setEjecutarModal((m) => ({ ...m, cicloCon: e.target.value }))}
+                    >
+                      <option value="">No, es una aplicación aparte</option>
+                      {ejecutarModal.candidatas.map((c) => (
+                        <option key={c.uuid} value={c.uuid}>
+                          {c.numero} · {c.fecha} · {c.hectareas} ha · {c.mezcla}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="col-12">
                   <label className="form-label small fw-medium mb-1">Observaciones</label>
                   <textarea
@@ -3224,7 +3347,7 @@ export default function AspersionesPage() {
                 </div>
               </div>
               <div className="d-flex justify-content-end gap-2 mt-3">
-                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setEjecutarModal(null)}>
+                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setEjecutarModal(null)}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-brand btn-sm rounded-3">
@@ -3232,6 +3355,86 @@ export default function AspersionesPage() {
                 </button>
               </div>
             </form>
+          </ModalShell>
+        )}
+
+        {cicloModal && (
+          <ModalShell title={`Ciclo de ${cicloModal.aspersion.numero} · ${cicloModal.aspersion.finca?.nombre || ""}`} onClose={() => setCicloModal(null)} width="44rem">
+            <p className="small text-secondary mb-2">
+              Un <strong>ciclo</strong> es una misma aplicación hecha en una o varias partes (días). Para FRAC cuenta como{" "}
+              <strong>una sola aplicación</strong>. Aquí puedes corregir qué aspersiones pertenecen al mismo ciclo.
+            </p>
+            {cicloModal.error && <div className="small text-danger mb-2">{cicloModal.error}</div>}
+            {cicloModal.cargando ? (
+              <div className="small text-secondary py-2">Cargando...</div>
+            ) : (
+              <>
+                <table className="table table-sm align-middle small mb-3">
+                  <thead>
+                    <tr className="text-secondary">
+                      <th className="fw-medium">Parte</th>
+                      <th className="fw-medium">N.°</th>
+                      <th className="fw-medium">Fecha</th>
+                      <th className="fw-medium">Mezcla</th>
+                      <th className="fw-medium text-end">Ha</th>
+                      <th className="fw-medium">Estado</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cicloModal.partes.map((p) => (
+                      <tr key={p.uuid} style={{ background: p.actual ? "#f0fdf4" : undefined }}>
+                        <td>{p.cicloParte}</td>
+                        <td className="fw-medium">{p.numero}</td>
+                        <td className="text-nowrap">{String(p.fecha).slice(0, 10)}</td>
+                        <td>{p.mezcla}</td>
+                        <td className="text-end">{p.hectareas}</td>
+                        <td className="text-secondary">{p.estado}</td>
+                        <td className="text-end">
+                          {cicloModal.partes.length > 1 && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-link p-0 text-secondary text-decoration-none"
+                              title="Esta aspersión no es del mismo ciclo: queda como una aplicación aparte"
+                              onClick={() => cicloAccion("separar-ciclo", {}, p)}
+                            >
+                              Separar
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {cicloModal.candidatas.length > 0 ? (
+                  <div className="d-flex gap-2 align-items-center">
+                    <select
+                      className="form-select form-select-sm"
+                      value={cicloModal.unirCon}
+                      onChange={(e) => setCicloModal((m) => ({ ...m, unirCon: e.target.value }))}
+                    >
+                      <option value="">Unir a este ciclo otra aspersión de la finca…</option>
+                      {cicloModal.candidatas.map((c) => (
+                        <option key={c.uuid} value={c.uuid}>
+                          {c.numero} · {String(c.fecha).slice(0, 10)} · {c.hectareas} ha · {c.mezcla}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-link text-decoration-none"
+                      style={{ color: "#166534" }}
+                      disabled={!cicloModal.unirCon}
+                      onClick={() => cicloAccion("unir-ciclo", { aspersionUuid: cicloModal.unirCon }, cicloModal.aspersion)}
+                    >
+                      Unir
+                    </button>
+                  </div>
+                ) : (
+                  <div className="small text-secondary">No hay otras aspersiones de esta finca cercanas para unir.</div>
+                )}
+              </>
+            )}
           </ModalShell>
         )}
 
@@ -3249,7 +3452,7 @@ export default function AspersionesPage() {
 
             <button
               type="button"
-              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2 mb-3"
+              className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2 mb-3"
               onClick={descargarPlantillaAspersiones}
             >
               <FiDownload /> Descargar plantilla (con todas las fincas activas)
@@ -3295,7 +3498,7 @@ export default function AspersionesPage() {
             )}
 
             <div className="d-flex justify-content-end gap-2 mt-3">
-              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setCargueModalOpen(false)}>
+              <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setCargueModalOpen(false)}>
                 Cerrar
               </button>
               <button
@@ -3524,7 +3727,7 @@ function ModalConfigDestinatarios({ onClose }) {
             <button type="submit" className="btn btn-brand btn-sm rounded-3 flex-grow-1" disabled={guardando}>
               {guardando ? "Guardando..." : "Guardar"}
             </button>
-            <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
+            <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={onClose}>
               Cerrar
             </button>
           </div>

@@ -309,7 +309,7 @@ export default function MezclaPruebaDetallePage() {
   async function loadCombos() {
     try {
       const [todos, categorias, uni, conv, alms, params] = await Promise.all([
-        apiFetch("/inventarios/articulos?limit=100&estado=true"),
+        apiFetch("/inventarios/articulos?limit=100&estado=true&tipo=INSUMO"),
         apiFetch("/inventarios/categorias?limit=100&tipo=ELABORADO&estado=true"),
         apiFetch("/inventarios/unidades?limit=100&estado=true"),
         apiFetch("/inventarios/unidades/conversiones"),

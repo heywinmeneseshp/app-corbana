@@ -133,7 +133,7 @@ export default function ObjetivosEvaluacionPage() {
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.objetivos">
-      <div className="p-4 p-md-5">
+      <div className="p-3 p-md-4">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
             <h1 className="fw-medium h4 mb-1">Objetivos de Evaluación</h1>
@@ -234,7 +234,7 @@ export default function ObjetivosEvaluacionPage() {
           )}
         </div>
 
-        <div className="card border-0 rounded-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="table-responsive">
             <table className="table table-hover mb-0 align-middle">
               <thead>

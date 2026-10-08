@@ -25,7 +25,16 @@ export default function SanidadAlertasPage() {
   const [modalConfig, setModalConfig] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [avisoEnvio, setAvisoEnvio] = useState("");
+  const [pestana, setPestana] = useState("indicadores"); // "indicadores" | "aspersiones"
+  const [alertasFrac, setAlertasFrac] = useState(null);
+  const [detalleFrac, setDetalleFrac] = useState(null); // alerta FRAC abierta para ver el detalle
   const esAdmin = esAdministrador();
+
+  useEffect(() => {
+    apiFetch("/frac-limites/alertas")
+      .then((res) => setAlertasFrac(Array.isArray(res) ? res : res?.data || []))
+      .catch(() => setAlertasFrac([]));
+  }, []);
 
   async function handleEnviarAhora() {
     if (!data?.semana) return;
@@ -84,62 +93,19 @@ export default function SanidadAlertasPage() {
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.alertas">
-      <div className="p-4 p-md-5">
-        <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-          <div className="d-flex align-items-center gap-3">
-            <span
-              className="rounded-circle d-flex align-items-center justify-content-center text-white"
-              style={{ width: 42, height: 42, background: "linear-gradient(135deg,#f59e0b,#dc2626)" }}
-            >
-              <FiAlertTriangle size={20} />
-            </span>
-            <div>
-              <h1 className="fw-bold h3 mb-1">Alertas de Sanidad Vegetal</h1>
-              <p className="text-secondary mb-0">
-                Fincas con YLI por debajo de 8, Índice de Infección por encima de 33%, o Suma Bruta por Hoja por
-                encima del umbral configurado (ver Gráficos → Suma Bruta), en la semana seleccionada.
-              </p>
-            </div>
-          </div>
-          <div className="d-flex align-items-end gap-2">
-            {esAdmin && (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-1"
-                  onClick={handleEnviarAhora}
-                  disabled={enviando || !data?.semana}
-                  title="Enviar por correo las alertas de la semana seleccionada, ahora mismo"
-                >
-                  <FiSend /> {enviando ? "Enviando..." : "Enviar ahora"}
-                </button>
-                <BotonConfiguracion
-                  alto={38}
-                  onClick={() => setModalConfig(true)}
-                  title="Configurar destinatarios del correo de alertas"
-                />
-              </>
-            )}
-            <div>
-              <label className="form-label small fw-medium text-secondary mb-1">Semana</label>
-              <select
-                className="form-select form-select-sm rounded-3 shadow-sm"
-                style={{ width: 180 }}
-                value={semanaUuid}
-                onChange={(e) => setSemanaUuid(e.target.value)}
-              >
-                {semanas.map((s) => (
-                  <option key={s.uuid} value={s.uuid}>
-                    {s.codigo}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+      <div className="p-3 p-md-4">
+        <div className="d-flex align-items-center gap-2 mb-1">
+          <FiAlertTriangle size={20} className="text-secondary" />
+          <h1 className="fw-bold h4 mb-0">Alertas de Sanidad Vegetal</h1>
         </div>
+        <p className="text-secondary small mb-3" style={{ minHeight: "2.6rem" }}>
+          {pestana === "indicadores"
+            ? "Fincas con YLI por debajo de 8, Índice de Infección por encima de 33% o Suma Bruta por Hoja por encima del umbral configurado (ver Gráficos → Suma Bruta), en la semana seleccionada."
+            : "Fincas que incumplen las reglas FRAC de manejo de resistencia (máximo de aplicaciones, %, consecutivas, intervalo y uso en mezcla) en los últimos 12 meses."}
+        </p>
 
         {avisoEnvio && (
-          <div className="alert alert-info py-2 small rounded-3 d-flex align-items-center justify-content-between">
+          <div className="small text-info-emphasis d-flex align-items-center justify-content-between mb-2">
             {avisoEnvio}
             <button type="button" className="btn btn-sm btn-link p-0 text-secondary" onClick={() => setAvisoEnvio("")}>
               <FiX />
@@ -149,22 +115,75 @@ export default function SanidadAlertasPage() {
 
         {modalConfig && <ModalConfigDestinatarios onClose={() => setModalConfig(false)} />}
 
-        {error && <div className="alert alert-danger py-2 small rounded-3">{error}</div>}
+        <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 pb-2 border-bottom">
+          <ul className="nav nav-pills gap-1">
+            {[
+              { id: "indicadores", label: "Indicadores", n: data?.alertas?.length },
+              { id: "aspersiones", label: "Aspersiones (FRAC)", n: alertasFrac?.length },
+            ].map((t) => (
+              <li className="nav-item" key={t.id}>
+                <button
+                  type="button"
+                  className={`nav-link btn-sm py-1 px-3 ${pestana === t.id ? "active" : ""}`}
+                  onClick={() => setPestana(t.id)}
+                >
+                  {t.label}
+                  {t.n > 0 && <span className="ms-2 fw-semibold">{t.n}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="d-flex align-items-center gap-2">
+            {/* Los controles de semana/envío se ocultan (no se quitan) en la otra pestaña para que nada se mueva. */}
+            <select
+                className={`form-select form-select-sm ${pestana === "indicadores" ? "" : "invisible"}`}
+                style={{ width: 130 }}
+                value={semanaUuid}
+                onChange={(e) => setSemanaUuid(e.target.value)}
+                title="Semana"
+              >
+                {semanas.map((sm) => (
+                  <option key={sm.uuid} value={sm.uuid}>
+                    {sm.codigo}
+                  </option>
+                ))}
+              </select>
+            {esAdmin && (
+              <button
+                type="button"
+                className={`btn btn-sm btn-link text-secondary text-decoration-none p-1 d-inline-flex align-items-center gap-1 ${pestana === "indicadores" ? "" : "invisible"}`}
+                onClick={handleEnviarAhora}
+                disabled={enviando || !data?.semana || pestana !== "indicadores"}
+                title="Enviar por correo las alertas de la semana seleccionada, ahora mismo"
+              >
+                <FiSend size={15} /> {enviando ? "Enviando..." : "Enviar ahora"}
+              </button>
+            )}
+            {esAdmin && (
+              <BotonConfiguracion alto={31} onClick={() => setModalConfig(true)} title="Configurar destinatarios del correo de alertas" />
+            )}
+          </div>
+        </div>
 
-        {loading && (
+        {pestana === "aspersiones" && <AlertasFrac alertas={alertasFrac} onSeleccionar={setDetalleFrac} />}
+        {detalleFrac && <DetalleAlertaFrac alerta={detalleFrac} onClose={() => setDetalleFrac(null)} />}
+
+        {pestana === "indicadores" && error && <div className="alert alert-danger py-2 small rounded-3">{error}</div>}
+
+        {pestana === "indicadores" && loading && (
           <div className="d-flex justify-content-center align-items-center py-5 text-secondary">
             <div className="spinner-border spinner-border-sm me-2" role="status"></div>
             <span className="small">Cargando alertas...</span>
           </div>
         )}
 
-        {!loading && !error && data && !data.semana && (
+        {pestana === "indicadores" && !loading && !error && data && !data.semana && (
           <p className="text-secondary small py-5 text-center mb-0">
             Todavía no hay ninguna semana cerrada para evaluar.
           </p>
         )}
 
-        {!loading && !error && data?.semana && (
+        {pestana === "indicadores" && !loading && !error && data?.semana && (
           <>
             <div className="d-flex align-items-center gap-2 mb-3">
               <span className="badge rounded-pill border bg-light text-dark px-3 py-2 fw-medium">
@@ -177,7 +196,7 @@ export default function SanidadAlertasPage() {
             </div>
 
             {data.alertas.length === 0 ? (
-              <div className="card border-0 shadow-sm rounded-4 p-5 text-center">
+              <div className="card border-0 rounded-2 p-5 text-center">
                 <FiCheckCircle size={32} className="text-success mx-auto mb-2" />
                 <p className="text-secondary mb-0">
                   Ninguna finca superó los umbrales de alerta en la semana {data.semana.codigo}.
@@ -187,7 +206,7 @@ export default function SanidadAlertasPage() {
               <div className="row g-3">
                 {data.alertas.map((a) => (
                   <div className="col-12 col-md-6 col-xl-4" key={a.fincaUuid}>
-                    <div className="card border-0 shadow-sm rounded-4 p-3 h-100">
+                    <div className="card border-0 rounded-2 p-3 h-100">
                       <div className="d-flex align-items-center justify-content-between mb-2">
                         <h2 className="h6 fw-bold mb-0">{a.fincaNombre}</h2>
                         <span className="badge rounded-pill text-bg-danger">{a.motivos.length} alerta(s)</span>
@@ -226,6 +245,161 @@ export default function SanidadAlertasPage() {
         )}
       </div>
     </RequirePermission>
+  );
+}
+
+// Fincas que superaron el límite de aplicaciones de un grupo FRAC en los
+// últimos 12 meses (los límites se configuran en Sanidad Vegetal → Ingredientes
+// Activos → "Límites FRAC"). Independiente de la semana elegida arriba.
+function AlertasFrac({ alertas, onSeleccionar }) {
+  if (alertas === null) {
+    return (
+      <div className="d-flex justify-content-center align-items-center py-5 text-secondary">
+        <div className="spinner-border spinner-border-sm me-2" role="status"></div>
+        <span className="small">Cargando alertas...</span>
+      </div>
+    );
+  }
+  if (alertas.length === 0) {
+    return (
+      <div className="card border-0 rounded-2 p-5 text-center">
+        <FiCheckCircle size={32} className="text-success mx-auto mb-2" />
+        <p className="text-secondary mb-0">Ninguna finca incumple las reglas FRAC de manejo de resistencia en los últimos 12 meses.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card border-0 rounded-2 mb-3 overflow-hidden">
+      <div className="px-3 py-2 d-flex align-items-center justify-content-between" style={{ background: "#fef2f2", borderBottom: "1px solid #fecaca" }}>
+        <span className="fw-semibold small d-flex align-items-center gap-2" style={{ color: "#b91c1c" }}>
+          <FiAlertTriangle /> Reglas FRAC de manejo de resistencia incumplidas (últimos 12 meses)
+        </span>
+        <span className="badge rounded-pill text-bg-danger">{alertas.length}</span>
+      </div>
+      <div className="table-responsive">
+        <table className="table table-sm align-middle mb-0 small">
+          <thead>
+            <tr className="text-secondary">
+              <th className="fw-medium">Finca</th>
+              <th className="fw-medium">Grupo FRAC</th>
+              <th className="fw-medium">Ingredientes</th>
+              <th className="fw-medium">Regla</th>
+              <th className="fw-medium">Detalle</th>
+              <th className="fw-medium">Última</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alertas.map((a) => (
+              <tr key={`${a.fincaId}-${a.fracCodigo}-${a.tipo}`} style={{ cursor: "pointer" }} onClick={() => onSeleccionar(a)} title="Ver el detalle de las aspersiones">
+                <td className="fw-medium">{a.fincaNombre}</td>
+                <td>
+                  <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">{a.fracCodigo}</span>
+                </td>
+                <td className="text-secondary">{a.ingredientes || "—"}</td>
+                <td className="text-secondary">{a.regla}</td>
+                <td className="fw-medium text-danger">{a.detalle}</td>
+                <td className="text-secondary">{a.ultimaFecha ? String(a.ultimaFecha).slice(0, 10) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Detalle de una alerta FRAC: todas las aspersiones de la finca en los últimos 12 meses (en orden),
+// con las del grupo resaltadas y marcadas las que incumplen la regla — para poder comprobarla.
+function DetalleAlertaFrac({ alerta, onClose }) {
+  const [detalle, setDetalle] = useState(null);
+  const [error, setError] = useState("");
+  const [soloGrupo, setSoloGrupo] = useState(true);
+
+  useEffect(() => {
+    const qs = new URLSearchParams({ fincaUuid: alerta.fincaUuid, fracCodigo: alerta.fracCodigo, tipo: alerta.tipo });
+    apiFetch(`/frac-limites/alertas/detalle?${qs}`)
+      .then((res) => setDetalle(res?.data || res))
+      .catch((err) => setError(err.message));
+  }, [alerta]);
+
+  const filas = detalle ? detalle.aspersiones.filter((a) => !soloGrupo || a.tieneGrupo) : [];
+  const r = detalle?.reglas;
+
+  return (
+    <ModalShell title={`${alerta.fincaNombre} — FRAC ${alerta.fracCodigo}`} onClose={onClose} width="90vw" height="90vh">
+      <div className="small mb-2">
+        <span className="text-secondary">{alerta.regla}:</span> <strong className="text-danger">{alerta.detalle}</strong>
+      </div>
+      {detalle && (
+        <div className="small text-secondary mb-2">
+          {detalle.modoAccion}
+          {r && (
+            <>
+              {" · "}Reglas: {r.max != null ? `máx. ${r.max} aplicaciones` : "sin máx. de aplicaciones"}
+              {r.maxPct != null ? `, máx. ${r.maxPct}%` : ""}
+              {r.maxConsecutivas != null ? `, seguidas máx. ${r.maxConsecutivas}` : ""}
+              {r.intervaloDias != null ? `, mínimo ${r.intervaloDias} días entre aplicaciones` : ""}
+              {r.soloEnMezclas ? ", solo en mezcla" : ""}
+            </>
+          )}
+          {" · "}
+          {detalle.aplicacionesDelGrupo} de {detalle.totalAspersiones} aplicaciones de la finca llevan este grupo (últimos 12 meses). Las partes de un mismo ciclo (una aplicación hecha en varios días) cuentan como una sola aplicación.
+        </div>
+      )}
+      {error && <div className="small text-danger py-2">{error}</div>}
+      {!detalle && !error && <div className="small text-secondary py-3">Cargando detalle...</div>}
+      {detalle && (
+        <>
+          <label className="small text-secondary d-flex align-items-center gap-2 mb-2">
+            <input type="checkbox" className="form-check-input mt-0" checked={soloGrupo} onChange={(e) => setSoloGrupo(e.target.checked)} />
+            Mostrar solo las aspersiones de este grupo
+          </label>
+          <div className="table-responsive" style={{ maxHeight: "calc(90vh - 15rem)", overflowY: "auto" }}>
+            <table className="table table-sm align-middle mb-0 small text-center">
+              <thead style={{ position: "sticky", top: 0, background: "#fff" }}>
+                <tr className="text-secondary">
+                  <th className="fw-medium text-nowrap" style={{ width: "1%" }}>Fecha</th>
+                  <th className="fw-medium text-nowrap" style={{ width: "1%" }}>N.°</th>
+                  <th className="fw-medium text-nowrap" style={{ width: "1%" }} title="Aplicación (ciclo) a la que pertenece; las partes de un ciclo cuentan como una sola aplicación">Ciclo</th>
+                  <th className="fw-medium text-nowrap">Mezcla</th>
+                  <th className="fw-medium text-nowrap">Insumos del grupo</th>
+                  <th className="fw-medium text-nowrap">Ingredientes</th>
+                  <th className="fw-medium text-nowrap" style={{ width: "1%" }}>Otros</th>
+                  <th className="fw-medium text-nowrap" style={{ width: "1%" }}>Ha</th>
+                  <th className="fw-medium text-nowrap" style={{ width: "1%" }}>Aeronave</th>
+                  <th className="fw-medium text-nowrap" style={{ width: "1%" }} title="Días desde la aplicación anterior de este grupo">
+                    Días
+                  </th>
+                  <th className="fw-medium">Incumple</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((a) => (
+                  <tr key={a.uuid} style={{ background: a.marca ? "#fef2f2" : a.tieneGrupo ? "#f0fdf4" : undefined, opacity: a.tieneGrupo ? 1 : 0.55 }}>
+                    <td className="text-nowrap">{a.fecha}</td>
+                    <td className="text-secondary text-nowrap">{a.numero}</td>
+                    <td className="text-nowrap" title={a.ciclo ? `Ciclo en varias partes: ${a.ciclo}` : undefined}>
+                      {a.cicloN ? `${a.cicloN}${a.cicloParte ? ` (parte ${a.cicloParte})` : ""}` : "—"}
+                    </td>
+                    <td className="text-nowrap">{a.mezcla}</td>
+                    <td className="fw-medium text-nowrap">{a.insumosGrupo || "—"}</td>
+                    <td className="text-secondary text-nowrap">{a.ingredientesGrupo || "—"}</td>
+                    <td className="text-secondary text-nowrap">{a.otrosGrupos || "—"}</td>
+                    <td className="text-nowrap">{Number(a.hectareas).toLocaleString("es-CO")}</td>
+                    <td className="text-nowrap" title={a.aeronave || undefined}>
+                      {a.medio === "DRON" ? "Dron" : a.medio === "AVION" ? "Avión" : "—"}
+                    </td>
+                    <td className="text-nowrap">{a.diasDesdeAnterior ?? "—"}</td>
+                    <td className="text-danger fw-medium">{a.marca || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </ModalShell>
   );
 }
 
@@ -371,7 +545,7 @@ function ModalConfigDestinatarios({ onClose }) {
             <button type="submit" className="btn btn-brand btn-sm rounded-3 flex-grow-1" disabled={guardando}>
               {guardando ? "Guardando..." : "Guardar"}
             </button>
-            <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
+            <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={onClose}>
               Cerrar
             </button>
           </div>

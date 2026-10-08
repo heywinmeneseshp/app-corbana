@@ -33,9 +33,9 @@ export default function SanidadEvaluacionesPage() {
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.evaluaciones">
-      <div className="p-4 p-md-5">
+      <div className="p-3 p-md-4">
         <div className="mb-4">
-          <h1 className="fw-bold h3 mb-1">Sanidad Vegetal — Evaluaciones</h1>
+          <h1 className="fw-bold h4 mb-1">Sanidad Vegetal — Evaluaciones</h1>
           <p className="text-secondary mb-0">Detalle de evaluaciones de infección, conteo de hojas y suma bruta.</p>
         </div>
 
@@ -43,7 +43,7 @@ export default function SanidadEvaluacionesPage() {
           <li className="nav-item">
             <button
               type="button"
-              className={`nav-link rounded-3 ${tab === TAB_INDICADORES ? "btn-brand text-white" : "btn btn-outline-secondary btn-sm"}`}
+              className={`nav-link rounded-3 ${tab === TAB_INDICADORES ? "btn-brand text-white" : "btn btn-sm btn-link text-secondary text-decoration-none"}`}
               onClick={() => setTab(TAB_INDICADORES)}
             >
               <FiTrendingUp className="me-1" /> Indicadores
@@ -53,7 +53,7 @@ export default function SanidadEvaluacionesPage() {
             <li className="nav-item" key={t.key}>
               <button
                 type="button"
-                className={`nav-link rounded-3 ${tab === t.key ? "btn-brand text-white" : "btn btn-outline-secondary btn-sm"}`}
+                className={`nav-link rounded-3 ${tab === t.key ? "btn-brand text-white" : "btn btn-sm btn-link text-secondary text-decoration-none"}`}
                 onClick={() => setTab(t.key)}
               >
                 {t.label}

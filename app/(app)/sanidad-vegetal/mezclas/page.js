@@ -904,7 +904,7 @@ export default function ElaboracionesPage() {
   }
 
   function removeEditarInsumoRow(key) {
-    setEditarInsumoRows((rows) => (rows.length > 1 ? rows.filter((r) => r.key !== key) : rows));
+    setEditarInsumoRows((rows) => (rows.length > 1 ? rows.filter((r) => r.key !== key) : [emptyInsumoRow()]));
   }
 
   async function handleGuardarEdicion(e) {
@@ -1065,7 +1065,8 @@ export default function ElaboracionesPage() {
       setArticulos(arts.items || []);
       setUnidades(unis.items || []);
       setConversiones(Array.isArray(convs) ? convs : convs.items || []);
-      setInsumosOpciones(insumos.items || []);
+      // Solo los insumos creados en Sanidad Vegetal (categoría fija "Sanidad Vegetal").
+      setInsumosOpciones((insumos.items || []).filter((a) => a.categoria?.nombre === "Sanidad Vegetal"));
       setIngredientesActivosOpciones(ingredientesActivos.items || []);
     } catch (err) {
       setError(err.message);
@@ -1111,7 +1112,7 @@ export default function ElaboracionesPage() {
   }
 
   function removeInsumoRow(key) {
-    setInsumoRows((rows) => (rows.length > 1 ? rows.filter((r) => r.key !== key) : rows));
+    setInsumoRows((rows) => (rows.length > 1 ? rows.filter((r) => r.key !== key) : [emptyInsumoRow()]));
   }
 
   async function handleCrearDirecta() {
@@ -1220,31 +1221,36 @@ export default function ElaboracionesPage() {
 
   return (
     <RequirePermission code="menu.inventarios.elaboraciones">
-      <div className="p-4 p-md-5">
+      <div className="p-3 p-md-4">
         {/* Mezclas vive en Sanidad Vegetal, comparte esta barra de pestañas
             con Insumos e Ingredientes Activos para navegar entre las tres
             sin pasar por el sidebar. */}
-        <ul className="nav nav-pills mb-3">
+        <ul className="nav nav-pills gap-1 mb-3">
           <li className="nav-item">
-            <Link href="/sanidad-vegetal/mezclas" className="nav-link rounded-3 active">
+            <Link href="/sanidad-vegetal/mezclas" className="nav-link btn-sm py-1 px-3 active">
               Mezclas
             </Link>
           </li>
           <li className="nav-item">
-            <Link href="/sanidad-vegetal/ingredientes-activos/insumos" className="nav-link rounded-3">
+            <Link href="/sanidad-vegetal/ingredientes-activos/insumos" className="nav-link btn-sm py-1 px-3">
               Insumos
             </Link>
           </li>
           <li className="nav-item">
-            <Link href="/sanidad-vegetal/ingredientes-activos" className="nav-link rounded-3">
+            <Link href="/sanidad-vegetal/ingredientes-activos" className="nav-link btn-sm py-1 px-3">
               Ingredientes Activos
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link href="/sanidad-vegetal/frac" className="nav-link btn-sm py-1 px-3">
+              FRAC
             </Link>
           </li>
         </ul>
 
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">Mezclas</h1>
+            <h1 className="fw-bold h4 mb-1">Mezclas</h1>
             <p className="text-secondary mb-0">
               Maestro de mezclas: cada una tiene su propio consecutivo y su artículo elaborado. El artículo elaborado
               nunca tiene saldo propio — cada vez que se produce un lote se valida stock y se descuentan los insumos
@@ -1265,7 +1271,7 @@ export default function ElaboracionesPage() {
             {!verEliminados && (
               <button
                 type="button"
-                className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+                className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2"
                 onClick={handleDescargarExcel}
                 disabled={exportando || mezclasFiltradas.length === 0}
                 title="Descargar el listado actual en Excel, con la receta de cada mezcla (un archivo que se puede volver a subir por Cargue masivo)"
@@ -1277,7 +1283,7 @@ export default function ElaboracionesPage() {
               <>
                 <button
                   type="button"
-                  className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+                  className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2"
                   onClick={openCargueModal}
                   title="Cargar varias mezclas desde un archivo Excel/CSV"
                 >
@@ -1297,7 +1303,7 @@ export default function ElaboracionesPage() {
             aparecer en el listado normal, hasta que se restauren.
           </div>
         ) : (
-        <div className="card border-0 rounded-4 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="card-body p-3">
             <div className="row g-2">
               <div className="col-12 col-md-4">
@@ -1353,7 +1359,7 @@ export default function ElaboracionesPage() {
             </div>
             {(filtros.search || filtros.insumoUuid || filtros.ingredienteActivoUuid) && (
               <div className="d-flex gap-2 mt-3">
-                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={limpiarFiltros}>
+                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={limpiarFiltros}>
                   Limpiar
                 </button>
               </div>
@@ -1364,7 +1370,7 @@ export default function ElaboracionesPage() {
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-        <div className="card border-0 rounded-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="table-responsive">
             <table className="table table-sm table-hover mb-0 align-middle">
               <thead>
@@ -1712,7 +1718,7 @@ export default function ElaboracionesPage() {
                             onChange={(e) => updateInsumoRow(row.key, { articuloUuid: e.target.value })}
                           >
                             <option value="">Selecciona...</option>
-                            {articulos.map((a) => (
+                            {insumosOpciones.map((a) => (
                               <option key={a.uuid} value={a.uuid}>
                                 {a.nombre}
                               </option>
@@ -1758,6 +1764,7 @@ export default function ElaboracionesPage() {
                           />
                         </td>
                         <td className="small text-center text-secondary">
+<div className="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
                           {dosis.dosisInformativa != null
                             ? `${dosis.dosisInformativa.toLocaleString("es-CO", { maximumFractionDigits: 3 })} ${dosis.dosisInformativaSimbolo}/ha`
                             : "—"}
@@ -1768,12 +1775,13 @@ export default function ElaboracionesPage() {
                               </span>
                             </div>
                           )}
-                          <div className="d-flex flex-column gap-1 mt-1">
+                          <div className="d-flex align-items-center gap-1">
                             <input
                               type="number"
                               step="any"
                               min="0"
                               className="form-control form-control-sm rounded-3 px-1"
+                              style={{ width: "5.5rem" }}
                               placeholder="dosis receta"
                               title="Dosis de referencia DE ESTA RECETA (ej. ACEITE a 2.0/ha). Vacío = usar la del artículo."
                               value={row.dosisPorHectarea}
@@ -1783,6 +1791,7 @@ export default function ElaboracionesPage() {
                             {row.dosisPorHectarea !== "" && (
                               <select
                                 className="form-select form-select-sm rounded-3 px-1"
+                                style={{ width: "5rem" }}
                                 value={row.dosisUnidadUuid}
                                 onChange={(e) => updateInsumoRow(row.key, { dosisUnidadUuid: e.target.value })}
                                 title="Unidad de la dosis de esta receta"
@@ -1796,6 +1805,7 @@ export default function ElaboracionesPage() {
                               </select>
                             )}
                           </div>
+</div>
                         </td>
                         <td className="text-center">
                           {ajusteAgua != null ? (
@@ -1839,15 +1849,14 @@ export default function ElaboracionesPage() {
                           )}
                         </td>
                         <td>
-                          {insumoRows.length > 1 && (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-link p-1 d-inline-flex text-danger"
-                              onClick={() => removeInsumoRow(row.key)}
-                            >
-                              <FiX size={16} />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link p-1 d-inline-flex text-danger"
+                            title="Quitar insumo"
+                            onClick={() => removeInsumoRow(row.key)}
+                          >
+                            <FiTrash2 size={15} />
+                          </button>
                         </td>
                       </tr>
                       );
@@ -1901,7 +1910,7 @@ export default function ElaboracionesPage() {
               </div>
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
@@ -2123,7 +2132,7 @@ export default function ElaboracionesPage() {
               {detalleMezcla?.versiones?.[0]?.esDirecta === false && (
                 <button
                   type="button"
-                  className="btn btn-outline-secondary btn-sm rounded-3"
+                  className="btn btn-sm btn-link text-secondary text-decoration-none"
                   onClick={() => router.push(`/inventarios/mezclas/${detalleMezcla.uuid}`)}
                 >
                   Ver prueba de laboratorio
@@ -2319,7 +2328,7 @@ export default function ElaboracionesPage() {
                                 onChange={(e) => updateEditarInsumoRow(row.key, { articuloUuid: e.target.value })}
                               >
                                 <option value="">Selecciona...</option>
-                                {articulos.map((a) => (
+                                {insumosOpciones.map((a) => (
                                   <option key={a.uuid} value={a.uuid}>
                                     {a.nombre}
                                   </option>
@@ -2365,6 +2374,7 @@ export default function ElaboracionesPage() {
                               />
                             </td>
                             <td className="small text-center text-secondary">
+<div className="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
                               {dosis.dosisInformativa != null
                                 ? `${dosis.dosisInformativa.toLocaleString("es-CO", { maximumFractionDigits: 3 })} ${dosis.dosisInformativaSimbolo}/ha`
                                 : "—"}
@@ -2375,12 +2385,13 @@ export default function ElaboracionesPage() {
                                   </span>
                                 </div>
                               )}
-                              <div className="d-flex flex-column gap-1 mt-1">
+                              <div className="d-flex align-items-center gap-1">
                                 <input
                                   type="number"
                                   step="any"
                                   min="0"
                                   className="form-control form-control-sm rounded-3 px-1"
+                              style={{ width: "5.5rem" }}
                                   placeholder="dosis receta"
                                   title="Dosis de referencia DE ESTA RECETA (ej. ACEITE a 2.0/ha). Vacío = usar la del artículo."
                                   value={row.dosisPorHectarea}
@@ -2390,6 +2401,7 @@ export default function ElaboracionesPage() {
                                 {row.dosisPorHectarea !== "" && (
                                   <select
                                     className="form-select form-select-sm rounded-3 px-1"
+                                style={{ width: "5rem" }}
                                     value={row.dosisUnidadUuid}
                                     onChange={(e) => updateEditarInsumoRow(row.key, { dosisUnidadUuid: e.target.value })}
                                     title="Unidad de la dosis de esta receta"
@@ -2403,6 +2415,7 @@ export default function ElaboracionesPage() {
                                   </select>
                                 )}
                               </div>
+</div>
                             </td>
                             <td className="text-center">
                               {ajusteAgua != null ? (
@@ -2446,15 +2459,14 @@ export default function ElaboracionesPage() {
                               )}
                             </td>
                             <td>
-                              {editarInsumoRows.length > 1 && (
-                                <button
-                                  type="button"
-                                  className="btn btn-sm btn-link p-1 d-inline-flex text-danger"
-                                  onClick={() => removeEditarInsumoRow(row.key)}
-                                >
-                                  <FiX size={16} />
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link p-1 d-inline-flex text-danger"
+                                title="Quitar insumo"
+                                onClick={() => removeEditarInsumoRow(row.key)}
+                              >
+                                <FiTrash2 size={15} />
+                              </button>
                             </td>
                           </tr>
                           );
@@ -2484,7 +2496,7 @@ export default function ElaboracionesPage() {
               )}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setEditarOpen(false)}>
+                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setEditarOpen(false)}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={editarSaving || editarLoading}>
@@ -2512,7 +2524,7 @@ export default function ElaboracionesPage() {
 
             <button
               type="button"
-              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2 mb-3"
+              className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2 mb-3"
               onClick={descargarPlantilla}
             >
               <FiDownload /> Descargar plantilla de ejemplo (.xlsx)
@@ -2558,7 +2570,7 @@ export default function ElaboracionesPage() {
             )}
 
             <div className="d-flex justify-content-end gap-2 mt-3">
-              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setCargueModalOpen(false)}>
+              <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setCargueModalOpen(false)}>
                 Cerrar
               </button>
               <button

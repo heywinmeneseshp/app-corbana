@@ -11,7 +11,7 @@ import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
 function emptyForm() {
-  return { nombre: "", descripcion: "", estado: true };
+  return { nombre: "", descripcion: "", grupoQuimicoUuid: "", estado: true };
 }
 
 const PLANTILLA_HEADERS = ["nombre", "descripcion", "estado"];
@@ -37,6 +37,9 @@ function descargarExcel(items) {
   const filas = items.map((i) => ({
     nombre: i.nombre,
     descripcion: i.descripcion || "",
+    frac: i.grupoQuimico?.frac?.codigo || "",
+    grupo_quimico: i.grupoQuimico?.nombre || "",
+    modo_accion: i.grupoQuimico?.frac?.modoAccion || "",
     estado: i.estado ? "activo" : "inactivo",
   }));
   const worksheet = XLSX.utils.json_to_sheet(filas);
@@ -66,6 +69,7 @@ export default function IngredientesActivosPage() {
 
   const inputCargueRef = useRef(null);
   const [cargueModalOpen, setCargueModalOpen] = useState(false);
+  const [gruposQuimicos, setGruposQuimicos] = useState([]);
   const [cargueArchivo, setCargueArchivo] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [cargueError, setCargueError] = useState("");
@@ -76,6 +80,11 @@ export default function IngredientesActivosPage() {
   // cambia la fuente de datos y las acciones de la última columna
   // (Restaurar en vez de Editar/Eliminar).
   const [esAdmin, setEsAdmin] = useState(false);
+  useEffect(() => {
+    apiFetch("/frac-limites/grupos")
+      .then((res) => setGruposQuimicos(Array.isArray(res) ? res : res?.data || []))
+      .catch(() => setGruposQuimicos([]));
+  }, []);
   const [verEliminados, setVerEliminados] = useState(false);
   const [eliminados, setEliminados] = useState([]);
   const [eliminadosLoading, setEliminadosLoading] = useState(false);
@@ -148,6 +157,7 @@ export default function IngredientesActivosPage() {
     setForm({
       nombre: ingrediente.nombre,
       descripcion: ingrediente.descripcion || "",
+      grupoQuimicoUuid: ingrediente.grupoQuimico?.uuid || "",
       estado: ingrediente.estado,
     });
     setFormError("");
@@ -159,7 +169,7 @@ export default function IngredientesActivosPage() {
     setFormError("");
     setSaving(true);
     try {
-      const body = { ...form, descripcion: form.descripcion || null };
+      const body = { ...form, descripcion: form.descripcion || null, grupoQuimicoUuid: form.grupoQuimicoUuid || null };
       if (editing) {
         await apiFetch(`/ingredientes-activos/${editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       } else {
@@ -217,27 +227,32 @@ export default function IngredientesActivosPage() {
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.ingredientes_activos">
-      <div className="p-4 p-md-5">
-        <ul className="nav nav-pills mb-3">
+      <div className="p-3 p-md-4">
+        <ul className="nav nav-pills gap-1 mb-3">
           <li className="nav-item">
-            <Link href="/sanidad-vegetal/mezclas" className="nav-link rounded-3">
+            <Link href="/sanidad-vegetal/mezclas" className="nav-link btn-sm py-1 px-3">
               Mezclas
             </Link>
           </li>
           <li className="nav-item">
-            <Link href="/sanidad-vegetal/ingredientes-activos/insumos" className="nav-link rounded-3">
+            <Link href="/sanidad-vegetal/ingredientes-activos/insumos" className="nav-link btn-sm py-1 px-3">
               Insumos
             </Link>
           </li>
           <li className="nav-item">
-            <Link href="/sanidad-vegetal/ingredientes-activos" className="nav-link rounded-3 active">
+            <Link href="/sanidad-vegetal/ingredientes-activos" className="nav-link btn-sm py-1 px-3 active">
               Ingredientes Activos
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link href="/sanidad-vegetal/frac" className="nav-link btn-sm py-1 px-3">
+              FRAC
             </Link>
           </li>
         </ul>
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">Ingredientes Activos</h1>
+            <h1 className="fw-bold h4 mb-1">Ingredientes Activos</h1>
             <p className="text-secondary mb-0">
               Maestro de referencia de los ingredientes activos que componen los agroquímicos usados en las aspersiones.
             </p>
@@ -256,7 +271,7 @@ export default function IngredientesActivosPage() {
             {!verEliminados && (
               <button
                 type="button"
-                className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+                className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2"
                 onClick={() => descargarExcel(items)}
                 title="Descargar el listado actual en Excel"
               >
@@ -267,7 +282,7 @@ export default function IngredientesActivosPage() {
               <>
                 <button
                   type="button"
-                  className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+                  className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2"
                   onClick={openCargueModal}
                   title="Cargar varios ingredientes activos desde un archivo Excel/CSV"
                 >
@@ -287,7 +302,7 @@ export default function IngredientesActivosPage() {
             datos, sin aparecer en el listado normal, hasta que se restauren.
           </div>
         ) : (
-        <div className="card border-0 rounded-4 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="card-body p-3">
             <div className="row g-2">
               <div className="col-12 col-md-6">
@@ -313,12 +328,15 @@ export default function IngredientesActivosPage() {
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-        <div className="card border-0 rounded-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="table-responsive">
             <table className="table table-sm table-hover mb-0 align-middle">
               <thead>
                 <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
                   <th className="fw-medium">Nombre</th>
+                  <th className="fw-medium">FRAC</th>
+                  <th className="fw-medium">Grupo químico</th>
+                  <th className="fw-medium">Modo de acción</th>
                   <th className="fw-medium">Descripción</th>
                   {verEliminados && <th className="fw-medium">Eliminado</th>}
                   <th className="fw-medium text-end">Acciones</th>
@@ -334,14 +352,14 @@ export default function IngredientesActivosPage() {
                 )}
                 {!verEliminados && !loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="text-center text-secondary py-3 small">
+                    <td colSpan={6} className="text-center text-secondary py-3 small">
                       No hay ingredientes activos registrados todavía.
                     </td>
                   </tr>
                 )}
                 {verEliminados && !eliminadosLoading && eliminados.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="text-center text-secondary py-3 small">
+                    <td colSpan={7} className="text-center text-secondary py-3 small">
                       No hay ingredientes activos eliminados.
                     </td>
                   </tr>
@@ -351,6 +369,15 @@ export default function IngredientesActivosPage() {
                   items.map((i) => (
                     <tr key={i.uuid}>
                       <td className="small fw-medium">{i.nombre}</td>
+                      <td className="small">
+                        {i.grupoQuimico?.frac?.codigo ? (
+                          <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">{i.grupoQuimico.frac.codigo}</span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="small text-secondary">{i.grupoQuimico?.nombre || "—"}</td>
+                      <td className="small text-secondary">{i.grupoQuimico?.frac?.modoAccion || "—"}</td>
                       <td className="small text-secondary">{i.descripcion || "—"}</td>
                       <td>
                         <div className="d-flex justify-content-end gap-2 flex-nowrap">
@@ -384,6 +411,15 @@ export default function IngredientesActivosPage() {
                   eliminados.map((i) => (
                     <tr key={i.uuid}>
                       <td className="small fw-medium">{i.nombre}</td>
+                      <td className="small">
+                        {i.grupoQuimico?.frac?.codigo ? (
+                          <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">{i.grupoQuimico.frac.codigo}</span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="small text-secondary">{i.grupoQuimico?.nombre || "—"}</td>
+                      <td className="small text-secondary">{i.grupoQuimico?.frac?.modoAccion || "—"}</td>
                       <td className="small text-secondary">{i.descripcion || "—"}</td>
                       <td className="small text-secondary">
                         {i.deletedAt ? new Date(i.deletedAt).toLocaleString("es-CO") : "—"}
@@ -426,6 +462,24 @@ export default function IngredientesActivosPage() {
                 />
               </div>
               <div className="mb-3">
+                <label className="form-label small fw-medium">Grupo químico (clasificación FRAC)</label>
+                <select
+                  className="form-select rounded-3"
+                  value={form.grupoQuimicoUuid}
+                  onChange={(e) => setForm((f) => ({ ...f, grupoQuimicoUuid: e.target.value }))}
+                >
+                  <option value="">Sin clasificar</option>
+                  {gruposQuimicos.map((g) => (
+                    <option key={g.uuid} value={g.uuid}>
+                      FRAC {g.fracCodigo} — {g.nombre}
+                    </option>
+                  ))}
+                </select>
+                {form.grupoQuimicoUuid && (
+                  <div className="form-text">{gruposQuimicos.find((g) => g.uuid === form.grupoQuimicoUuid)?.modoAccion}</div>
+                )}
+              </div>
+              <div className="mb-3">
                 <label className="form-label small fw-medium">Descripción</label>
                 <textarea
                   className="form-control rounded-3"
@@ -451,7 +505,7 @@ export default function IngredientesActivosPage() {
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
@@ -471,7 +525,7 @@ export default function IngredientesActivosPage() {
 
             <button
               type="button"
-              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2 mb-3"
+              className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2 mb-3"
               onClick={descargarPlantilla}
             >
               <FiDownload /> Descargar plantilla de ejemplo (.xlsx)
@@ -509,7 +563,7 @@ export default function IngredientesActivosPage() {
             )}
 
             <div className="d-flex justify-content-end gap-2 mt-3">
-              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setCargueModalOpen(false)}>
+              <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setCargueModalOpen(false)}>
                 Cerrar
               </button>
               <button
@@ -524,6 +578,6 @@ export default function IngredientesActivosPage() {
           </ModalShell>
         )}
       </div>
-    </RequirePermission>
+        </RequirePermission>
   );
 }

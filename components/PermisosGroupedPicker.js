@@ -31,6 +31,7 @@ const MENU_TREE = [
       { codigo: "menu.maestros.labores", nombre: "Labores", prefijos: ["labor."] },
       { codigo: "menu.maestros.colaboradores", nombre: "Colaboradores", prefijos: ["colaborador."] },
       { codigo: "menu.maestros.estadios_sigatoka", nombre: "Estadios de Sigatoka", prefijos: ["estadio_sigatoka."] },
+      { codigo: "menu.maestros.version_app", nombre: "Versión App Móvil", prefijos: [] },
     ],
   },
   {
@@ -48,6 +49,7 @@ const MENU_TREE = [
         prefijos: ["racimo_movimiento.crear", "racimo_movimiento.forzar_saldo_negativo", "racimo_movimiento.ajustar"],
       },
       { codigo: "menu.racimos.saldos_lotes_cintas", nombre: "Saldos × Lotes y Cintas", prefijos: [] },
+      { codigo: "menu.racimos.liquidacion", nombre: "Liquidación de semanas", prefijos: [] },
       // Detalle Semanal / Gráfico de Embolses / Gráfico de Repiques viven acá
       // por su código de permiso histórico (racimos.*), pero en el sidebar
       // real están dentro de la sección "Reportes" (ver Sidebar.js) — se
@@ -87,6 +89,8 @@ const MENU_TREE = [
         nombre: "Comprobante de aspersiones",
         prefijos: ["sanidad_vegetal.comprobantes_aspersion."],
       },
+      { codigo: "menu.sanidad_vegetal.ingredientes_activos", nombre: "Ingredientes Activos", prefijos: ["ingrediente_activo."] },
+      { codigo: "menu.sanidad_vegetal.insumos", nombre: "Insumos", prefijos: [] },
     ],
   },
   {
@@ -126,6 +130,7 @@ const MENU_TREE = [
       { codigo: "menu.inventarios.mezclas", nombre: "Mezclas", prefijos: [] },
       { codigo: "menu.inventarios.elaboraciones", nombre: "Mezclas", prefijos: [] },
       { codigo: "menu.inventarios.proformas", nombre: "Proformas", prefijos: [] },
+      { codigo: "menu.inventarios.facturas", nombre: "Facturas", prefijos: [] },
       { codigo: "menu.inventarios.equipos", nombre: "Equipos", prefijos: [] },
       { codigo: "menu.inventarios.proveedores", nombre: "Proveedores", prefijos: [] },
       { codigo: "menu.inventarios.planes", nombre: "Planes de Mantenimiento", prefijos: [] },
@@ -139,11 +144,13 @@ const MENU_TREE = [
 // nivel que las secciones, y al agregarlos muestran directo sus permisos
 // granulares (sin el paso intermedio de submenú).
 const ITEMS_PLANOS = [
-  { codigo: "menu.precipitacion_diaria", nombre: "Precipitación Diaria", prefijos: ["precipitacion_diaria."] },
+  { codigo: "menu.precipitacion_diaria", nombre: "Precipitación Diaria", prefijos: ["precipitacion_diaria.", "clima."] },
+  { codigo: "menu.cargue_masivo", nombre: "Cargue Masivo", prefijos: [] },
   { codigo: "menu.produccion_semanal", nombre: "Producción Semanal", prefijos: ["produccion."] },
   { codigo: "menu.estimaciones", nombre: "Estimaciones de Fincas", prefijos: ["estimacion."] },
   { codigo: "menu.pronostico", nombre: "Pronóstico de Cajas", prefijos: ["pronostico."] },
   { codigo: "menu.programacion_corte", nombre: "Programación de Corte", prefijos: ["programacion_corte."] },
+  { codigo: "menu.estacion_meteorologica", nombre: "Estación Meteorológica", prefijos: ["estacion_meteorologica."] },
 ];
 
 const TODOS_LOS_CODIGOS_DE_MENU = new Set([

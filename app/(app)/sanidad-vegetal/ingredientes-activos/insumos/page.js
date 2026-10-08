@@ -378,28 +378,33 @@ export default function InsumosSanidadVegetalPage() {
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.insumos">
-      <div className="p-4 p-md-5">
-        <ul className="nav nav-pills mb-3">
+      <div className="p-3 p-md-4">
+        <ul className="nav nav-pills gap-1 mb-3">
           <li className="nav-item">
-            <Link href="/sanidad-vegetal/mezclas" className="nav-link rounded-3">
+            <Link href="/sanidad-vegetal/mezclas" className="nav-link btn-sm py-1 px-3">
               Mezclas
             </Link>
           </li>
           <li className="nav-item">
-            <Link href="/sanidad-vegetal/ingredientes-activos/insumos" className="nav-link rounded-3 active">
+            <Link href="/sanidad-vegetal/ingredientes-activos/insumos" className="nav-link btn-sm py-1 px-3 active">
               Insumos
             </Link>
           </li>
           <li className="nav-item">
-            <Link href="/sanidad-vegetal/ingredientes-activos" className="nav-link rounded-3">
+            <Link href="/sanidad-vegetal/ingredientes-activos" className="nav-link btn-sm py-1 px-3">
               Ingredientes Activos
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link href="/sanidad-vegetal/frac" className="nav-link btn-sm py-1 px-3">
+              FRAC
             </Link>
           </li>
         </ul>
 
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">Insumos</h1>
+            <h1 className="fw-bold h4 mb-1">Insumos</h1>
             <p className="text-secondary mb-0">
               Artículos de inventario tipo insumo usados en Sanidad Vegetal — siempre quedan en la categoría{" "}
               &quot;Sanidad Vegetal&quot; y pueden amarrarse (opcional) a los ingredientes activos que los componen.
@@ -419,7 +424,7 @@ export default function InsumosSanidadVegetalPage() {
             {!verEliminados && (
               <button
                 type="button"
-                className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+                className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2"
                 onClick={() => descargarExcel(itemsFiltrados)}
                 title="Descargar el listado actual en Excel"
               >
@@ -430,7 +435,7 @@ export default function InsumosSanidadVegetalPage() {
               <>
                 <button
                   type="button"
-                  className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+                  className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2"
                   onClick={openCargueModal}
                   title="Cargar varios insumos desde un archivo Excel/CSV"
                 >
@@ -467,7 +472,7 @@ export default function InsumosSanidadVegetalPage() {
             aparecer en el listado normal, hasta que se restauren.
           </div>
         ) : (
-        <div className="card border-0 rounded-4 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="card-body p-3">
             <div className="row g-2">
               <div className="col-12 col-md-6">
@@ -514,7 +519,7 @@ export default function InsumosSanidadVegetalPage() {
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-        <div className="card border-0 rounded-4 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="table-responsive">
             <table className="table table-sm table-hover mb-0 align-middle">
               <thead>
@@ -840,7 +845,7 @@ export default function InsumosSanidadVegetalPage() {
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setModalOpen(false)}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
@@ -867,7 +872,7 @@ export default function InsumosSanidadVegetalPage() {
 
             <button
               type="button"
-              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2 mb-3"
+              className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2 mb-3"
               onClick={descargarPlantilla}
             >
               <FiDownload /> Descargar plantilla de ejemplo (.xlsx)
@@ -905,7 +910,7 @@ export default function InsumosSanidadVegetalPage() {
             )}
 
             <div className="d-flex justify-content-end gap-2 mt-3">
-              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setCargueModalOpen(false)}>
+              <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setCargueModalOpen(false)}>
                 Cerrar
               </button>
               <button

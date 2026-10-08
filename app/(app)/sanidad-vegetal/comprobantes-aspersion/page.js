@@ -10,11 +10,6 @@ import { descargarComprobanteAspersionPdf, verComprobanteAspersionPdf } from "@/
 
 const MEDIO_LABEL = { AVION: "Avión", DRON: "Dron" };
 
-function nombreUsuario(u) {
-  if (!u) return "—";
-  return `${u.nombre || ""} ${u.apellido || ""}`.trim() || u.usuario || "—";
-}
-
 function fmtFecha(v) {
   if (!v) return "—";
   const d = new Date(v);
@@ -135,6 +130,14 @@ export default function ComprobantesAspersionPage() {
       hectareasAplicadas: c.hectareasAplicadas !== null && c.hectareasAplicadas !== undefined ? String(Number(c.hectareasAplicadas)) : "",
       galonesTotales: c.galonesTotales !== null && c.galonesTotales !== undefined ? String(Number(c.galonesTotales)) : "",
       observaciones: c.observaciones || "",
+      aeronave: c.aeronave || "",
+      volumenAplicacionHa: c.volumenAplicacionHa != null ? String(Number(c.volumenAplicacionHa)) : "",
+      temperaturaInicial: c.temperaturaInicial != null ? String(Number(c.temperaturaInicial)) : "",
+      temperaturaFinal: c.temperaturaFinal != null ? String(Number(c.temperaturaFinal)) : "",
+      velocidadViento: c.velocidadViento != null ? String(Number(c.velocidadViento)) : "",
+      humedadRelativaFinal: c.humedadRelativaFinal != null ? String(Number(c.humedadRelativaFinal)) : "",
+      horaInicio: c.horaInicio || "",
+      horaFinal: c.horaFinal || "",
       error: "",
     });
   }
@@ -151,6 +154,14 @@ export default function ComprobantesAspersionPage() {
         piloto: m.piloto.trim() || null,
         medio: m.medio || null,
         observaciones: m.observaciones.trim() || null,
+        aeronave: m.aeronave.trim() || null,
+        horaInicio: m.horaInicio || null,
+        horaFinal: m.horaFinal || null,
+        volumenAplicacionHa: m.volumenAplicacionHa !== "" ? Number(m.volumenAplicacionHa) : null,
+        temperaturaInicial: m.temperaturaInicial !== "" ? Number(m.temperaturaInicial) : null,
+        temperaturaFinal: m.temperaturaFinal !== "" ? Number(m.temperaturaFinal) : null,
+        velocidadViento: m.velocidadViento !== "" ? Number(m.velocidadViento) : null,
+        humedadRelativaFinal: m.humedadRelativaFinal !== "" ? Number(m.humedadRelativaFinal) : null,
         ...(m.hectareasAplicadas !== "" ? { hectareasAplicadas: Number(m.hectareasAplicadas) } : {}),
         ...(m.galonesTotales !== "" ? { galonesTotales: Number(m.galonesTotales) } : {}),
       };
@@ -199,7 +210,7 @@ export default function ComprobantesAspersionPage() {
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.comprobantes_aspersion">
-      <div className="p-4 p-md-5">
+      <div className="p-3 p-md-4">
         <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
           <div>
             <h1 className="fw-bold h4 mb-1 d-flex align-items-center gap-2">
@@ -207,12 +218,12 @@ export default function ComprobantesAspersionPage() {
             </h1>
             <p className="text-secondary small mb-0">
               Se genera en borrador al ejecutar una aspersión. Complétalo y emítelo; el PDF muestra la mezcla, las hectáreas, el
-              piloto, los insumos (sin cantidades), los galones y quién ejecutó.
+              piloto, los galones y quién ejecutó.
             </p>
           </div>
         </div>
 
-        <div className="card border-0 rounded-4 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <form className="card-body p-3 row g-2 align-items-end" onSubmit={aplicarFiltros}>
             <div className="col-12 col-md-4">
               <label className="form-label small mb-1">Buscar</label>
@@ -261,7 +272,7 @@ export default function ComprobantesAspersionPage() {
                 Filtrar
               </button>
               {(aplicados.search || aplicados.estado || aplicados.fincaUuid || filtros.search || filtros.estado || filtros.fincaUuid) && (
-                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={limpiarFiltros}>
+                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={limpiarFiltros}>
                   Limpiar
                 </button>
               )}
@@ -271,7 +282,7 @@ export default function ComprobantesAspersionPage() {
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-        <div className="card border-0 rounded-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 rounded-2" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="table-responsive">
             <table className="table table-sm align-middle mb-0">
               <thead>
@@ -281,11 +292,8 @@ export default function ComprobantesAspersionPage() {
                   <th>Finca</th>
                   <th>Mezcla</th>
                   <th>Con</th>
-                  <th>Piloto</th>
-                  <th className="text-end">Ha prog.</th>
                   <th className="text-end">Ha aplic.</th>
                   <th className="text-end">Galones</th>
-                  <th>Ejecutó</th>
                   <th>Estado</th>
                   <th className="text-end">Acciones</th>
                 </tr>
@@ -293,14 +301,14 @@ export default function ComprobantesAspersionPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={12} className="text-center text-secondary small py-4">
+                    <td colSpan={9} className="text-center text-secondary small py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="text-center text-secondary small py-4">
+                    <td colSpan={9} className="text-center text-secondary small py-4">
                       No hay comprobantes. Se crean automáticamente al ejecutar una aspersión.
                     </td>
                   </tr>
@@ -316,11 +324,8 @@ export default function ComprobantesAspersionPage() {
                         <td>{c.aspersion?.finca?.nombre || "—"}</td>
                         <td>{c.aspersion?.mezcla?.nombre || c.aspersion?.mezcla?.codigo || "—"}</td>
                         <td>{MEDIO_LABEL[c.medio] || "—"}</td>
-                        <td>{c.piloto || <span className="text-warning">Pendiente</span>}</td>
-                        <td className="text-end">{num(c.hectareasProgramadas)}</td>
                         <td className="text-end">{num(c.hectareasAplicadas)}</td>
                         <td className="text-end">{num(c.galonesTotales)}</td>
-                        <td>{nombreUsuario(c.ejecutadoPor)}</td>
                         <td>
                           <EstadoBadge estado={c.estado} />
                         </td>
@@ -451,6 +456,86 @@ export default function ComprobantesAspersionPage() {
                 />
               </div>
               <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Aeronave</label>
+                <input
+                  type="text"
+                  maxLength={150}
+                  className="form-control form-control-sm rounded-3"
+                  value={edicion.aeronave}
+                  onChange={(e) => setEdicion((m) => ({ ...m, aeronave: e.target.value }))}
+                />
+              </div>
+              <div className="col-6">
+                <label className="form-label small fw-medium mb-1">Volumen de aplicación por hectárea (gal/ha)</label>
+                <input
+                  type="number"
+                  step="0.01" min="0"
+                  className="form-control form-control-sm rounded-3"
+                  value={edicion.volumenAplicacionHa}
+                  onChange={(e) => setEdicion((m) => ({ ...m, volumenAplicacionHa: e.target.value }))}
+                />
+              </div>
+              <div className="col-6">
+                <label className="form-label small fw-medium mb-1">Velocidad del viento (km/h)</label>
+                <input
+                  type="number"
+                  step="0.1" min="0"
+                  className="form-control form-control-sm rounded-3"
+                  value={edicion.velocidadViento}
+                  onChange={(e) => setEdicion((m) => ({ ...m, velocidadViento: e.target.value }))}
+                />
+              </div>
+              <div className="col-6">
+                <label className="form-label small fw-medium mb-1">Temperatura inicial (°C)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="form-control form-control-sm rounded-3"
+                  value={edicion.temperaturaInicial}
+                  onChange={(e) => setEdicion((m) => ({ ...m, temperaturaInicial: e.target.value }))}
+                />
+              </div>
+              <div className="col-6">
+                <label className="form-label small fw-medium mb-1">Temperatura final (°C)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="form-control form-control-sm rounded-3"
+                  value={edicion.temperaturaFinal}
+                  onChange={(e) => setEdicion((m) => ({ ...m, temperaturaFinal: e.target.value }))}
+                />
+              </div>
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Humedad relativa final (%)</label>
+                <input
+                  type="number"
+                  step="0.1" min="0" max="100"
+                  className="form-control form-control-sm rounded-3"
+                  value={edicion.humedadRelativaFinal}
+                  onChange={(e) => setEdicion((m) => ({ ...m, humedadRelativaFinal: e.target.value }))}
+                />
+              </div>
+              <div className="col-6">
+                <label className="form-label small fw-medium mb-1">Hora inicio</label>
+                <input
+                  type="time"
+                  
+                  className="form-control form-control-sm rounded-3"
+                  value={edicion.horaInicio}
+                  onChange={(e) => setEdicion((m) => ({ ...m, horaInicio: e.target.value }))}
+                />
+              </div>
+              <div className="col-6">
+                <label className="form-label small fw-medium mb-1">Hora final</label>
+                <input
+                  type="time"
+                  
+                  className="form-control form-control-sm rounded-3"
+                  value={edicion.horaFinal}
+                  onChange={(e) => setEdicion((m) => ({ ...m, horaFinal: e.target.value }))}
+                />
+              </div>
+              <div className="col-12">
                 <label className="form-label small fw-medium mb-1">Observaciones</label>
                 <textarea
                   className="form-control form-control-sm rounded-3"
@@ -462,7 +547,7 @@ export default function ComprobantesAspersionPage() {
               </div>
             </div>
             <div className="d-flex justify-content-end gap-2 mt-3">
-              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setEdicion(null)}>
+              <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setEdicion(null)}>
                 Cancelar
               </button>
               <button type="button" className="btn btn-outline-success btn-sm rounded-3" disabled={guardando} onClick={() => guardarEdicion(false)}>

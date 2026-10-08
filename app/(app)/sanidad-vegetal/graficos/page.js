@@ -208,9 +208,9 @@ export default function SanidadGraficosPage() {
   // igual puede entrar y ver (solo) Clima.
   return (
     <RequirePermission code="menu.sanidad_vegetal.graficos">
-      <div className="p-4 p-md-5">
+      <div className="p-3 p-md-4">
         <div className="mb-4">
-          <h1 className="fw-bold h3 mb-1">Gráficos</h1>
+          <h1 className="fw-bold h4 mb-1">Gráficos</h1>
           <p className="text-secondary mb-0">Promedios semanales de infección, conteo de hojas, suma bruta y clima.</p>
         </div>
 
@@ -219,7 +219,7 @@ export default function SanidadGraficosPage() {
             <li className="nav-item" key={t.key}>
               <button
                 type="button"
-                className={`nav-link rounded-3 ${tab === t.key ? "btn-brand text-white" : "btn btn-outline-secondary btn-sm"}`}
+                className={`nav-link rounded-3 ${tab === t.key ? "btn-brand text-white" : "btn btn-sm btn-link text-secondary text-decoration-none"}`}
                 onClick={() => setTab(t.key)}
               >
                 {t.label}
