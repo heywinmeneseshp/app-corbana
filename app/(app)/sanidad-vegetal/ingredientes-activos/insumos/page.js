@@ -472,11 +472,10 @@ export default function InsumosSanidadVegetalPage() {
             aparecer en el listado normal, hasta que se restauren.
           </div>
         ) : (
-        <div className="card border-0 rounded-2 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <div className="card-body p-3">
-            <div className="row g-2">
+        <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+            <div className="row g-2 align-items-end">
               <div className="col-12 col-md-6">
-                <label className="form-label small mb-1">Buscar por nombre o código</label>
+                <label className="form-label small fw-medium">Buscar por nombre o código</label>
                 <input
                   type="text"
                   className="form-control form-control-sm rounded-3"
@@ -497,7 +496,7 @@ export default function InsumosSanidadVegetalPage() {
                 </datalist>
               </div>
               <div className="col-12 col-md-6">
-                <label className="form-label small mb-1">Ingrediente activo</label>
+                <label className="form-label small fw-medium">Ingrediente activo</label>
                 <select
                   className="form-select form-select-sm rounded-3"
                   value={ingredienteActivoUuid}
@@ -513,17 +512,16 @@ export default function InsumosSanidadVegetalPage() {
                 </select>
               </div>
             </div>
-          </div>
         </div>
         )}
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-        <div className="card border-0 rounded-2 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
-            <table className="table table-sm table-hover mb-0 align-middle">
-              <thead>
-                <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
+            <table className="table table-hover mb-0 align-middle" style={{ fontSize: "0.78rem" }}>
+              <thead className="table-light">
+                <tr>
                   {!verEliminados && (
                     <th style={{ width: "2.5rem" }}>
                       <input
@@ -535,32 +533,32 @@ export default function InsumosSanidadVegetalPage() {
                       />
                     </th>
                   )}
-                  <th className="fw-medium">Código</th>
-                  <th className="fw-medium">Nombre</th>
-                  <th className="fw-medium">Ingredientes activos</th>
-                  <th className="fw-medium">Dosis por hectárea</th>
-                  {verEliminados && <th className="fw-medium">Eliminado</th>}
-                  <th className="fw-medium text-end">Acciones</th>
+                  <th className="fw-medium text-center">Código</th>
+                  <th className="fw-medium text-start">Nombre</th>
+                  <th className="fw-medium text-start">Ingredientes activos</th>
+                  <th className="fw-medium text-center">Dosis por hectárea</th>
+                  {verEliminados && <th className="fw-medium text-center">Eliminado</th>}
+                  <th className="fw-medium text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {(verEliminados ? eliminadosLoading : loading) && (
                   <tr>
-                    <td colSpan={6} className="text-center text-secondary py-3 small">
+                    <td colSpan={6} className="text-center text-secondary py-3">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!verEliminados && !loading && itemsFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center text-secondary py-3 small">
+                    <td colSpan={6} className="text-center text-secondary py-3">
                       No hay insumos registrados todavía.
                     </td>
                   </tr>
                 )}
                 {verEliminados && !eliminadosLoading && eliminados.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center text-secondary py-3 small">
+                    <td colSpan={6} className="text-center text-secondary py-3">
                       No hay insumos eliminados.
                     </td>
                   </tr>
@@ -577,20 +575,20 @@ export default function InsumosSanidadVegetalPage() {
                           onChange={() => toggleSeleccionado(i.uuid)}
                         />
                       </td>
-                      <td className="small fw-medium">{i.codigo || "—"}</td>
-                      <td className="small">{i.nombre}</td>
-                      <td className="small text-secondary">
+                      <td className="fw-medium text-center text-nowrap">{i.codigo || "—"}</td>
+                      <td>{i.nombre}</td>
+                      <td className="text-secondary">
                         {(i.ingredientesActivos || []).length > 0
                           ? i.ingredientesActivos.map((ia) => ia.nombre).join(", ")
                           : "—"}
                       </td>
-                      <td className="small text-secondary">
+                      <td className="text-secondary text-center text-nowrap">
                         {i.dosisPorHectarea != null
                           ? `${Number(i.dosisPorHectarea).toFixed(3)} ${i.dosisUnidad?.simbolo || ""}/ha`
                           : "—"}
                       </td>
                       <td>
-                        <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                        <div className="d-flex justify-content-center gap-1 flex-nowrap">
                           {hasPermission("inventario.articulos.editar") && (
                             <button
                               type="button"
@@ -620,23 +618,23 @@ export default function InsumosSanidadVegetalPage() {
                   !eliminadosLoading &&
                   eliminados.map((i) => (
                     <tr key={i.uuid}>
-                      <td className="small fw-medium">{i.codigo || "—"}</td>
-                      <td className="small">{i.nombre}</td>
-                      <td className="small text-secondary">
+                      <td className="fw-medium text-center text-nowrap">{i.codigo || "—"}</td>
+                      <td>{i.nombre}</td>
+                      <td className="text-secondary">
                         {(i.ingredientesActivos || []).length > 0
                           ? i.ingredientesActivos.map((ia) => ia.nombre).join(", ")
                           : "—"}
                       </td>
-                      <td className="small text-secondary">
+                      <td className="text-secondary text-center text-nowrap">
                         {i.dosisPorHectarea != null
                           ? `${Number(i.dosisPorHectarea).toFixed(3)} ${i.dosisUnidad?.simbolo || ""}/ha`
                           : "—"}
                       </td>
-                      <td className="small text-secondary">
+                      <td className="text-secondary text-center text-nowrap">
                         {i.deletedAt ? new Date(i.deletedAt).toLocaleString("es-CO") : "—"}
                       </td>
                       <td>
-                        <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                        <div className="d-flex justify-content-center gap-1 flex-nowrap">
                           <button
                             type="button"
                             className="btn btn-sm btn-link p-1 d-inline-flex"

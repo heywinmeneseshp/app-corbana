@@ -17,6 +17,7 @@ export default function GruposFracModal({ onClose, onCambio, embebido = false })
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busqueda, setBusqueda] = useState("");
   const [form, setForm] = useState(null); // { uuid?, nombre, fracCodigo, codigoNuevo, modoAccion }
   const puedeCrear = hasPermission("ingrediente_activo.crear");
   const puedeEditar = hasPermission("ingrediente_activo.editar");
@@ -85,6 +86,10 @@ export default function GruposFracModal({ onClose, onCambio, embebido = false })
   }
 
   const esNuevoCodigo = form?.fracCodigo === NUEVO_CODIGO;
+  const q = busqueda.trim().toLowerCase();
+  const gruposFiltrados = q
+    ? grupos.filter((g) => [g.fracCodigo, g.nombre, g.modoAccion].some((v) => String(v || "").toLowerCase().includes(q)))
+    : grupos;
 
   const contenido = (
     <>
@@ -94,20 +99,9 @@ export default function GruposFracModal({ onClose, onCambio, embebido = false })
       </p>
       {error && <div className="small text-danger mb-2">{error}</div>}
 
-      {puedeCrear && !form && (
-        <button
-          type="button"
-          className="btn btn-sm btn-link text-decoration-none p-0 mb-3 d-inline-flex align-items-center gap-1"
-          style={{ color: "#166534" }}
-          onClick={abrirNuevo}
-        >
-          <FiPlus size={15} /> Nuevo grupo químico
-        </button>
-      )}
-
       {form && (
-        <div className="border-top border-bottom py-3 mb-3">
-          <div className="fw-semibold small mb-2">{form.uuid ? "Editar grupo químico" : "Nuevo grupo químico"}</div>
+        <ModalShell title={form.uuid ? "Editar grupo químico" : "Nuevo grupo químico"} onClose={() => setForm(null)} width="40rem" height="auto">
+        <div>
           <div className="row g-2 align-items-end">
             <div className="col-12 col-md-4">
               <label className="form-label small text-secondary mb-1">Grupo químico</label>
@@ -156,51 +150,69 @@ export default function GruposFracModal({ onClose, onCambio, embebido = false })
             </div>
           </div>
           {!esNuevoCodigo && <div className="small text-secondary mt-1">Cambiar el modo de acción lo cambia para todos los grupos de ese código.</div>}
-          <div className="d-flex gap-3 mt-2">
+          <div className="d-flex justify-content-end gap-3 mt-3">
             <button
               type="button"
-              className="btn btn-sm btn-link text-decoration-none p-0 d-inline-flex align-items-center gap-1"
-              style={{ color: "#166534" }}
+              className="btn btn-brand btn-brand-verde btn-sm rounded-3 d-inline-flex align-items-center gap-1"
               disabled={!form.nombre.trim() || (esNuevoCodigo && !form.codigoNuevo.trim())}
               onClick={guardar}
             >
               <FiCheck size={15} /> Guardar
             </button>
-            <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none p-0 d-inline-flex align-items-center gap-1" onClick={() => setForm(null)}>
+            <button type="button" className="btn btn-sm btn-outline-secondary rounded-3 d-inline-flex align-items-center gap-1" onClick={() => setForm(null)}>
               <FiX size={15} /> Cancelar
             </button>
           </div>
         </div>
+        </ModalShell>
       )}
 
+      <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+        <div className="row g-2 align-items-end">
+          <div className="col-12 col-md-6">
+            <label className="form-label small fw-medium">Buscar por código, grupo o modo de acción</label>
+            <input type="text" className="form-control form-control-sm rounded-3" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+          </div>
+          {puedeCrear && (
+            <div className="col-12 col-md-auto ms-md-auto">
+              <button type="button" className="btn btn-brand btn-brand-verde btn-sm rounded-3 d-inline-flex align-items-center gap-1" onClick={abrirNuevo}>
+                <FiPlus size={15} /> Nuevo grupo químico
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {loading ? (
-        <div className="small text-secondary py-3">Cargando...</div>
+        <p className="text-secondary">Cargando...</p>
       ) : (
-        <div style={{ maxHeight: "55vh", overflowY: "auto" }}>
-          <table className="table table-sm align-middle small mb-0">
-            <thead style={{ position: "sticky", top: 0, background: "#fff" }}>
-              <tr className="text-secondary">
-                <th className="fw-medium" style={{ width: "1%" }}>
+        <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+          <table className="table table-hover mb-0 align-middle" style={{ fontSize: "0.78rem" }}>
+            <thead className="table-light">
+              <tr>
+                <th className="fw-medium text-center" style={{ width: "1%" }}>
                   FRAC
                 </th>
-                <th className="fw-medium">Grupo químico</th>
-                <th className="fw-medium">Modo de acción</th>
+                <th className="fw-medium text-start">Grupo químico</th>
+                <th className="fw-medium text-start">Modo de acción</th>
                 <th className="fw-medium text-center" style={{ width: "1%" }} title="Ingredientes activos que usan este grupo">
                   Ingredientes
                 </th>
-                <th style={{ width: "1%" }} />
+                <th className="fw-medium text-center" style={{ width: "1%" }}>
+                  Acciones
+                </th>
               </tr>
             </thead>
             <tbody>
-              {grupos.map((g) => (
+              {gruposFiltrados.map((g) => (
                 <tr key={g.uuid}>
-                  <td className="fw-semibold" style={{ color: "#166534" }}>
-                    {g.fracCodigo}
+                  <td className="text-center">
+                    <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">{g.fracCodigo}</span>
                   </td>
                   <td className="fw-medium">{g.nombre}</td>
                   <td className="text-secondary">{g.modoAccion || "—"}</td>
                   <td className="text-center">{g.ingredientes}</td>
-                  <td className="text-end text-nowrap">
+                  <td className="text-center text-nowrap">
                     {puedeEditar && (
                       <button type="button" className="btn btn-sm btn-link p-1 text-secondary" title="Editar" onClick={() => abrirEditar(g)}>
                         <FiEdit2 size={15} />

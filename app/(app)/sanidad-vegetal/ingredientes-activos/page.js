@@ -14,8 +14,8 @@ function emptyForm() {
   return { nombre: "", descripcion: "", grupoQuimicoUuid: "", estado: true };
 }
 
-const PLANTILLA_HEADERS = ["nombre", "descripcion", "estado"];
-const PLANTILLA_EJEMPLO = ["Mancozeb", "Fungicida de contacto", "activo"];
+const PLANTILLA_HEADERS = ["nombre", "descripcion", "frac", "grupo_quimico", "estado"];
+const PLANTILLA_EJEMPLO = ["Mancozeb", "Fungicida de contacto", "M03", "Ditiocarbamatos", "activo"];
 
 function descargarPlantilla() {
   const worksheet = XLSX.utils.aoa_to_sheet([PLANTILLA_HEADERS, PLANTILLA_EJEMPLO]);
@@ -302,11 +302,10 @@ export default function IngredientesActivosPage() {
             datos, sin aparecer en el listado normal, hasta que se restauren.
           </div>
         ) : (
-        <div className="card border-0 rounded-2 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <div className="card-body p-3">
-            <div className="row g-2">
+        <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+            <div className="row g-2 align-items-end">
               <div className="col-12 col-md-6">
-                <label className="form-label small mb-1">Buscar por nombre</label>
+                <label className="form-label small fw-medium">Buscar por nombre</label>
                 <input
                   type="text"
                   className="form-control form-control-sm rounded-3"
@@ -322,44 +321,43 @@ export default function IngredientesActivosPage() {
                 </datalist>
               </div>
             </div>
-          </div>
         </div>
         )}
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-        <div className="card border-0 rounded-2 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
-            <table className="table table-sm table-hover mb-0 align-middle">
-              <thead>
-                <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
+            <table className="table table-hover mb-0 align-middle" style={{ fontSize: "0.78rem" }}>
+              <thead className="table-light">
+                <tr>
                   <th className="fw-medium">Nombre</th>
-                  <th className="fw-medium">FRAC</th>
-                  <th className="fw-medium">Grupo químico</th>
-                  <th className="fw-medium">Modo de acción</th>
+                  <th className="fw-medium text-center">FRAC</th>
+                  <th className="fw-medium text-center">Grupo químico</th>
+                  <th className="fw-medium text-center">Modo de acción</th>
                   <th className="fw-medium">Descripción</th>
-                  {verEliminados && <th className="fw-medium">Eliminado</th>}
-                  <th className="fw-medium text-end">Acciones</th>
+                  {verEliminados && <th className="fw-medium text-center">Eliminado</th>}
+                  <th className="fw-medium text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {(verEliminados ? eliminadosLoading : loading) && (
                   <tr>
-                    <td colSpan={verEliminados ? 4 : 3} className="text-center text-secondary py-3 small">
+                    <td colSpan={verEliminados ? 4 : 3} className="text-center text-secondary py-3">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!verEliminados && !loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center text-secondary py-3 small">
+                    <td colSpan={6} className="text-center text-secondary py-3">
                       No hay ingredientes activos registrados todavía.
                     </td>
                   </tr>
                 )}
                 {verEliminados && !eliminadosLoading && eliminados.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center text-secondary py-3 small">
+                    <td colSpan={7} className="text-center text-secondary py-3">
                       No hay ingredientes activos eliminados.
                     </td>
                   </tr>
@@ -368,19 +366,19 @@ export default function IngredientesActivosPage() {
                   !loading &&
                   items.map((i) => (
                     <tr key={i.uuid}>
-                      <td className="small fw-medium">{i.nombre}</td>
-                      <td className="small">
+                      <td className="fw-medium">{i.nombre}</td>
+                      <td className="text-center">
                         {i.grupoQuimico?.frac?.codigo ? (
                           <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">{i.grupoQuimico.frac.codigo}</span>
                         ) : (
                           "—"
                         )}
                       </td>
-                      <td className="small text-secondary">{i.grupoQuimico?.nombre || "—"}</td>
-                      <td className="small text-secondary">{i.grupoQuimico?.frac?.modoAccion || "—"}</td>
-                      <td className="small text-secondary">{i.descripcion || "—"}</td>
+                      <td className="text-secondary text-center">{i.grupoQuimico?.nombre || "—"}</td>
+                      <td className="text-secondary text-center">{i.grupoQuimico?.frac?.modoAccion || "—"}</td>
+                      <td className="text-secondary">{i.descripcion || "—"}</td>
                       <td>
-                        <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                        <div className="d-flex justify-content-center gap-1 flex-nowrap">
                           {hasPermission("ingrediente_activo.editar") && (
                             <button
                               type="button"
@@ -410,22 +408,22 @@ export default function IngredientesActivosPage() {
                   !eliminadosLoading &&
                   eliminados.map((i) => (
                     <tr key={i.uuid}>
-                      <td className="small fw-medium">{i.nombre}</td>
-                      <td className="small">
+                      <td className="fw-medium">{i.nombre}</td>
+                      <td className="text-center">
                         {i.grupoQuimico?.frac?.codigo ? (
                           <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">{i.grupoQuimico.frac.codigo}</span>
                         ) : (
                           "—"
                         )}
                       </td>
-                      <td className="small text-secondary">{i.grupoQuimico?.nombre || "—"}</td>
-                      <td className="small text-secondary">{i.grupoQuimico?.frac?.modoAccion || "—"}</td>
-                      <td className="small text-secondary">{i.descripcion || "—"}</td>
-                      <td className="small text-secondary">
+                      <td className="text-secondary text-center">{i.grupoQuimico?.nombre || "—"}</td>
+                      <td className="text-secondary text-center">{i.grupoQuimico?.frac?.modoAccion || "—"}</td>
+                      <td className="text-secondary">{i.descripcion || "—"}</td>
+                      <td className="text-secondary text-center">
                         {i.deletedAt ? new Date(i.deletedAt).toLocaleString("es-CO") : "—"}
                       </td>
                       <td>
-                        <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                        <div className="d-flex justify-content-center gap-1 flex-nowrap">
                           <button
                             type="button"
                             className="btn btn-sm btn-link p-1 d-inline-flex"
@@ -519,8 +517,10 @@ export default function IngredientesActivosPage() {
         {cargueModalOpen && (
           <ModalShell title="Cargue masivo de ingredientes activos" onClose={() => setCargueModalOpen(false)}>
             <p className="small text-secondary mb-3">
-              Sube un archivo .xlsx o .csv con las columnas <strong>nombre</strong> (obligatoria), <strong>descripcion</strong> y{" "}
-              <strong>estado</strong> (activo/inactivo). Si un nombre ya existe, se actualiza en vez de duplicarse.
+              Sube un archivo .xlsx o .csv con las columnas <strong>nombre</strong> (obligatoria), <strong>descripcion</strong>,{" "}
+              <strong>grupo_quimico</strong> (debe existir en FRAC; agrega <strong>frac</strong> si el nombre se repite en varios códigos) y{" "}
+              <strong>estado</strong> (activo/inactivo). Si un nombre ya existe, se actualiza en vez de duplicarse; una celda vacía no borra el dato
+              actual. Con &quot;Descargar Excel&quot; obtienes el archivo listo para editar y volver a subir.
             </p>
 
             <button

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2, FiStar } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiStar, FiUser } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import EnrolarRostroModal from "@/components/asistencia/EnrolarRostroModal";
 
 function emptyForm() {
   return { nombre: "", documento: "", telefono: "", fincaUuid: "", estado: true, labores: [] };
@@ -91,6 +92,7 @@ export default function ColaboradoresPage() {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [rostroDe, setRostroDe] = useState(null); // colaborador cuyo rostro se está enrolando
 
   async function load() {
     setLoading(true);
@@ -204,20 +206,21 @@ export default function ColaboradoresPage() {
                   <th>Finca</th>
                   <th>Labores</th>
                   <th>Estado</th>
+                  <th>Rostro</th>
                   <th className="text-end">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={7} className="text-center text-secondary py-4">
+                    <td colSpan={8} className="text-center text-secondary py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center text-secondary py-4">
+                    <td colSpan={8} className="text-center text-secondary py-4">
                       No hay colaboradores registrados todavía.
                     </td>
                   </tr>
@@ -249,7 +252,21 @@ export default function ColaboradoresPage() {
                         )}
                       </td>
                       <td>
+                        {c.rostroEnrolado ? (
+                          <span className="badge rounded-pill" style={{ backgroundColor: "#d1fae5", color: "#047857" }} title={`${c.rostroMuestras} captura(s)`}>
+                            Enrolado
+                          </span>
+                        ) : (
+                          <span className="badge rounded-pill text-bg-light text-secondary">Sin enrolar</span>
+                        )}
+                      </td>
+                      <td>
                         <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                          {hasPermission("colaborador.editar") && (
+                            <button type="button" className="btn btn-sm btn-outline-success" title="Registrar rostro (asistencia)" onClick={() => setRostroDe(c)}>
+                              <FiUser />
+                            </button>
+                          )}
                           {hasPermission("colaborador.editar") && (
                             <button type="button" className="btn btn-sm btn-outline-warning" title="Editar" onClick={() => openEdit(c)}>
                               <FiEdit2 />
@@ -358,6 +375,8 @@ export default function ColaboradoresPage() {
             </form>
           </ModalShell>
         )}
+
+        {rostroDe && <EnrolarRostroModal colaborador={rostroDe} onClose={() => setRostroDe(null)} onCambio={load} />}
       </div>
     </RequirePermission>
   );

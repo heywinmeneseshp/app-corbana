@@ -5,7 +5,6 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet"
 import L from "leaflet";
 import { FiMapPin } from "react-icons/fi";
 import ModalShell from "@/components/ModalShell";
-import { CINTA_POR_ID, USUARIO_POR_ID } from "@/lib/precalibracion/mockData";
 
 // Capas de mapa disponibles — todas gratis, sin API key (mismo patrón que
 // components/reportes/MapaEvaluacionesModal.js).
@@ -75,16 +74,14 @@ export default function MapaRecorridoModal({ titulo, registros = [], onClose }) 
     const mapa = new Map();
     for (const r of ordenados) {
       if (!mapa.has(r.cintaId)) {
-        const cinta = CINTA_POR_ID.get(r.cintaId);
-        mapa.set(r.cintaId, { id: r.cintaId, nombre: cinta?.nombre || r.cintaId, color: cinta?.color || "#64748b" });
+        mapa.set(r.cintaId, { id: r.cintaId, nombre: r.cintaNombre || r.cintaId, color: r.cintaColor || "#64748b" });
       }
     }
     return [...mapa.values()];
   }, [ordenados]);
 
   function iconoPara(registro, orden) {
-    const cinta = CINTA_POR_ID.get(registro.cintaId);
-    return crearIconoOrden(cinta?.color || "#64748b", orden);
+    return crearIconoOrden(registro.cintaColor || "#64748b", orden);
   }
 
   function toggleCinta(cintaId) {
@@ -201,7 +198,6 @@ export default function MapaRecorridoModal({ titulo, registros = [], onClose }) 
               />
             )}
             {visibles.map((r) => {
-              const cinta = CINTA_POR_ID.get(r.cintaId);
               const orden = ordenPorId.get(r.id);
               return (
                 <Marker
@@ -215,13 +211,13 @@ export default function MapaRecorridoModal({ titulo, registros = [], onClose }) 
                       <div>
                         {formatoFecha(r.fecha)} — {r.hora}
                       </div>
-                      <div className="text-secondary">{USUARIO_POR_ID.get(r.usuarioId)?.nombre || "—"}</div>
+                      <div className="text-secondary">{r.usuarioNombre || "—"}</div>
                       <div className="d-flex align-items-center gap-1 mt-1">
                         <span
                           className="rounded-circle d-inline-block"
-                          style={{ width: 8, height: 8, background: cinta?.color || "#64748b" }}
+                          style={{ width: 8, height: 8, background: r.cintaColor || "#64748b" }}
                         />
-                        {cinta?.nombre || "—"} / S{r.edad}
+                        {r.cintaNombre || "—"} / S{r.edad}
                       </div>
                     </div>
                   </Popup>

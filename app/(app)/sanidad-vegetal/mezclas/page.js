@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
-import { FiPlus, FiEye, FiX, FiInfo, FiUploadCloud, FiDownload, FiArchive, FiRotateCcw, FiTrash2, FiEdit2, FiSliders } from "react-icons/fi";
+import { FiPlus, FiEye, FiX, FiInfo, FiUploadCloud, FiDownload, FiArchive, FiRotateCcw, FiTrash2, FiEdit2, FiSliders, FiFilter, FiChevronRight } from "react-icons/fi";
 import { apiFetch, apiUpload } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
@@ -1065,8 +1065,9 @@ export default function ElaboracionesPage() {
       setArticulos(arts.items || []);
       setUnidades(unis.items || []);
       setConversiones(Array.isArray(convs) ? convs : convs.items || []);
-      // Solo los insumos creados en Sanidad Vegetal (categoría fija "Sanidad Vegetal").
-      setInsumosOpciones((insumos.items || []).filter((a) => a.categoria?.nombre === "Sanidad Vegetal"));
+      // Todos los artículos de tipo Insumo: una receta lleva también aceite, adherente, agua, etc., que no son de la
+      // categoría "Sanidad Vegetal". Filtrar solo por esa categoría dejaba esos renglones sin artículo al editar.
+      setInsumosOpciones(insumos.items || []);
       setIngredientesActivosOpciones(ingredientesActivos.items || []);
     } catch (err) {
       setError(err.message);
@@ -1248,14 +1249,11 @@ export default function ElaboracionesPage() {
           </li>
         </ul>
 
+        {/* Mismo diseño de encabezado, filtros y tabla que Sanidad Vegetal → Evaluación de Labores. */}
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
             <h1 className="fw-bold h4 mb-1">Mezclas</h1>
-            <p className="text-secondary mb-0">
-              Maestro de mezclas: cada una tiene su propio consecutivo y su artículo elaborado. El artículo elaborado
-              nunca tiene saldo propio — cada vez que se produce un lote se valida stock y se descuentan los insumos
-              de la receta.
-            </p>
+            <p className="text-secondary mb-0">Maestro de mezclas: cada una tiene su consecutivo y su artículo elaborado.</p>
           </div>
           <div className="d-flex gap-2">
             {esAdmin && (
@@ -1271,19 +1269,19 @@ export default function ElaboracionesPage() {
             {!verEliminados && (
               <button
                 type="button"
-                className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2"
+                className="btn btn-sm btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
                 onClick={handleDescargarExcel}
                 disabled={exportando || mezclasFiltradas.length === 0}
                 title="Descargar el listado actual en Excel, con la receta de cada mezcla (un archivo que se puede volver a subir por Cargue masivo)"
               >
-                <FiDownload /> {exportando ? "Generando..." : "Descargar Excel"}
+                <FiDownload /> {exportando ? "Generando..." : "Exportar"}
               </button>
             )}
             {!verEliminados && hasPermission("inventario.mezclas.elaborar") && (
               <>
                 <button
                   type="button"
-                  className="btn btn-sm btn-link text-secondary text-decoration-none d-flex align-items-center gap-2"
+                  className="btn btn-sm btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
                   onClick={openCargueModal}
                   title="Cargar varias mezclas desde un archivo Excel/CSV"
                 >
@@ -1299,15 +1297,14 @@ export default function ElaboracionesPage() {
 
         {verEliminados ? (
           <div className="alert alert-secondary py-2 small mb-3">
-            Mostrando mezclas eliminadas — solo visibles para el Administrador. Siguen en la base de datos, sin
-            aparecer en el listado normal, hasta que se restauren.
+            Mostrando mezclas eliminadas — solo visibles para el Administrador. Siguen en la base de datos, sin aparecer en el
+            listado normal, hasta que se restauren.
           </div>
         ) : (
-        <div className="card border-0 rounded-2 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <div className="card-body p-3">
-            <div className="row g-2">
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Buscar por nombre o código</label>
+          <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+            <div className="row g-2 align-items-end">
+              <div className="col-12 col-md">
+                <label className="form-label small fw-medium">Buscar por nombre o código</label>
                 <input
                   type="text"
                   className="form-control form-control-sm rounded-3"
@@ -1326,8 +1323,8 @@ export default function ElaboracionesPage() {
                     ))}
                 </datalist>
               </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Insumo en la receta</label>
+              <div className="col-6 col-md">
+                <label className="form-label small fw-medium">Insumo en la receta</label>
                 <select
                   className="form-select form-select-sm rounded-3"
                   value={filtros.insumoUuid}
@@ -1341,8 +1338,8 @@ export default function ElaboracionesPage() {
                   ))}
                 </select>
               </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Ingrediente activo en la receta</label>
+              <div className="col-6 col-md">
+                <label className="form-label small fw-medium">Ingrediente activo en la receta</label>
                 <select
                   className="form-select form-select-sm rounded-3"
                   value={filtros.ingredienteActivoUuid}
@@ -1356,137 +1353,107 @@ export default function ElaboracionesPage() {
                   ))}
                 </select>
               </div>
+              {(filtros.search || filtros.insumoUuid || filtros.ingredienteActivoUuid) && (
+                <div className="col-12 col-md-auto">
+                  <button type="button" className="btn btn-sm btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={limpiarFiltros}>
+                    <FiFilter /> Limpiar
+                  </button>
+                </div>
+              )}
             </div>
-            {(filtros.search || filtros.insumoUuid || filtros.ingredienteActivoUuid) && (
-              <div className="d-flex gap-2 mt-3">
-                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={limpiarFiltros}>
-                  Limpiar
-                </button>
-              </div>
-            )}
           </div>
-        </div>
         )}
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-        <div className="card border-0 rounded-2 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <div className="table-responsive">
-            <table className="table table-sm table-hover mb-0 align-middle">
-              <thead>
-                <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
-                  <th className="fw-medium">Código</th>
-                  <th className="fw-medium">Nombre</th>
-                  <th className="fw-medium">Artículo elaborado</th>
-                  <th className="fw-medium">Volumen por hectárea</th>
-                  {verEliminados && <th className="fw-medium">Eliminado</th>}
-                  <th className="fw-medium text-end">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(verEliminados ? eliminadosLoading : loadingMezclas) && (
+        {(verEliminados ? eliminadosLoading : loadingMezclas) ? (
+          <p className="text-secondary">Cargando...</p>
+        ) : (verEliminados ? eliminados : mezclasFiltradas).length === 0 ? (
+          <p className="text-secondary">{verEliminados ? "No hay mezclas eliminadas." : "No hay mezclas para estos filtros."}</p>
+        ) : (
+          <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+            <div className="table-responsive">
+              <table className="table table-hover mb-0 align-middle" style={{ fontSize: "0.78rem" }}>
+                <thead className="table-light">
                   <tr>
-                    <td colSpan={verEliminados ? 6 : 5} className="text-center text-secondary py-3 small">
-                      Cargando...
-                    </td>
+                    <th className="ps-4 text-center text-nowrap">Código</th>
+                    <th>Nombre</th>
+                    <th>Artículo elaborado</th>
+                    <th className="text-center text-nowrap" title="Volumen por hectárea">Vol./ha</th>
+                    {verEliminados && <th className="text-center">Eliminado</th>}
+                    <th className="pe-4 text-center">Acciones</th>
                   </tr>
-                )}
-                {!verEliminados && !loadingMezclas && mezclasFiltradas.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="text-center text-secondary py-3 small">
-                      No hay mezclas registradas todavía.
-                    </td>
-                  </tr>
-                )}
-                {verEliminados && !eliminadosLoading && eliminados.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="text-center text-secondary py-3 small">
-                      No hay mezclas eliminadas.
-                    </td>
-                  </tr>
-                )}
-                {!verEliminados &&
-                  !loadingMezclas &&
-                  mezclasFiltradas.map((m) => (
-                    <tr key={m.uuid} style={{ cursor: "pointer" }} onClick={() => abrirDetalleMezcla(m)}>
-                      <td className="small fw-medium">{m.codigo}</td>
-                      <td className="small">{m.nombre || <span className="text-secondary fst-italic">Sin nombre</span>}</td>
-                      <td className="small text-secondary">{m.articuloElaborado?.nombre || "—"}</td>
-                      <td className="small text-secondary">
-                        {m.dosisPorHectarea != null
-                          ? `${Number(m.dosisPorHectarea).toFixed(2)} ${m.dosisPorHectareaUnidad?.simbolo || ""}/ha`
-                          : "—"}
-                      </td>
-                      <td onClick={(ev) => ev.stopPropagation()}>
-                        <div className="d-flex justify-content-end">
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
-                            title="Ver insumos y costo"
-                            onClick={() => abrirDetalleMezcla(m)}
-                          >
-                            <FiEye size={15} />
-                          </button>
+                </thead>
+                <tbody>
+                  {!verEliminados &&
+                    mezclasFiltradas.map((m) => (
+                      <tr key={m.uuid} role="button" onClick={() => abrirDetalleMezcla(m)}>
+                        <td className="ps-4 text-center text-nowrap">
+                          <span className="text-nowrap">{m.codigo}</span>
+                        </td>
+                        <td>{m.nombre || <span className="text-secondary fst-italic">Sin nombre</span>}</td>
+                        <td>{m.articuloElaborado?.nombre || "—"}</td>
+                        <td className="text-center">
+                          {m.dosisPorHectarea != null ? (
+                            <span className="badge rounded-pill text-bg-light text-secondary">
+                              {`${Number(m.dosisPorHectarea).toFixed(2)} ${m.dosisPorHectareaUnidad?.simbolo || ""}/ha`}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="pe-4 text-center text-nowrap" onClick={(ev) => ev.stopPropagation()}>
                           {hasPermission("inventario.mezclas.editar") && (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
-                              title="Editar"
-                              onClick={() => abrirEditar(m)}
-                            >
-                              <FiEdit2 size={15} />
+                            <button type="button" className="btn btn-sm btn-link p-1 me-1 text-secondary" title="Editar" onClick={() => abrirEditar(m)}>
+                              <FiEdit2 />
                             </button>
                           )}
                           {esAdmin && (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-link p-1 d-inline-flex"
-                              style={{ color: "#dc2626" }}
-                              title="Eliminar"
-                              onClick={() => handleDelete(m)}
-                            >
-                              <FiTrash2 size={15} />
+                            <button type="button" className="btn btn-sm btn-link p-1 me-1" style={{ color: "#dc2626" }} title="Eliminar" onClick={() => handleDelete(m)}>
+                              <FiTrash2 />
                             </button>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                {verEliminados &&
-                  !eliminadosLoading &&
-                  eliminados.map((m) => (
-                    <tr key={m.uuid}>
-                      <td className="small fw-medium">{m.codigo}</td>
-                      <td className="small">{m.nombre || <span className="text-secondary fst-italic">Sin nombre</span>}</td>
-                      <td className="small text-secondary">{m.articuloElaborado?.nombre || "—"}</td>
-                      <td className="small text-secondary">
-                        {m.dosisPorHectarea != null
-                          ? `${Number(m.dosisPorHectarea).toFixed(2)} ${m.dosisPorHectareaUnidad?.simbolo || ""}/ha`
-                          : "—"}
-                      </td>
-                      <td className="small text-secondary">
-                        {m.deletedAt ? new Date(m.deletedAt).toLocaleString("es-CO") : "—"}
-                      </td>
-                      <td>
-                        <div className="d-flex justify-content-end">
+                          <FiChevronRight className="text-secondary" title="Ver insumos y costo" onClick={() => abrirDetalleMezcla(m)} />
+                        </td>
+                      </tr>
+                    ))}
+                  {verEliminados &&
+                    eliminados.map((m) => (
+                      <tr key={m.uuid}>
+                        <td className="ps-4 text-center text-nowrap">
+                          <span className="text-nowrap">{m.codigo}</span>
+                        </td>
+                        <td>{m.nombre || <span className="text-secondary fst-italic">Sin nombre</span>}</td>
+                        <td>{m.articuloElaborado?.nombre || "—"}</td>
+                        <td className="text-center">
+                          {m.dosisPorHectarea != null ? (
+                            <span className="badge rounded-pill text-bg-light text-secondary">
+                              {`${Number(m.dosisPorHectarea).toFixed(2)} ${m.dosisPorHectareaUnidad?.simbolo || ""}/ha`}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="text-center text-secondary">{m.deletedAt ? new Date(m.deletedAt).toLocaleString("es-CO") : "—"}</td>
+                        <td className="pe-4 text-center">
                           <button
                             type="button"
-                            className="btn btn-sm btn-link p-1 d-inline-flex"
+                            className="btn btn-sm btn-link p-1"
                             style={{ color: "#16a34a" }}
                             title="Restaurar"
                             disabled={restaurandoUuid === m.uuid}
                             onClick={() => handleRestore(m)}
                           >
-                            <FiRotateCcw size={15} />
+                            <FiRotateCcw />
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
         {modalOpen && (
           <ModalShell title="Nueva mezcla" onClose={() => setModalOpen(false)} width="80vw">
@@ -2195,7 +2162,7 @@ export default function ElaboracionesPage() {
                       onChange={(e) => setEditarForm((f) => ({ ...f, dosisPorHectareaUnidadUuid: e.target.value }))}
                     >
                       <option value="">Unidad...</option>
-                      {unidades.map((u) => (
+                      {unidades.filter((u) => u.tipo === "VOLUMEN").map((u) => (
                         <option key={u.uuid} value={u.uuid}>
                           {u.simbolo}
                         </option>

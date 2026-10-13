@@ -44,6 +44,13 @@ body {
   color: #fff;
 }
 
+/* Variante que sigue verde al pasar el mouse (el hover normal de .btn-brand pasa a gris). */
+.btn-brand.btn-brand-verde:hover,
+.btn-brand.btn-brand-verde:focus {
+  background-color: var(--brand-800);
+  border-color: var(--brand-800);
+}
+
 .border-brand {
   border-color: var(--brand-700) !important;
 }
@@ -117,3 +124,64 @@ body {
 .grafico-expandido .grafico-alto {
   height: calc(100vh - 240px) !important;
 }
+
+
+/* === Diseño compacto (mx) ===
+   Sistema de botones/tablas/pestañas compacto y plano, con los colores de la app (verde brand).
+   Usado por Sanidad Vegetal → Mezclas; reutilizable en otras pantallas. */
+:root {
+  --mx-btn-h: 34px;
+  --mx-btn-h-sm: 28px;
+  --mx-radius: 7px;
+  --mx-line: #e5e9ef;
+  --mx-muted: #64748b;
+}
+.mx-title { font-size: 22px; line-height: 1.1; margin: 0 0 3px; letter-spacing: -0.3px; font-weight: 700; }
+.mx-subtitle { color: var(--mx-muted); font-size: 12.5px; margin: 0 0 4px; }
+.mx-info { color: #475569; font-size: 12.5px; margin: 12px 0 2px; line-height: 1.45; }
+.mx-info b { color: #0f172a; font-weight: 600; }
+
+.mx-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--mx-line); margin-top: 14px; }
+.mx-tab { padding: 9px 2px; color: var(--mx-muted); font-size: 12.5px; font-weight: 500; cursor: pointer; border: 0; border-bottom: 2px solid transparent; background: transparent; }
+.mx-tab.active { color: #0f172a; border-bottom-color: var(--brand-800); font-weight: 600; }
+
+.mx-toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 4px; align-items: center; }
+.mx-search, .mx-select {
+  height: var(--mx-btn-h); background: #fff; border: 1px solid #dce5f0; border-radius: var(--mx-radius);
+  padding: 0 12px; font-size: 12.5px; outline: none; font-family: inherit;
+}
+.mx-search { flex: 1; min-width: 14rem; }
+.mx-select { max-width: 15rem; }
+.mx-search:focus, .mx-select:focus { border-color: var(--brand-700); box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.1); }
+
+.mx-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: var(--mx-btn-h); padding: 0 13px;
+  border: 1px solid transparent; border-radius: var(--mx-radius); font-family: inherit; font-size: 12.5px; font-weight: 600;
+  line-height: 1; cursor: pointer; background: transparent; color: #0f172a; white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.mx-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.25); }
+.mx-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.mx-btn-primary { background: var(--brand-700); color: #fff; }
+.mx-btn-primary:hover:not(:disabled) { background: var(--brand-800); }
+.mx-btn-outline { background: #fff; color: var(--brand-800); border-color: #b6e8cd; }
+.mx-btn-outline:hover:not(:disabled) { background: var(--brand-50); border-color: #8bd9b1; }
+.mx-btn-ghost { color: var(--mx-muted); padding: 0 8px; }
+.mx-btn-ghost:hover:not(:disabled) { background: #f1f5f9; color: #0f172a; }
+
+.mx-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: var(--mx-btn-h-sm); height: var(--mx-btn-h-sm);
+  padding: 0; border: 0; border-radius: 50%; background: transparent; color: #6c757d; cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mx-icon-btn:hover { background: #f1f5f9; color: var(--brand-800); }
+.mx-icon-btn.danger { color: #dc2626; }
+.mx-icon-btn.danger:hover { background: #fff5f5; color: #b91c1c; }
+
+.mx-table-wrap { background: #fff; border: 1px solid var(--mx-line); border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06); overflow: hidden; }
+.mx-table { width: 100%; border-collapse: collapse; }
+.mx-table th { text-align: left; padding: 10px 12px; font-size: 12px; color: #0f172a; font-weight: 600; background: transparent; border-bottom: 1px solid var(--mx-line); }
+.mx-table td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; font-size: 12.5px; vertical-align: middle; color: #334155; }
+.mx-table tr:last-child td { border-bottom: 0; }
+.mx-table tbody tr:hover td { background: #fafbfc; }
+.mx-actions { display: flex; gap: 4px; justify-content: flex-end; }

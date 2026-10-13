@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.2",
+    "@vladmandic/face-api": "^1.7.15",
     "bootstrap": "^5.3.8",
     "date-fns": "^4.4.0",
     "docx": "^9.7.1",

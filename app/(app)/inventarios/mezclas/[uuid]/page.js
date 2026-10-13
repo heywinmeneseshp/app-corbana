@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FiPlus, FiX, FiCamera, FiTrash2, FiArrowLeft, FiCheckCircle, FiXCircle, FiInfo, FiClock, FiSend, FiMenu } from "react-icons/fi";
+import { FiPlus, FiX, FiCamera, FiTrash2, FiArrowLeft, FiCheckCircle, FiXCircle, FiInfo, FiClock, FiSend, FiMenu, FiSliders } from "react-icons/fi";
 import { apiFetch, apiFetchFormData, apiFetchBlob } from "@/lib/api";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
 import { estadoPruebaInfo, ESTADOS_PRUEBA_EDITABLES } from "@/lib/mezclaEstados";
@@ -295,6 +295,10 @@ export default function MezclaPruebaDetallePage() {
         cantidad: String(c.cantidad ?? 1),
         unidadUuid: c.unidad?.uuid || "",
         esPrincipal: Boolean(c.esPrincipal),
+        // Dosis relativa guardada ("X % de otro insumo"): se resuelve a uuid del insumo de referencia.
+        tipoDosis: c.tipoDosis || "FIJA",
+        porcentajeReferencia: c.porcentajeReferencia != null ? String(Number(c.porcentajeReferencia)) : "",
+        referenciaArticuloUuid: c.referenciaArticuloId ? (v?.componentes || []).find((x) => x.articulo?.id === c.referenciaArticuloId)?.articulo?.uuid || "" : "",
       }));
       setComponentesForm(nuevosComponentes);
       return nuevosComponentes;
@@ -660,6 +664,29 @@ export default function MezclaPruebaDetallePage() {
   // guardado una etapa anterior apuntando a esta misma fila (bug real
   // reportado: reemplazar toda la lista le cambiaba el id por debajo y la
   // etapa vieja quedaba mostrando "—" en vez del insumo).
+  // Dosis relativa de un renglón ya guardado: "este insumo es el X % de otro" (ej. AL 100 = 1 % del ACEITE BANOLE).
+  const [reglaEdit, setReglaEdit] = useState(null); // { idx, referenciaArticuloUuid, porcentaje }
+
+  async function guardarRegla(idx, regla) {
+    const fila = componentesForm[idx];
+    if (!fila?.uuid) return;
+    setComponentesError("");
+    setSavingComponentes(true);
+    try {
+      await apiFetch(`/inventarios/mezclas/${uuid}/versiones/${version.uuid}/componentes/${fila.uuid}`, {
+        method: "PATCH",
+        body: JSON.stringify({ cantidad: Number(fila.cantidad) || 1, unidadUuid: fila.unidadUuid || null, ...regla }),
+      });
+      setReglaEdit(null);
+      const recargados = await load();
+      if (recargados) await sincronizarAgua(recargados);
+    } catch (err) {
+      setComponentesError(err.message);
+    } finally {
+      setSavingComponentes(false);
+    }
+  }
+
   async function updateComponenteYGuardar(idx, field, value) {
     const next = computeNextComponentes(componentesForm, idx, field, value);
     setComponentesForm(next);
@@ -1986,6 +2013,7 @@ export default function MezclaPruebaDetallePage() {
                     <th className="text-start" style={{ minWidth: "14rem", color: "#166534" }}>Artículo</th>
                     <th className="text-center" style={{ width: "8rem", color: "#166534" }}>Cantidad</th>
                     <th className="text-center" style={{ minWidth: "8rem", color: "#166534" }}>Unidad</th>
+                    <th className="text-center" style={{ minWidth: "11rem", color: "#166534" }} title="Dosis relativa: este insumo es el X % de otro insumo de la receta">% de otro</th>
                     <th className="text-center" style={{ minWidth: "7rem", color: "#166534" }}>Dosis por ha.</th>
                     <th className="text-center" style={{ minWidth: "7rem", color: "#166534" }}>Dosis real</th>
                   </tr>
@@ -2006,6 +2034,11 @@ export default function MezclaPruebaDetallePage() {
                           <td className="small">{c.articulo?.nombre || "—"}</td>
                           <td className="small text-center">{Number(c.cantidad).toFixed(2)}</td>
                           <td className="small text-center text-secondary">{c.unidad?.simbolo || "—"}</td>
+                          <td className="small text-center text-secondary">
+                            {c.tipoDosis === "PORCENTAJE" && c.referenciaArticuloId
+                              ? `${Number(c.porcentajeReferencia)} % de ${(version.componentes || []).find((x) => x.articulo?.id === c.referenciaArticuloId)?.articulo?.nombre || "—"}`
+                              : "—"}
+                          </td>
                           <td className="small text-center text-secondary">
                             {c.articulo?.dosisPorHectarea != null
                               ? `${Number(c.articulo.dosisPorHectarea)} ${c.articulo?.dosisUnidad?.simbolo || ""}/ha`
@@ -2070,6 +2103,86 @@ export default function MezclaPruebaDetallePage() {
                             ))}
                           </select>
                         </td>
+                        <td className="small text-center">
+                          {esAgua ? (
+                            <span className="text-secondary">—</span>
+                          ) : reglaEdit?.idx === idx ? (
+                            <div className="d-flex align-items-center justify-content-center gap-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                className="form-control form-control-sm text-center px-1"
+                                style={{ width: "4rem" }}
+                                autoFocus
+                                value={reglaEdit.porcentaje}
+                                onChange={(e) => setReglaEdit((r) => ({ ...r, porcentaje: e.target.value }))}
+                              />
+                              <span>% de</span>
+                              <select
+                                className="form-select form-select-sm px-1"
+                                style={{ width: "8rem" }}
+                                value={reglaEdit.referenciaArticuloUuid}
+                                onChange={(e) => setReglaEdit((r) => ({ ...r, referenciaArticuloUuid: e.target.value }))}
+                              >
+                                <option value="">insumo…</option>
+                                {componentesForm
+                                  .filter((o, j) => j !== idx && o.articuloUuid && articulos.find((a) => a.uuid === o.articuloUuid)?.nombre !== "Agua")
+                                  .map((o) => (
+                                    <option key={o.articuloUuid} value={o.articuloUuid}>
+                                      {articulos.find((a) => a.uuid === o.articuloUuid)?.nombre}
+                                    </option>
+                                  ))}
+                              </select>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link p-1"
+                                style={{ color: "#166534" }}
+                                title="Guardar"
+                                disabled={!reglaEdit.referenciaArticuloUuid || !(Number(reglaEdit.porcentaje) > 0)}
+                                onClick={() =>
+                                  guardarRegla(idx, { tipoDosis: "PORCENTAJE", referenciaArticuloUuid: reglaEdit.referenciaArticuloUuid, porcentajeReferencia: Number(reglaEdit.porcentaje) })
+                                }
+                              >
+                                <FiCheckCircle size={15} />
+                              </button>
+                              <button type="button" className="btn btn-sm btn-link p-1 text-secondary" title="Cancelar" onClick={() => setReglaEdit(null)}>
+                                <FiX size={15} />
+                              </button>
+                            </div>
+                          ) : c.tipoDosis === "PORCENTAJE" && c.referenciaArticuloUuid ? (
+                            <span>
+                              <strong>{c.porcentajeReferencia} %</strong> de {articulos.find((a) => a.uuid === c.referenciaArticuloUuid)?.nombre || "—"}{" "}
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link p-0 text-secondary"
+                                title="Editar la regla"
+                                onClick={() => setReglaEdit({ idx, referenciaArticuloUuid: c.referenciaArticuloUuid, porcentaje: c.porcentajeReferencia })}
+                              >
+                                <FiSliders size={13} />
+                              </button>{" "}
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link p-0"
+                                style={{ color: "#dc2626" }}
+                                title="Quitar la regla (queda como cantidad fija)"
+                                onClick={() => guardarRegla(idx, { tipoDosis: "FIJA" })}
+                              >
+                                <FiX size={13} />
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-link text-secondary text-decoration-none p-0"
+                              title="Calcular este insumo como un % de otro (ej. AL 100 = 1 % del aceite)"
+                              disabled={!c.uuid}
+                              onClick={() => setReglaEdit({ idx, referenciaArticuloUuid: "", porcentaje: "" })}
+                            >
+                              + % de otro
+                            </button>
+                          )}
+                        </td>
                         <td className="small text-center text-secondary">
                           {articuloFila?.dosisPorHectarea != null
                             ? `${Number(articuloFila.dosisPorHectarea)} ${articuloFila?.dosisUnidad?.simbolo || ""}/ha`
@@ -2083,12 +2196,45 @@ export default function MezclaPruebaDetallePage() {
                   })}
                   {(editable ? componentesForm : version.componentes || []).length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-center text-secondary small py-2">
+                      <td colSpan={7} className="text-center text-secondary small py-2">
                         Sin insumos agregados todavía — agrégalos desde &quot;Agregar insumo&quot;, arriba.
                       </td>
                     </tr>
                   )}
                 </tbody>
+                {(() => {
+                  // Total de VOLUMEN de la receta: suma todos los insumos que se pueden llevar a litros (los de peso,
+                  // como el acondicionador, no suman).
+                  const litro = unidades.find((u) => u.nombre === "Litro");
+                  const filas = editable
+                    ? componentesForm.map((c) => ({ cantidad: Number(c.cantidad), unidadUuid: c.unidadUuid }))
+                    : (version.componentes || []).map((c) => ({ cantidad: Number(c.cantidad), unidadUuid: c.unidad?.uuid }));
+                  if (!litro || filas.length === 0) return null;
+                  let litros = 0;
+                  let sinVolumen = 0;
+                  for (const f of filas) {
+                    const enL = Number.isFinite(f.cantidad) && f.cantidad > 0 ? convertirCantidad(grafoUnidades, f.unidadUuid, litro.uuid, f.cantidad) : null;
+                    if (enL == null) sinVolumen += 1;
+                    else litros += enL;
+                  }
+                  return (
+                    <tfoot>
+                      <tr style={{ borderTop: "2px solid #bbf7d0" }}>
+                        <td />
+                        <td className="small fw-bold" style={{ color: "#166534" }}>
+                          Total (volumen)
+                        </td>
+                        <td className="text-center fw-bold" colSpan={2}>
+                          {(litros * 1000).toLocaleString("es-CO", { maximumFractionDigits: 2 })} ml
+                          <span className="text-secondary fw-normal"> · {litros.toLocaleString("es-CO", { maximumFractionDigits: 4 })} L</span>
+                        </td>
+                        <td colSpan={3} className="small text-secondary">
+                          {sinVolumen > 0 ? `No incluye ${sinVolumen} insumo(s) que no son de volumen (peso).` : ""}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  );
+                })()}
               </table>
             </div>
             {componentesError && <div className="alert alert-danger py-2 small">{componentesError}</div>}

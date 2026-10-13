@@ -42,6 +42,7 @@ import {
   FiTruck,
   FiTarget,
   FiDownload,
+  FiUserCheck,
 } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl, GiWeightScale } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
@@ -149,6 +150,7 @@ const NAV = [
   },
   { type: "link", key: "programacionCorte", label: "Programación de Corte", icon: GiScissors, permKey: "programacionCorte", href: "/programacion-corte" },
   { type: "link", key: "precalibracion", label: "Precalibración", icon: GiWeightScale, permKey: "precalibracion", href: "/precalibracion" },
+  { type: "link", key: "asistencia", label: "Asistencia", icon: FiUserCheck, permKey: "asistencia", href: "/asistencia" },
   {
     type: "section",
     key: "reportes",
@@ -328,6 +330,7 @@ export default function Sidebar() {
       pronostico: hasPermission("menu.pronostico"),
       programacionCorte: hasPermission("menu.programacion_corte"),
       precalibracion: hasPermission("menu.precalibracion"),
+      asistencia: hasPermission("menu.asistencia"),
       // Sección Reportes: visible si el usuario tiene acceso a alguno de sus
       // items (Descargas, Detalle Semanal, Gráfico de Embolses o Gráfico de
       // Repiques, cada uno con su propio permiso).

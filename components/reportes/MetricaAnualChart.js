@@ -70,13 +70,16 @@ function VariacionBadge({ pct }) {
 export default function MetricaAnualChart({
   permCode,
   icon: Icon,
-  titulo,
-  subtitulo,
-  arrayField,
-  metricKey,
-  color,
-  decimal = false,
-  prefix,
+  titulo: tituloProp,
+  subtitulo: subtituloProp,
+  arrayField: arrayFieldProp,
+  metricKey: metricKeyProp,
+  color: colorProp,
+  decimal: decimalProp = false,
+  prefix: prefixProp,
+  // Opcional: varias métricas en la misma página (se elige con botones arriba, sin perder los filtros). Cada una:
+  // { id, label, titulo, subtitulo, arrayField, metricKey, color, decimal, prefix }. Todas salen de la misma consulta.
+  metricas,
   yDomain,
   yUnit,
   referenceLineAt,
@@ -90,6 +93,15 @@ export default function MetricaAnualChart({
   // Con el año completo se mantienen los ticks fijos 1, 10, 20...; al acotar el
   // rango, el eje se adapta solo.
   const [rangoSemanas, setRangoSemanas] = useState(null);
+  const [metricaId, setMetricaId] = useState(metricas?.[0]?.id ?? null);
+  const metricaSel = metricas?.find((m) => m.id === metricaId) ?? metricas?.[0] ?? null;
+  const titulo = metricaSel?.titulo ?? tituloProp;
+  const subtitulo = metricaSel?.subtitulo ?? subtituloProp;
+  const arrayField = metricaSel?.arrayField ?? arrayFieldProp;
+  const metricKey = metricaSel?.metricKey ?? metricKeyProp;
+  const color = metricaSel?.color ?? colorProp;
+  const decimal = metricaSel?.decimal ?? decimalProp;
+  const prefix = metricaSel?.prefix ?? prefixProp;
   const ejeSemanas = rangoSemanas ? { interval: "preserveStartEnd" } : { domain: [1, 53], ticks: [1, 10, 20, 30, 40, 50] };
   const [fincas, setFincas] = useState([]);
   const [canastas, setCanastas] = useState([{ id: "c0", nombre: "", objetivos: [], anios: [] }]);
@@ -175,6 +187,13 @@ export default function MetricaAnualChart({
   }, [objetivosEfectivos]);
 
   const modoComparacion = seriesList.length > 1;
+
+  // En las páginas con varias métricas la semana elegida se resalta con una línea vertical (no hay ranking que variar).
+  const semanaResaltada = metricas ? semanas.find((x) => x.uuid === semanaUuid) : null;
+  const marcaSemana =
+    semanaResaltada && seriesList.some((x) => x.anio === semanaResaltada.anio) ? (
+      <ReferenceLine x={semanaResaltada.numeroSemana} stroke="#64748b" strokeDasharray="4 3" label={{ value: semanaResaltada.codigo, position: "top", fontSize: 10, fill: "#64748b" }} />
+    ) : null;
 
   useEffect(() => {
     setLoading(true);
@@ -288,11 +307,23 @@ export default function MetricaAnualChart({
           <p className="text-secondary mb-0">{subtitulo}</p>
         </div>
 
+        {metricas && metricas.length > 1 && (
+          <ul className="nav nav-pills gap-1 mb-3">
+            {metricas.map((m) => (
+              <li key={m.id} className="nav-item">
+                <button type="button" className={`nav-link btn-sm py-1 px-3 ${metricaSel?.id === m.id ? "active" : ""}`} onClick={() => setMetricaId(m.id)}>
+                  {m.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <div className="mb-4 d-flex flex-wrap align-items-end gap-2">
           <SelectorCanastas fincas={fincas} anioOpciones={anioOpciones} canastas={canastas} onChange={setCanastas} />
           {!modoComparacion && (
             <div>
-              <label className="form-label small fw-medium mb-1">Semana (para variación)</label>
+              <label className="form-label small fw-medium mb-1">{metricas ? "Semana (resaltar)" : "Semana (para variación)"}</label>
               <SemanaAutocomplete
                 semanas={semanas}
                 value={semanaUuid}
@@ -337,6 +368,7 @@ export default function MetricaAnualChart({
                   }
                 />
                 {referenceLineAt != null && <ReferenceLine y={referenceLineAt} stroke="#b45309" strokeDasharray="3 3" />}
+                {marcaSemana}
                 <Line
                   type="monotone"
                   dataKey={metricKey}
@@ -366,6 +398,7 @@ export default function MetricaAnualChart({
                 <Tooltip content={<ChartTooltip decimal={decimal} semanaCodigoPorNumero={semanaCodigoPorNumero} />} />
                 <Legend wrapperStyle={{ fontSize: "0.75rem" }} />
                 {referenceLineAt != null && <ReferenceLine y={referenceLineAt} stroke="#b45309" strokeDasharray="3 3" />}
+                {marcaSemana}
                 {seriesList.map((serie, i) => (
                   <Line
                     key={serie.key}

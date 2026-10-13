@@ -806,9 +806,23 @@ export default function AspersionesPage() {
   // "Volumen / ha" lo puede editar el operador — vacío = el configurado
   // en la mezcla (pedido explícito). Todo lo demás (cantidad a preparar,
   // % aumento automático, tabla, agua de relleno) se recalcula solo.
-  const dosisPorHectareaNum =
-    form.volumenHaManual !== "" ? Number(form.volumenHaManual) || 0 : Number(mezclaSeleccionada?.dosisPorHectarea || 0);
   const unidadDosisUuid = mezclaSeleccionada?.dosisPorHectareaUnidad?.uuid;
+  // El campo "Volumen / ha" se muestra SIEMPRE en galones (lo que el operador conoce de memoria, ej. "6 Gal/ha"),
+  // sin importar en qué unidad esté guardado en la mezcla; los cálculos internos siguen en la unidad de la mezcla.
+  const galonVolumen = unidadesVolumen.find((u) => u.nombre === "Galón");
+  const aGalones = (valor) => {
+    if (!galonVolumen || !unidadDosisUuid) return null;
+    return unidadDosisUuid === galonVolumen.uuid ? valor : convertirCantidad(grafoUnidades, unidadDosisUuid, galonVolumen.uuid, valor);
+  };
+  const desdeGalones = (valor) => {
+    if (!galonVolumen || !unidadDosisUuid || unidadDosisUuid === galonVolumen.uuid) return valor;
+    return convertirCantidad(grafoUnidades, galonVolumen.uuid, unidadDosisUuid, valor) ?? valor;
+  };
+  const dosisMezclaNum = Number(mezclaSeleccionada?.dosisPorHectarea || 0);
+  const dosisMezclaEnGalones = aGalones(dosisMezclaNum); // null si no hay conversión a galones
+  const volumenHaMuestraGalones = dosisMezclaEnGalones != null;
+  const dosisPorHectareaNum =
+    form.volumenHaManual !== "" ? desdeGalones(Number(form.volumenHaManual) || 0) : dosisMezclaNum;
   const unidadRendimientoUuid = mezclaSeleccionada?.unidadRendimiento?.uuid;
 
   // Unidad "mostrada": la preferida del operador si existe conversión
@@ -2416,7 +2430,7 @@ export default function AspersionesPage() {
                       min="0.01"
                       className="form-control rounded-start-3"
                       disabled={!mezclaSeleccionada}
-                      placeholder={mezclaSeleccionada ? Number(mezclaSeleccionada.dosisPorHectarea || 0).toFixed(2) : ""}
+                      placeholder={mezclaSeleccionada ? Number(volumenHaMuestraGalones ? dosisMezclaEnGalones : dosisMezclaNum).toFixed(2) : ""}
                       value={form.volumenHaManual}
                       onChange={(e) => {
                         // Igual que con hectáreas: las cantidades por fila son
@@ -2431,12 +2445,12 @@ export default function AspersionesPage() {
                       }}
                     />
                     {mezclaSeleccionada && (
-                      <span className="input-group-text small">{mezclaSeleccionada.dosisPorHectareaUnidad?.simbolo}</span>
+                      <span className="input-group-text small">{volumenHaMuestraGalones ? galonVolumen.simbolo : mezclaSeleccionada.dosisPorHectareaUnidad?.simbolo}</span>
                     )}
                   </div>
                   {mezclaSeleccionada && form.volumenHaManual !== "" && (
                     <p className="form-text small mb-0">
-                      De mezcla: {Number(mezclaSeleccionada.dosisPorHectarea || 0).toFixed(2)}{" "}
+                      De mezcla: {Number(volumenHaMuestraGalones ? dosisMezclaEnGalones : dosisMezclaNum).toFixed(2)}{" "}
                       <button
                         type="button"
                         className="btn btn-link btn-sm p-0 align-baseline"

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FiAlertCircle, FiEdit2, FiRotateCcw } from "react-icons/fi";
+import { FiAlertCircle, FiCheckCircle, FiEdit2, FiRotateCcw } from "react-icons/fi";
+import { guardarAjusteEstimacion } from "@/lib/precalibracion/api";
 
 // Espacio fijo para el lápiz de edición: las celdas sin lápiz lo dejan
 // vacío para que los números queden alineados en la columna.
@@ -21,15 +22,17 @@ function HuecoIcono({ children }) {
 // Hoy todo es local (mock); en la API real la escalera saldrá de
 // GET /estimaciones/resumen-finca y la nueva será un registro nuevo
 // (ver lib/precalibracion/api.js).
-export default function PotencialCosecha({ potencial }) {
+export default function PotencialCosecha({ potencial, fincaId = "", semanaId = "", onGuardado }) {
   const [editando, setEditando] = useState(null); // null | "cajas" | "ratio"
   const [borrador, setBorrador] = useState("");
   const [cajasEdit, setCajasEdit] = useState(null);
   const [ratioEdit, setRatioEdit] = useState(null);
   const [ultimo, setUltimo] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const [errorGuardar, setErrorGuardar] = useState("");
 
   const alcance = `Semana ${potencial.semana?.codigo || "—"}${potencial.fincaNombre ? ` · ${potencial.fincaNombre}` : " · todas las fincas"}`;
-  const est = potencial.estimacion;
+  const est = potencial.estimacion || { racimos: 0, ratio: null, cajas: 0 };
   const racimos = potencial.precal.racimos;
 
   const nueva =
@@ -78,6 +81,20 @@ export default function PotencialCosecha({ potencial }) {
 
   function cancelarEdicion() {
     setEditando(null);
+  }
+
+  // El ajuste se guarda en su propia tabla (no toca las estimaciones de la escalera).
+  async function guardarAjuste() {
+    setGuardando(true);
+    setErrorGuardar("");
+    try {
+      await guardarAjusteEstimacion({ fincaId, semanaId, racimosAptos: racimos, cajas: nueva, ratio: ratioNuevo, estimacionCajas: est.cajas });
+      onGuardado?.();
+    } catch (err) {
+      setErrorGuardar(err.message);
+    } finally {
+      setGuardando(false);
+    }
   }
 
   function restablecer() {
@@ -129,6 +146,20 @@ export default function PotencialCosecha({ potencial }) {
     );
   }
 
+  // Sin estimación cargada para la semana: solo se muestran los racimos precalibrados.
+  if (!potencial.estimacion) {
+    return (
+      <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+        <h2 className="h5 fw-bold mb-0">Potencial de cosecha</h2>
+        <p className="small text-secondary mb-2">{alcance}</p>
+        <p className="mb-0">
+          <span className="fw-semibold">{formatoEntero(racimos)}</span> racimos precalibrados en la semana.{" "}
+          <span className="text-secondary small">No hay estimación cargada para esta semana en las fincas seleccionadas.</span>
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
       <div className="d-flex align-items-center justify-content-between gap-2">
@@ -137,13 +168,20 @@ export default function PotencialCosecha({ potencial }) {
           <p className="small text-secondary mb-0">{alcance}</p>
         </div>
         {editado && editando !== "cajas" && editando !== "ratio" && (
-          <button
-            type="button"
-            className="btn btn-link btn-sm p-0 text-decoration-none small text-nowrap"
-            onClick={restablecer}
-          >
-            <FiRotateCcw size={12} /> Volver a estimación
-          </button>
+          <div className="d-flex align-items-center gap-3">
+            <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none small text-nowrap" onClick={restablecer}>
+              <FiRotateCcw size={12} /> Volver a estimación
+            </button>
+            <button
+              type="button"
+              className="btn btn-brand btn-brand-verde btn-sm rounded-3 text-nowrap"
+              disabled={guardando || !fincaId}
+              title={fincaId ? "Guardar este ajuste (no modifica la escalera)" : "Elige una finca para poder guardar el ajuste"}
+              onClick={guardarAjuste}
+            >
+              {guardando ? "Guardando..." : "Guardar ajuste"}
+            </button>
+          </div>
         )}
       </div>
       <div className="table-responsive mt-2">
@@ -271,9 +309,27 @@ export default function PotencialCosecha({ potencial }) {
         }
       `}</style>
 
+      {errorGuardar && <div className="alert alert-danger py-2 small mt-2 mb-0">{errorGuardar}</div>}
+
+      {potencial.ajusteGuardado && (
+        <div className="alert alert-success py-2 small mt-2 mb-0 d-flex align-items-center gap-2">
+          <FiCheckCircle size={16} className="flex-shrink-0" />
+          <span>
+            Último ajuste guardado: <strong>{formatoEntero(potencial.ajusteGuardado.cajas)}</strong> cajas
+            {potencial.ajusteGuardado.ratio != null && <> (ratio {formatoRatio(potencial.ajusteGuardado.ratio)})</>}
+            {potencial.ajusteGuardado.creadoPor && <> por {potencial.ajusteGuardado.creadoPor}</>} el{" "}
+            {new Date(potencial.ajusteGuardado.creadoEn).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short", timeZone: "America/Bogota" })}.
+          </span>
+        </div>
+      )}
+
       <div className="alert alert-warning py-2 small mt-2 mb-0 d-flex align-items-center gap-2">
         <FiAlertCircle size={16} className="flex-shrink-0" />
-        <span>Datos simulados con fines de validación visual.</span>
+        <span>
+          {fincaId
+            ? "Al guardar, el ajuste queda en Precalibración como una versión nueva: no modifica las estimaciones de la escalera."
+            : "Elige una finca para poder guardar el ajuste. Con \"Todas\" los cambios son solo un cálculo en pantalla."}
+        </span>
       </div>
     </div>
   );

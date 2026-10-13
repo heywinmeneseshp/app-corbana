@@ -1,7 +1,6 @@
 "use client";
 
 import ModalShell from "@/components/ModalShell";
-import { CINTA_POR_ID, USUARIO_POR_ID } from "@/lib/precalibracion/mockData";
 
 function formatoFecha(fechaIso) {
   const [anio, mes, dia] = fechaIso.split("-");
@@ -12,7 +11,7 @@ function formatoFecha(fechaIso) {
 // individuales (trazabilidad: fecha, hora, cinta, edad, usuario, GPS).
 export default function DetalleLoteModal({ detalle, onClose }) {
   if (!detalle) return null;
-  const { lote, finca, valor, resultados, total, totalSaldo, totalRestante, registros } = detalle;
+  const { lote, finca, valor, resultados, total, totalSaldo, registros } = detalle;
 
   return (
     <ModalShell title={`Lote ${lote.nombre}`} onClose={onClose} size="lg">
@@ -43,7 +42,6 @@ export default function DetalleLoteModal({ detalle, onClose }) {
               <th>Cinta / Edad</th>
               <th className="text-end">Saldo</th>
               <th className="text-end">Aptos</th>
-              <th className="text-end">Resto</th>
             </tr>
           </thead>
           <tbody>
@@ -51,20 +49,16 @@ export default function DetalleLoteModal({ detalle, onClose }) {
               <tr key={r.cintaId}>
                 <td>
                   <span className="d-inline-block rounded-circle me-1" style={{ width: 10, height: 10, backgroundColor: r.color }} />
-                  {r.cinta} <span className="text-secondary small">({r.embolse})</span> / Edad {r.edad}
+                  {r.cinta} <span className="text-secondary small">({r.embolseCodigo || r.embolse})</span> / Edad {r.edad}
                 </td>
                 <td className="text-end">{r.saldo.toLocaleString("es")}</td>
                 <td className="text-end fw-medium text-success" style={{ backgroundColor: "#f0fdf4" }}>{r.racimos.toLocaleString("es")}</td>
-                <td className={`text-end ${r.restante < 0 ? "text-danger" : "text-warning-emphasis"}`} style={{ backgroundColor: "#fffbeb" }}>
-                  {r.restante.toLocaleString("es")}
-                </td>
               </tr>
             ))}
             <tr className="table-light fw-bold">
               <td>TOTAL</td>
               <td className="text-end">{(totalSaldo || 0).toLocaleString("es")}</td>
               <td className="text-end">{total.toLocaleString("es")}</td>
-              <td className="text-end">{(totalRestante || 0).toLocaleString("es")}</td>
             </tr>
           </tbody>
         </table>
@@ -89,11 +83,11 @@ export default function DetalleLoteModal({ detalle, onClose }) {
               <tr key={r.id}>
                 <td className="text-nowrap">{formatoFecha(r.fecha)}</td>
                 <td>{r.hora}</td>
-                <td>{CINTA_POR_ID.get(r.cintaId)?.nombre || "—"}</td>
+                <td>{r.cintaNombre || "—"}</td>
                 <td>S{r.edad}</td>
-                <td>{USUARIO_POR_ID.get(r.usuarioId)?.nombre || "—"}</td>
-                <td className="text-end">{r.lat.toFixed(4)}</td>
-                <td className="text-end">{r.lng.toFixed(4)}</td>
+                <td>{r.usuarioNombre || "—"}</td>
+                <td className="text-end">{r.lat != null ? r.lat.toFixed(4) : "—"}</td>
+                <td className="text-end">{r.lng != null ? r.lng.toFixed(4) : "—"}</td>
               </tr>
             ))}
           </tbody>

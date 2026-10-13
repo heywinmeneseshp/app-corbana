@@ -5,12 +5,14 @@ import Link from "next/link";
 import RequirePermission from "@/components/RequirePermission";
 import GruposFracModal from "@/components/GruposFracModal";
 import FracLimitesModal from "@/components/FracLimitesModal";
+import FracCargueMasivo from "@/components/FracCargueMasivo";
 
 // Todo lo referente a la clasificación FRAC (Fungicide Resistance Action Committee) en un solo lugar:
 // códigos y grupos químicos (a qué grupo pertenece cada ingrediente activo) y las reglas de manejo de
 // resistencia por código (máximos, intervalos...) que generan las alertas de aspersiones.
 export default function SanidadFracPage() {
   const [seccion, setSeccion] = useState("grupos"); // "grupos" | "reglas"
+  const [version, setVersion] = useState(0); // recarga las listas tras un cargue masivo
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.ingredientes_activos">
@@ -38,11 +40,14 @@ export default function SanidadFracPage() {
           </li>
         </ul>
 
-        <div className="mb-3">
-          <h1 className="fw-bold h4 mb-1">FRAC</h1>
-          <p className="text-secondary mb-0">
-            Clasificación FRAC de los ingredientes activos y reglas de manejo de resistencia a fungicidas.
-          </p>
+        <div className="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div>
+            <h1 className="fw-bold h4 mb-1">FRAC</h1>
+            <p className="text-secondary mb-0">
+              Clasificación FRAC de los ingredientes activos y reglas de manejo de resistencia a fungicidas.
+            </p>
+          </div>
+          <FracCargueMasivo onCambio={() => setVersion((v) => v + 1)} />
         </div>
 
         <div className="d-flex border-bottom mb-3">
@@ -66,8 +71,8 @@ export default function SanidadFracPage() {
           ))}
         </div>
 
-        {seccion === "grupos" && <GruposFracModal embebido />}
-        {seccion === "reglas" && <FracLimitesModal embebido />}
+        {seccion === "grupos" && <GruposFracModal key={version} embebido />}
+        {seccion === "reglas" && <FracLimitesModal key={version} embebido />}
       </div>
     </RequirePermission>
   );

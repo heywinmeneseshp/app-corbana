@@ -676,6 +676,9 @@ function LotesModal({ finca, onClose }) {
   const [filtroLote, setFiltroLote] = useState("");
   const [filtroSemana, setFiltroSemana] = useState("");
   const [detalleAbierto, setDetalleAbierto] = useState(null); // `${loteUuid}|${semanaUuid}` con el detalle por día abierto
+  // Edición manual de un registro del histórico (lote + semana): { loteUuid, semanaUuid, area, areaTotal, hastaUuid, fijo }.
+  const [edicion, setEdicion] = useState(null);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const esAdmin = (getCurrentUser()?.roles || []).includes("Administrador");
   const puedeEditar = hasPermission("lote.editar");
   const puedeCrear = hasPermission("lote.crear");
@@ -864,6 +867,60 @@ function LotesModal({ finca, onClose }) {
     }
   }
 
+  // ── Edición manual del histórico: corrige (o crea) el área de UN lote en UNA semana, y opcionalmente la repite hasta
+  // otra semana posterior (útil cuando las semanas siguientes ya tienen su propio registro y volverían a pisar el valor).
+  const semanasAsc = [...semanas].sort((a, b) => (a.fechaInicio < b.fechaInicio ? -1 : 1));
+  const puedeEditarHistorico = puedeEditar && (puedeSemanasAnteriores || esAdmin);
+
+  function abrirEdicion({ lote, semana, ultimo }) {
+    setError("");
+    setAviso("");
+    setEdicion({
+      loteUuid: lote?.uuid || "",
+      semanaUuid: semana?.uuid || "",
+      area: ultimo ? String(Number(ultimo.area)) : "",
+      areaTotal: ultimo && ultimo.areaTotal != null ? String(Number(ultimo.areaTotal)) : "",
+      hastaUuid: "",
+      fijo: Boolean(lote && semana),
+    });
+  }
+
+  async function guardarEdicion() {
+    const sem = semanas.find((x) => x.uuid === edicion.semanaUuid);
+    const hasta = semanas.find((x) => x.uuid === (edicion.hastaUuid || edicion.semanaUuid));
+    const area = Number(edicion.area);
+    if (!edicion.loteUuid || !sem) return setError("Elige el lote y la semana.");
+    if (edicion.area === "" || Number.isNaN(area) || area < 0) return setError("El área en producción debe ser un número (0 o más).");
+    if (edicion.areaTotal !== "" && (Number.isNaN(Number(edicion.areaTotal)) || Number(edicion.areaTotal) < 0)) return setError("El área total debe ser un número (0 o más).");
+    setGuardandoEdicion(true);
+    setError("");
+    try {
+      const rango = semanasAsc.filter((x) => x.fechaInicio >= sem.fechaInicio && x.fechaInicio <= (hasta || sem).fechaInicio);
+      for (const x of rango) {
+        const esActual = semanaActual && x.uuid === semanaActual.uuid;
+        await apiFetch(`/lotes/${edicion.loteUuid}/area-produccion`, {
+          method: "POST",
+          body: JSON.stringify({
+            area,
+            areaTotal: edicion.areaTotal === "" ? null : Number(edicion.areaTotal),
+            ...(esActual ? {} : { semanaUuid: x.uuid }),
+          }),
+        });
+        // Igual que en la pestaña Lotes: el total del lote solo se actualiza al editar la semana actual.
+        if (esActual && edicion.areaTotal !== "") {
+          await apiFetch(`/lotes/${edicion.loteUuid}`, { method: "PUT", body: JSON.stringify({ area: Number(edicion.areaTotal) }) });
+        }
+      }
+      await loadTodo();
+      setAviso(`Área guardada en ${rango.length === 1 ? `la semana ${sem.codigo}` : `${rango.length} semanas (${sem.codigo} a ${(hasta || sem).codigo})`}.`);
+      setEdicion(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardandoEdicion(false);
+    }
+  }
+
   // ── Histórico semanal: una fila por lote y semana con el dato más
   // actualizado de esa semana; el reloj abre el detalle de ediciones por día.
   const grupos = (() => {
@@ -935,7 +992,78 @@ function LotesModal({ finca, onClose }) {
                 ))}
               </select>
               <span className="small text-secondary">{gruposFiltrados.length} registro(s)</span>
+              {puedeEditarHistorico && (
+                <button type="button" className="btn btn-sm btn-outline-secondary ms-auto" onClick={() => abrirEdicion({})}>
+                  Registro manual
+                </button>
+              )}
             </div>
+            {error && <div className="alert alert-danger py-2 small mb-2">{error}</div>}
+            {aviso && <div className="alert alert-success py-2 small mb-2">{aviso}</div>}
+
+            {edicion && (
+              <div className="border rounded-3 p-3 mb-3 bg-light">
+                <div className="fw-medium small mb-2">Editar el área de un lote en una semana</div>
+                <div className="row g-2 align-items-end">
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small mb-1">Lote</label>
+                    <select className="form-select form-select-sm bg-white" value={edicion.loteUuid} disabled={edicion.fijo} onChange={(e) => setEdicion({ ...edicion, loteUuid: e.target.value })}>
+                      <option value="">Elige...</option>
+                      {lotes
+                        .slice()
+                        .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es", { numeric: true }))
+                        .map((l) => (
+                          <option key={l.uuid} value={l.uuid}>
+                            Lote {l.nombre}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className="col-6 col-md-2">
+                    <label className="form-label small mb-1">Semana</label>
+                    <select className="form-select form-select-sm bg-white" value={edicion.semanaUuid} disabled={edicion.fijo} onChange={(e) => setEdicion({ ...edicion, semanaUuid: e.target.value, hastaUuid: "" })}>
+                      <option value="">Elige...</option>
+                      {semanas.map((x) => (
+                        <option key={x.uuid} value={x.uuid}>
+                          {x.codigo}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-6 col-md-2">
+                    <label className="form-label small mb-1">En producción (Ha)</label>
+                    <input type="number" min="0" step="0.01" className="form-control form-control-sm" value={edicion.area} onChange={(e) => setEdicion({ ...edicion, area: e.target.value })} />
+                  </div>
+                  <div className="col-6 col-md-2">
+                    <label className="form-label small mb-1">Total (Ha)</label>
+                    <input type="number" min="0" step="0.01" className="form-control form-control-sm" value={edicion.areaTotal} onChange={(e) => setEdicion({ ...edicion, areaTotal: e.target.value })} />
+                  </div>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small mb-1" title="Si las semanas siguientes ya tienen su propio registro, conservarían su valor: repite este dato hasta la semana que elijas.">
+                      Repetir hasta
+                    </label>
+                    <select className="form-select form-select-sm bg-white" value={edicion.hastaUuid} onChange={(e) => setEdicion({ ...edicion, hastaUuid: e.target.value })} disabled={!edicion.semanaUuid}>
+                      <option value="">Solo esa semana</option>
+                      {semanasAsc
+                        .filter((x) => edicion.semanaUuid && x.fechaInicio > (semanas.find((y) => y.uuid === edicion.semanaUuid)?.fechaInicio || "9"))
+                        .map((x) => (
+                          <option key={x.uuid} value={x.uuid}>
+                            {x.codigo}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="d-flex gap-2 mt-3">
+                  <button type="button" className="btn btn-brand btn-brand-verde btn-sm rounded-3" disabled={guardandoEdicion} onClick={guardarEdicion}>
+                    {guardandoEdicion ? "Guardando..." : "Guardar"}
+                  </button>
+                  <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" disabled={guardandoEdicion} onClick={() => setEdicion(null)}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
             {loading && <p className="small text-secondary">Cargando...</p>}
             {!loading && (
               <div className="table-responsive" style={{ maxHeight: "55vh" }}>
@@ -947,7 +1075,7 @@ function LotesModal({ finca, onClose }) {
                       <th className="text-end">Total (Ha)</th>
                       <th className="text-end">En producción (Ha)</th>
                       <th>Última edición</th>
-                      <th style={{ width: "2rem" }}></th>
+                      <th style={{ width: "4rem" }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -968,7 +1096,12 @@ function LotesModal({ finca, onClose }) {
                           <td className="small text-secondary">
                             {g.ultimo.fechaRegistro} · {nombreUsuario(g.ultimo.creadoPor)}
                           </td>
-                          <td className="text-end">
+                          <td className="text-end text-nowrap">
+                            {puedeEditarHistorico && (
+                              <button type="button" className="btn btn-sm p-0 border-0 text-secondary me-2" title="Editar el área de este lote en esta semana" onClick={() => abrirEdicion(g)}>
+                                <FiEdit2 size={14} />
+                              </button>
+                            )}
                             <button
                               type="button"
                               className={`btn btn-sm p-0 border-0 ${detalleAbierto === g.clave ? "text-primary" : "text-secondary"}`}

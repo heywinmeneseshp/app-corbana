@@ -84,28 +84,29 @@ export default function FracLimitesModal({ onClose, embebido = false }) {
       {loading ? (
         <div className="text-center py-4 text-secondary small">Cargando...</div>
       ) : (
-        <div className="table-responsive" style={{ maxHeight: "62vh", overflowY: "auto" }}>
-          <table className="table table-sm align-middle mb-0 small">
-            <thead>
-              <tr className="text-secondary">
-                <th className="fw-medium">FRAC</th>
-                <th className="fw-medium">Ingredientes</th>
-                <th className="fw-medium" style={{ width: "6.5rem" }}>
+        <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+         <div className="table-responsive">
+          <table className="table table-hover align-middle mb-0" style={{ fontSize: "0.78rem" }}>
+            <thead className="table-light">
+              <tr>
+                <th className="fw-medium text-center">FRAC</th>
+                <th className="fw-medium text-start">Ingredientes</th>
+                <th className="fw-medium text-center" style={{ width: "6.5rem" }}>
                   Máx. aplic.
                 </th>
-                <th className="fw-medium" style={{ width: "5.5rem" }}>
+                <th className="fw-medium text-center" style={{ width: "5.5rem" }}>
                   Máx. %
                 </th>
-                <th className="fw-medium" style={{ width: "5.5rem" }}>
+                <th className="fw-medium text-center" style={{ width: "5.5rem" }}>
                   Seguidas
                 </th>
-                <th className="fw-medium" style={{ width: "6rem" }}>
+                <th className="fw-medium text-center" style={{ width: "6rem" }}>
                   Días libres
                 </th>
                 <th className="fw-medium text-center" style={{ width: "5rem" }}>
                   Solo mezcla
                 </th>
-                <th className="fw-medium">Restricciones (FRAC)</th>
+                <th className="fw-medium text-start">Restricciones (FRAC)</th>
                 <th style={{ width: "5rem" }} />
               </tr>
             </thead>
@@ -116,16 +117,16 @@ export default function FracLimitesModal({ onClose, embebido = false }) {
                 const cambio = CAMPOS.some((c) => actual[c] !== original[c]) || actual.soloEnMezclas !== original.soloEnMezclas;
                 return (
                   <tr key={f.fracCodigo}>
-                    <td>
+                    <td className="text-center">
                       <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">{f.fracCodigo}</span>
                     </td>
                     <td className="text-secondary" style={{ minWidth: "12rem" }}>
                       {f.nombres}
                     </td>
-                    <td>{campoNumerico(f.fracCodigo, "maxAplicaciones", { placeholder: "Sin límite" })}</td>
-                    <td>{campoNumerico(f.fracCodigo, "maxPorcentaje", { max: 100 })}</td>
-                    <td>{campoNumerico(f.fracCodigo, "maxConsecutivas")}</td>
-                    <td>{campoNumerico(f.fracCodigo, "intervaloMinimoDias")}</td>
+                    <td className="text-center">{campoNumerico(f.fracCodigo, "maxAplicaciones", { placeholder: "Sin límite" })}</td>
+                    <td className="text-center">{campoNumerico(f.fracCodigo, "maxPorcentaje", { max: 100 })}</td>
+                    <td className="text-center">{campoNumerico(f.fracCodigo, "maxConsecutivas")}</td>
+                    <td className="text-center">{campoNumerico(f.fracCodigo, "intervaloMinimoDias")}</td>
                     <td className="text-center">
                       <input
                         type="checkbox"
@@ -138,7 +139,7 @@ export default function FracLimitesModal({ onClose, embebido = false }) {
                     <td className="text-secondary" style={{ minWidth: "18rem" }} title={f.fuente || undefined}>
                       {f.restricciones || "—"}
                     </td>
-                    <td className="text-end">
+                    <td className="text-center text-nowrap">
                       {puedeEditar && cambio && (
                         <button type="button" className="btn btn-brand btn-sm rounded-3" disabled={guardando === f.fracCodigo} onClick={() => guardar(f.fracCodigo)}>
                           {guardando === f.fracCodigo ? "..." : "Guardar"}
@@ -150,6 +151,7 @@ export default function FracLimitesModal({ onClose, embebido = false }) {
               })}
             </tbody>
           </table>
+         </div>
         </div>
       )}
     </>
