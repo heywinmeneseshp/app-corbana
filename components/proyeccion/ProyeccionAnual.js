@@ -79,8 +79,12 @@ export default function ProyeccionAnual() {
       const e = await getEscenario(id);
       setEscenario(e);
       setDraft({ nombre: e.nombre, descripcion: e.descripcion || "", params: { ...PARAMS_VACIOS, ...e.params }, areas: e.areas });
-      const { items } = await apiFetch(`/semanas?limit=100&anio=${e.anio}`);
-      setSemanas([...items].sort((a, b) => String(a.fechaInicio).localeCompare(String(b.fechaInicio))));
+      // Semanas elegibles para el plan de hectáreas: las del año del escenario y las del año anterior que aún no han llegado
+      // (unas hectáreas que entran a fines del año anterior dan su primera cosecha en el año proyectado).
+      const hoy = new Date().toISOString().slice(0, 10);
+      const [actual, previo] = await Promise.all([apiFetch(`/semanas?limit=100&anio=${e.anio}`), apiFetch(`/semanas?limit=100&anio=${e.anio - 1}`).catch(() => ({ items: [] }))]);
+      const futurasPrevio = (previo.items || []).filter((x) => String(x.fechaInicio).slice(0, 10) > hoy);
+      setSemanas([...futurasPrevio, ...actual.items].sort((a, b) => String(a.fechaInicio).localeCompare(String(b.fechaInicio))));
       return e;
     },
     [],
@@ -110,7 +114,7 @@ export default function ProyeccionAnual() {
       draft.nombre !== escenario.nombre ||
       (draft.descripcion || "") !== (escenario.descripcion || "") ||
       !mismoJson({ ...PARAMS_VACIOS, ...escenario.params }, draft.params) ||
-      !mismoJson(escenario.areas.map((a) => [a.fincaUuid, a.semanaUuid, a.hectareas, a.nota || null]), draft.areas.map((a) => [a.fincaUuid, a.semanaUuid, a.hectareas, a.nota || null]))
+      !mismoJson(escenario.areas.map((a) => [a.fincaUuid, a.semanaUuid, a.hectareas, a.rampaPct ?? null, a.rampaSemanas ?? null, a.nota || null]), draft.areas.map((a) => [a.fincaUuid, a.semanaUuid, a.hectareas, a.rampaPct ?? null, a.rampaSemanas ?? null, a.nota || null]))
     );
   }, [escenario, draft]);
 
@@ -120,7 +124,7 @@ export default function ProyeccionAnual() {
     setAviso("");
     try {
       await actualizarEscenario(uuid, { nombre: draft.nombre, descripcion: draft.descripcion, params: draft.params });
-      await guardarAreas(uuid, draft.areas.map((a) => ({ fincaUuid: a.fincaUuid, semanaUuid: a.semanaUuid, hectareas: a.hectareas, nota: a.nota || undefined })));
+      await guardarAreas(uuid, draft.areas.map((a) => ({ fincaUuid: a.fincaUuid, semanaUuid: a.semanaUuid, hectareas: a.hectareas, rampaPct: a.hectareas > 0 ? a.rampaPct ?? null : null, rampaSemanas: a.hectareas > 0 ? a.rampaSemanas ?? null : null, nota: a.nota || undefined })));
       await cargarLista(uuid);
       await cargarEscenario(uuid);
       await calcular(uuid);
@@ -320,6 +324,7 @@ export default function ProyeccionAnual() {
               fincas={fincas}
               semanas={semanas}
               deshabilitado={!puedeEditar}
+              rampaPorDefecto={{ pct: draft.params.rampaPct, semanas: draft.params.rampaSemanas }}
               onCargado={async () => {
                 await cargarEscenario(uuid);
                 await calcular(uuid);
@@ -333,18 +338,6 @@ export default function ProyeccionAnual() {
                 <div className="col-12 col-md-4">
                   <label className="form-label small mb-1">Nombre del escenario</label>
                   <input type="text" className="form-control form-control-sm" maxLength={120} disabled={!puedeEditar} value={draft.nombre} onChange={(e) => setDraft({ ...draft, nombre: e.target.value })} />
-                </div>
-                <div className="col-6 col-md-2">
-                  <label className="form-label small mb-1" title="Con qué porcentaje del embolse por hectárea arranca una hectárea nueva">
-                    Arranque hectárea nueva (%)
-                  </label>
-                  <input type="number" min="0" max="100" className="form-control form-control-sm" disabled={!puedeEditar} value={draft.params.rampaPct} onChange={(e) => setParam({ rampaPct: Number(e.target.value) })} />
-                </div>
-                <div className="col-6 col-md-2">
-                  <label className="form-label small mb-1" title="Semanas que tarda en llegar al 100 % del embolse por hectárea de la finca">
-                    Semanas hasta el 100 %
-                  </label>
-                  <input type="number" min="0" max="104" className="form-control form-control-sm" disabled={!puedeEditar} value={draft.params.rampaSemanas} onChange={(e) => setParam({ rampaSemanas: Number(e.target.value) })} />
                 </div>
                 <div className="col-12 col-md-4">
                   <label className="form-label small mb-1">Años históricos usados (promedio simple)</label>
