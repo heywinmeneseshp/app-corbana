@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2, FiStar, FiUser } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiStar, FiUser, FiUserPlus, FiUserX } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
@@ -9,7 +9,7 @@ import ModalShell from "@/components/ModalShell";
 import EnrolarRostroModal from "@/components/asistencia/EnrolarRostroModal";
 
 function emptyForm() {
-  return { nombre: "", documento: "", telefono: "", fincaUuid: "", estado: true, labores: [] };
+  return { userUuid: "", nombre: "", apellido: "", documento: "", telefono: "", email: "", cargo: "", fincaUuid: "", estado: true, labores: [] };
 }
 
 // Fila del picker "labor + calificación": se agrega una labor a la vez con
@@ -93,6 +93,11 @@ export default function ColaboradoresPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [rostroDe, setRostroDe] = useState(null); // colaborador cuyo rostro se está enrolando
+  const [users, setUsers] = useState([]);
+  const [usuarioDe, setUsuarioDe] = useState(null); // colaborador al que se le crea o vincula un usuario
+  const [usuarioForm, setUsuarioForm] = useState({ modo: "crear", usuario: "", password: "", email: "", userUuid: "" });
+  const [usuarioError, setUsuarioError] = useState("");
+  const [usuarioSaving, setUsuarioSaving] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -111,6 +116,7 @@ export default function ColaboradoresPage() {
     load();
     apiFetch("/fincas?limit=100").then(({ items }) => setFincas(items)).catch(() => {});
     apiFetch("/labores?limit=100").then(({ items }) => setLabores(items)).catch(() => {});
+    if (hasPermission("menu.maestros.usuarios")) apiFetch("/users?limit=100").then(({ items }) => setUsers(items)).catch(() => {});
   }, []);
 
   function openCreate() {
@@ -124,8 +130,11 @@ export default function ColaboradoresPage() {
     setEditing(colaborador);
     setForm({
       nombre: colaborador.nombre,
+      apellido: colaborador.apellido || "",
       documento: colaborador.documento || "",
       telefono: colaborador.telefono || "",
+      email: colaborador.email || "",
+      cargo: colaborador.cargo || "",
       fincaUuid: colaborador.finca?.uuid || "",
       estado: colaborador.estado,
       labores: (colaborador.labores || []).map((l) => ({
@@ -145,8 +154,12 @@ export default function ColaboradoresPage() {
     try {
       const body = {
         nombre: form.nombre,
+        apellido: form.apellido || null,
         documento: form.documento || null,
         telefono: form.telefono || null,
+        email: form.email || null,
+        cargo: form.cargo || null,
+        ...(!editing && form.userUuid ? { userUuid: form.userUuid } : {}),
         fincaUuid: form.fincaUuid || null,
         estado: form.estado,
         labores: form.labores.map((l) => ({ laborUuid: l.laborUuid, calificacion: l.calificacion })),
@@ -165,8 +178,61 @@ export default function ColaboradoresPage() {
     }
   }
 
+  // Usuarios que todavía no están vinculados a ningún colaborador.
+  const usuariosLibres = users.filter((u) => !items.some((c) => c.usuario?.uuid === u.uuid));
+  const puedeGestionarUsuario = hasPermission("colaborador.editar") && hasPermission("menu.maestros.usuarios");
+
+  // Al crear un colaborador desde un usuario existente se copian sus datos.
+  function elegirUsuarioParaNuevo(userUuid) {
+    const u = users.find((x) => x.uuid === userUuid);
+    setForm((f) => ({
+      ...f,
+      userUuid,
+      ...(u ? { nombre: u.nombre, apellido: u.apellido || "", email: u.email || "", cargo: u.cargo || "" } : {}),
+    }));
+  }
+
+  function abrirUsuario(colaborador) {
+    setUsuarioDe(colaborador);
+    setUsuarioError("");
+    setUsuarioForm({ modo: "crear", usuario: "", password: "", email: colaborador.email || "", userUuid: "" });
+  }
+
+  async function guardarUsuario(e) {
+    e.preventDefault();
+    setUsuarioError("");
+    setUsuarioSaving(true);
+    try {
+      if (usuarioForm.modo === "vincular") {
+        await apiFetch(`/colaboradores/${usuarioDe.uuid}/usuario`, { method: "PUT", body: JSON.stringify({ userUuid: usuarioForm.userUuid }) });
+      } else {
+        await apiFetch(`/colaboradores/${usuarioDe.uuid}/usuario`, {
+          method: "POST",
+          body: JSON.stringify({ usuario: usuarioForm.usuario, password: usuarioForm.password, ...(usuarioForm.email ? { email: usuarioForm.email } : {}) }),
+        });
+        apiFetch("/users?limit=100").then(({ items }) => setUsers(items)).catch(() => {});
+      }
+      setUsuarioDe(null);
+      load();
+    } catch (err) {
+      setUsuarioError(err.message);
+    } finally {
+      setUsuarioSaving(false);
+    }
+  }
+
+  async function desvincularUsuario(colaborador) {
+    if (!confirm(`¿Desvincular el usuario "${colaborador.usuario.usuario}" de este colaborador? El usuario no se elimina.`)) return;
+    try {
+      await apiFetch(`/colaboradores/${colaborador.uuid}/usuario`, { method: "DELETE" });
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function handleDelete(colaborador) {
-    if (!confirm(`¿Eliminar al colaborador "${colaborador.nombre}"?`)) return;
+    if (!confirm(`¿Eliminar al colaborador "${`${colaborador.nombre} ${colaborador.apellido || ""}`.trim()}"?`)) return;
     try {
       await apiFetch(`/colaboradores/${colaborador.uuid}`, { method: "DELETE" });
       load();
@@ -201,10 +267,12 @@ export default function ColaboradoresPage() {
               <thead className="table-light">
                 <tr>
                   <th>Nombre</th>
-                  <th>Documento</th>
+                  <th>Identificación</th>
+                  <th>Cargo</th>
                   <th>Teléfono</th>
-                  <th>Finca</th>
+                  <th>Finca predeterminada</th>
                   <th>Labores</th>
+                  <th>Usuario</th>
                   <th>Estado</th>
                   <th>Rostro</th>
                   <th className="text-end">Acciones</th>
@@ -213,14 +281,14 @@ export default function ColaboradoresPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={8} className="text-center text-secondary py-4">
+                    <td colSpan={10} className="text-center text-secondary py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center text-secondary py-4">
+                    <td colSpan={10} className="text-center text-secondary py-4">
                       No hay colaboradores registrados todavía.
                     </td>
                   </tr>
@@ -228,8 +296,9 @@ export default function ColaboradoresPage() {
                 {!loading &&
                   items.map((c) => (
                     <tr key={c.uuid}>
-                      <td className="fw-medium">{c.nombre}</td>
+                      <td className="fw-medium">{`${c.nombre} ${c.apellido || ""}`.trim()}</td>
                       <td className="small text-secondary">{c.documento || "—"}</td>
+                      <td className="small text-secondary">{c.cargo || "—"}</td>
                       <td className="small text-secondary">{c.telefono || "—"}</td>
                       <td className="small text-secondary">{c.finca?.nombre || "—"}</td>
                       <td>
@@ -241,6 +310,9 @@ export default function ColaboradoresPage() {
                             </span>
                           ))}
                         </div>
+                      </td>
+                      <td className="small">
+                        {c.usuario ? <span className="badge rounded-pill text-bg-light border">{c.usuario.usuario}</span> : <span className="text-secondary">Sin usuario</span>}
                       </td>
                       <td>
                         {c.estado ? (
@@ -267,6 +339,16 @@ export default function ColaboradoresPage() {
                               <FiUser />
                             </button>
                           )}
+                          {puedeGestionarUsuario && !c.usuario && (
+                            <button type="button" className="btn btn-sm btn-link text-secondary p-1" title="Crear o vincular usuario" onClick={() => abrirUsuario(c)}>
+                              <FiUserPlus />
+                            </button>
+                          )}
+                          {puedeGestionarUsuario && c.usuario && (
+                            <button type="button" className="btn btn-sm btn-link text-secondary p-1" title="Desvincular usuario" onClick={() => desvincularUsuario(c)}>
+                              <FiUserX />
+                            </button>
+                          )}
                           {hasPermission("colaborador.editar") && (
                             <button type="button" className="btn btn-sm btn-outline-warning" title="Editar" onClick={() => openEdit(c)}>
                               <FiEdit2 />
@@ -290,7 +372,21 @@ export default function ColaboradoresPage() {
           <ModalShell title={editing ? "Editar colaborador" : "Nuevo colaborador"} onClose={() => setModalOpen(false)} size="lg">
             <form onSubmit={handleSave}>
               <div className="row g-3 mb-3">
-                <div className="col-12">
+                {!editing && puedeGestionarUsuario && (
+                  <div className="col-12">
+                    <label className="form-label small fw-medium">Crear a partir de un usuario existente (opcional)</label>
+                    <select className="form-select rounded-3" value={form.userUuid} onChange={(e) => elegirUsuarioParaNuevo(e.target.value)}>
+                      <option value="">No, es un colaborador sin usuario</option>
+                      {usuariosLibres.map((u) => (
+                        <option key={u.uuid} value={u.uuid}>
+                          {u.nombre} {u.apellido} ({u.usuario})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="form-text">Se copian sus datos y el colaborador queda vinculado al usuario.</div>
+                  </div>
+                )}
+                <div className="col-6">
                   <label className="form-label small fw-medium">
                     Nombre <span className="text-danger">*</span>
                   </label>
@@ -304,10 +400,26 @@ export default function ColaboradoresPage() {
                   />
                 </div>
                 <div className="col-6">
-                  <label className="form-label small fw-medium">Documento</label>
+                  <label className="form-label small fw-medium">
+                    Apellido <span className="text-danger">*</span>
+                  </label>
                   <input
                     type="text"
                     className="form-control rounded-3"
+                    required
+                    maxLength={150}
+                    value={form.apellido}
+                    onChange={(e) => setForm((f) => ({ ...f, apellido: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small fw-medium">
+                    Identificación <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control rounded-3"
+                    required
                     maxLength={30}
                     value={form.documento}
                     onChange={(e) => setForm((f) => ({ ...f, documento: e.target.value }))}
@@ -323,8 +435,28 @@ export default function ColaboradoresPage() {
                     onChange={(e) => setForm((f) => ({ ...f, telefono: e.target.value }))}
                   />
                 </div>
-                <div className="col-12">
-                  <label className="form-label small fw-medium">Finca</label>
+                <div className="col-6">
+                  <label className="form-label small fw-medium">Cargo</label>
+                  <input
+                    type="text"
+                    className="form-control rounded-3"
+                    maxLength={100}
+                    value={form.cargo}
+                    onChange={(e) => setForm((f) => ({ ...f, cargo: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small fw-medium">Correo electrónico</label>
+                  <input
+                    type="email"
+                    className="form-control rounded-3"
+                    maxLength={150}
+                    value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small fw-medium">Finca predeterminada</label>
                   <select
                     className="form-select rounded-3"
                     value={form.fincaUuid}
@@ -337,6 +469,7 @@ export default function ColaboradoresPage() {
                       </option>
                     ))}
                   </select>
+                  <div className="form-text">Solo es la finca habitual: el colaborador puede marcar asistencia en cualquier otra.</div>
                 </div>
               </div>
 
@@ -370,6 +503,62 @@ export default function ColaboradoresPage() {
                 </button>
                 <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
                   {saving ? "Guardando..." : "Guardar"}
+                </button>
+              </div>
+            </form>
+          </ModalShell>
+        )}
+
+        {usuarioDe && (
+          <ModalShell title={`Usuario de ${usuarioDe.nombre} ${usuarioDe.apellido || ""}`.trim()} onClose={() => setUsuarioDe(null)}>
+            <form onSubmit={guardarUsuario}>
+              <div className="btn-group btn-group-sm mb-3 w-100">
+                <button type="button" className={`btn ${usuarioForm.modo === "crear" ? "btn-brand" : "btn-outline-secondary"}`} onClick={() => setUsuarioForm((f) => ({ ...f, modo: "crear" }))}>
+                  Crear usuario nuevo
+                </button>
+                <button type="button" className={`btn ${usuarioForm.modo === "vincular" ? "btn-brand" : "btn-outline-secondary"}`} onClick={() => setUsuarioForm((f) => ({ ...f, modo: "vincular" }))}>
+                  Vincular usuario existente
+                </button>
+              </div>
+
+              {usuarioForm.modo === "crear" ? (
+                <div className="row g-3 mb-3">
+                  <div className="col-12 small text-secondary">El usuario toma el nombre, apellido y cargo del colaborador.</div>
+                  <div className="col-6">
+                    <label className="form-label small fw-medium">Usuario <span className="text-danger">*</span></label>
+                    <input type="text" className="form-control rounded-3" required minLength={3} maxLength={50} value={usuarioForm.usuario} onChange={(e) => setUsuarioForm((f) => ({ ...f, usuario: e.target.value.replace(/[^a-zA-Z0-9]/g, "") }))} />
+                  </div>
+                  <div className="col-6">
+                    <label className="form-label small fw-medium">Contraseña <span className="text-danger">*</span></label>
+                    <input type="password" className="form-control rounded-3" required minLength={8} maxLength={100} value={usuarioForm.password} onChange={(e) => setUsuarioForm((f) => ({ ...f, password: e.target.value }))} />
+                    <div className="form-text">Mínimo 8, con letras y números.</div>
+                  </div>
+                  <div className="col-12">
+                    <label className="form-label small fw-medium">Correo electrónico <span className="text-danger">*</span></label>
+                    <input type="email" className="form-control rounded-3" required maxLength={150} value={usuarioForm.email} onChange={(e) => setUsuarioForm((f) => ({ ...f, email: e.target.value }))} />
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-3">
+                  <label className="form-label small fw-medium">Usuario <span className="text-danger">*</span></label>
+                  <select className="form-select rounded-3" required value={usuarioForm.userUuid} onChange={(e) => setUsuarioForm((f) => ({ ...f, userUuid: e.target.value }))}>
+                    <option value="">Selecciona...</option>
+                    {usuariosLibres.map((u) => (
+                      <option key={u.uuid} value={u.uuid}>
+                        {u.nombre} {u.apellido} ({u.usuario})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {usuarioError && <div className="alert alert-danger py-2 small">{usuarioError}</div>}
+              <div className="d-flex justify-content-end gap-2">
+                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setUsuarioDe(null)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-brand btn-brand-verde btn-sm rounded-3" disabled={usuarioSaving}>
+                  {usuarioSaving ? "Guardando..." : usuarioForm.modo === "crear" ? "Crear usuario" : "Vincular"}
                 </button>
               </div>
             </form>

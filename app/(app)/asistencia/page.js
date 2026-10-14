@@ -11,6 +11,8 @@ const FILTROS_VACIOS = { fincaUuid: "", colaboradorUuid: "", tipo: "", desde: ""
 const formatoFechaHora = (iso) =>
   new Date(iso).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short", timeZone: "America/Bogota" });
 
+const etiquetaColaborador = (c) => `${c.nombre} ${c.apellido || ""}${c.documento ? ` · ${c.documento}` : ""}`.replace(/\s+·/, " ·").trim();
+
 // Asistencia: marcaciones de entrada/salida de los colaboradores, verificadas por reconocimiento facial desde la app de
 // campo (no se guardan fotos). Misma estética de filtros y tabla que el resto de módulos.
 export default function AsistenciaPage() {
@@ -20,6 +22,7 @@ export default function AsistenciaPage() {
   const [datos, setDatos] = useState({ items: [], meta: null });
   const [fincas, setFincas] = useState([]);
   const [colaboradores, setColaboradores] = useState([]);
+  const [textoColaborador, setTextoColaborador] = useState("");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
@@ -63,6 +66,7 @@ export default function AsistenciaPage() {
   };
   const limpiar = () => {
     setFiltros(FILTROS_VACIOS);
+    setTextoColaborador("");
     setPagina(1);
     setAplicados(FILTROS_VACIOS);
   };
@@ -94,14 +98,21 @@ export default function AsistenciaPage() {
             </div>
             <div className="col-6 col-md-3">
               <label className="form-label small fw-medium">Colaborador</label>
-              <select className="form-select form-select-sm rounded-3" value={filtros.colaboradorUuid} onChange={(e) => cambiar("colaboradorUuid", e.target.value)}>
-                <option value="">Todos</option>
+              <input
+                list="colaboradores-asistencia"
+                className="form-control form-control-sm rounded-3"
+                placeholder="Todos (nombre, apellido o identificación)"
+                value={textoColaborador}
+                onChange={(e) => {
+                  setTextoColaborador(e.target.value);
+                  cambiar("colaboradorUuid", colaboradores.find((c) => etiquetaColaborador(c) === e.target.value)?.uuid || "");
+                }}
+              />
+              <datalist id="colaboradores-asistencia">
                 {colaboradores.map((c) => (
-                  <option key={c.uuid} value={c.uuid}>
-                    {c.nombre}
-                  </option>
+                  <option key={c.uuid} value={etiquetaColaborador(c)} />
                 ))}
-              </select>
+              </datalist>
             </div>
             <div className="col-6 col-md-2">
               <label className="form-label small fw-medium">Tipo</label>

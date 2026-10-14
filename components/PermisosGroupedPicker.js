@@ -148,7 +148,7 @@ const ITEMS_PLANOS = [
   { codigo: "menu.cargue_masivo", nombre: "Cargue Masivo", prefijos: [] },
   { codigo: "menu.produccion_semanal", nombre: "Producción Semanal", prefijos: ["produccion."] },
   { codigo: "menu.estimaciones", nombre: "Estimaciones de Fincas", prefijos: ["estimacion."] },
-  { codigo: "menu.pronostico", nombre: "Pronóstico de Cajas", prefijos: ["pronostico."] },
+  { codigo: "menu.pronostico", nombre: "Proyección", prefijos: ["pronostico."] },
   { codigo: "menu.programacion_corte", nombre: "Programación de Corte", prefijos: ["programacion_corte."] },
   { codigo: "menu.estacion_meteorologica", nombre: "Estación Meteorológica", prefijos: ["estacion_meteorologica."] },
 ];

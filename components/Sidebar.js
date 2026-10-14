@@ -78,7 +78,6 @@ const NAV = [
       { key: "motivoRecuse", label: "Motivos de Recuse", icon: GiFruitBowl, permKey: "motivoRecuse", href: "/maestros/motivos-recuse" },
       { key: "categoriaLabor", label: "Categorías de Labor", icon: FiFolder, permKey: "categoriaLabor", href: "/maestros/categorias-labor" },
       { key: "labor", label: "Labores", icon: FiCheckSquare, permKey: "labor", href: "/maestros/labores" },
-      { key: "colaboradores", label: "Colaboradores", icon: FiUsers, permKey: "colaboradores", href: "/maestros/colaboradores" },
       { key: "estadioSigatoka", label: "Estadios de Sigatoka", icon: FiTrendingUp, permKey: "estadioSigatoka", href: "/maestros/estadios-sigatoka" },
     ],
   },
@@ -115,7 +114,7 @@ const NAV = [
   { type: "link", key: "precipitacionDiaria", label: "Precipitación Diaria", icon: FiCloudRain, permKey: "precipitacionDiaria", href: "/precipitacion-diaria" },
   { type: "link", key: "produccionSemanal", label: "Producción Semanal", icon: FiPackage, permKey: "produccionSemanal", href: "/produccion-semanal" },
   { type: "link", key: "estimaciones", label: "Estimaciones de Fincas", icon: FiTarget, permKey: "estimaciones", href: "/estimaciones" },
-  { type: "link", key: "pronostico", label: "Pronóstico de Cajas", icon: FiActivity, permKey: "pronostico", href: "/pronostico" },
+  { type: "link", key: "pronostico", label: "Proyección", icon: FiActivity, permKey: "pronostico", href: "/pronostico" },
   { type: "link", key: "estacionMeteorologica", label: "Estación Meteorológica", icon: FiWind, permKey: "estacionMeteorologica", href: "/estacion-meteorologica" },
   {
     type: "section",
@@ -150,7 +149,19 @@ const NAV = [
   },
   { type: "link", key: "programacionCorte", label: "Programación de Corte", icon: GiScissors, permKey: "programacionCorte", href: "/programacion-corte" },
   { type: "link", key: "precalibracion", label: "Precalibración", icon: GiWeightScale, permKey: "precalibracion", href: "/precalibracion" },
-  { type: "link", key: "asistencia", label: "Asistencia", icon: FiUserCheck, permKey: "asistencia", href: "/asistencia" },
+  {
+    type: "section",
+    key: "colaboradoresMenu",
+    label: "Colaboradores",
+    icon: FiUsers,
+    permKey: "colaboradoresMenu",
+    pathPrefix: "/maestros/colaboradores",
+    altPathPrefix: "/asistencia",
+    items: [
+      { key: "colaboradores", label: "Colaboradores", icon: FiUsers, permKey: "colaboradores", href: "/maestros/colaboradores" },
+      { key: "asistencia", label: "Asistencia", icon: FiUserCheck, permKey: "asistencia", href: "/asistencia" },
+    ],
+  },
   {
     type: "section",
     key: "reportes",
@@ -331,6 +342,7 @@ export default function Sidebar() {
       programacionCorte: hasPermission("menu.programacion_corte"),
       precalibracion: hasPermission("menu.precalibracion"),
       asistencia: hasPermission("menu.asistencia"),
+      colaboradoresMenu: hasPermission("menu.maestros.colaboradores") || hasPermission("menu.asistencia"),
       // Sección Reportes: visible si el usuario tiene acceso a alguno de sus
       // items (Descargas, Detalle Semanal, Gráfico de Embolses o Gráfico de
       // Repiques, cada uno con su propio permiso).

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiRepeat } from "react-icons/fi";
+import { FiPlus, FiRepeat, FiTruck } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
+import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import MovimientoLoteModal from "@/components/inventario/MovimientoLoteModal";
 
 const TIPOS = [
   { value: "ENTRADA", label: "Entrada", badge: "success" },
@@ -26,23 +28,6 @@ function badgeFor(tipo) {
 function labelFor(tipo) {
   const t = TIPOS.find((x) => x.value === tipo);
   return t ? t.label : tipo;
-}
-
-function emptyForm() {
-  return {
-    documento: "",
-    tipo: "ENTRADA",
-    fecha: new Date().toISOString().slice(0, 10),
-    almacenUuid: "",
-    articuloUuid: "",
-    cantidad: "",
-    unidadUuid: "",
-    costoUnitario: "0",
-    lote: "",
-    fechaVencimiento: "",
-    motivoUuid: "",
-    observaciones: "",
-  };
 }
 
 function emptyTransferForm() {
@@ -70,9 +55,8 @@ export default function MovimientosPage() {
 
   const [filtros, setFiltros] = useState({ almacenUuid: "", articuloUuid: "", tipo: "", fechaDesde: "", fechaHasta: "", documento: "" });
 
-  const [modalOpen, setModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm());
+  const [loteModo, setLoteModo] = useState(null); // null | "recepcion" | "movimiento"
   const [transferForm, setTransferForm] = useState(emptyTransferForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -115,12 +99,6 @@ export default function MovimientosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function openCreate() {
-    setForm(emptyForm());
-    setFormError("");
-    setModalOpen(true);
-  }
-
   function openTransfer() {
     setTransferForm(emptyTransferForm());
     setFormError("");
@@ -130,43 +108,6 @@ export default function MovimientosPage() {
   function handleArticuloChange(uuid, setter) {
     const prod = articulos.find((p) => p.uuid === uuid);
     setter((f) => ({ ...f, articuloUuid: uuid, unidadUuid: prod?.unidadMedida?.uuid || f.unidadUuid }));
-  }
-
-  async function handleSave(e, forzarSaldoNegativo = false) {
-    e?.preventDefault?.();
-    setFormError("");
-    setSaving(true);
-    try {
-      const body = {
-        ...form,
-        cantidad: Number(form.cantidad),
-        costoUnitario: Number(form.costoUnitario),
-        unidadUuid: form.unidadUuid || null,
-        lote: form.lote || null,
-        fechaVencimiento: form.fechaVencimiento || null,
-        motivoUuid: form.motivoUuid || null,
-        observaciones: form.observaciones || null,
-        forzarSaldoNegativo,
-      };
-      const resultado = await apiFetch("/inventarios/movimientos", { method: "POST", body: JSON.stringify(body) });
-      if (resultado?.requiereConfirmacion) {
-        // Solo pasa al dar salida de un artículo elaborado y alguno de sus
-        // insumos queda insuficiente (el elaborado nunca tiene saldo
-        // propio, así que se descuentan sus insumos — ver
-        // movimiento.service.js#create).
-        const mensaje = resultado.advertencias.map((a) => a.mensaje).join("\n");
-        if (confirm(`${mensaje}\n\n¿Registrar de todas formas?`)) {
-          await handleSave(null, true);
-        }
-        return;
-      }
-      setModalOpen(false);
-      load();
-    } catch (err) {
-      setFormError(err.message);
-    } finally {
-      setSaving(false);
-    }
   }
 
   async function handleSaveTransfer(e) {
@@ -206,7 +147,12 @@ export default function MovimientosPage() {
               </button>
             )}
             {hasPermission("inventario.movimientos.crear") && (
-              <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
+              <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setLoteModo("recepcion")}>
+                <FiTruck /> Recepción
+              </button>
+            )}
+            {esAdministrador() && (
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setLoteModo("movimiento")}>
                 <FiPlus /> Nuevo movimiento
               </button>
             )}
@@ -333,7 +279,10 @@ export default function MovimientosPage() {
                   items.map((m) => (
                     <tr key={m.uuid}>
                       <td className="small text-secondary">{new Date(m.fecha).toLocaleDateString()}</td>
-                      <td className="fw-medium">{m.documento}</td>
+                      <td className="fw-medium">
+                        {m.documento}
+                        {m.proveedor && <div className="small text-secondary fw-normal">{m.proveedor.nombre}</div>}
+                      </td>
                       <td>
                         <span className={`badge rounded-pill text-bg-${badgeFor(m.tipo)}`}>{labelFor(m.tipo)}</span>
                       </td>
@@ -352,197 +301,6 @@ export default function MovimientosPage() {
             </table>
           </div>
         </div>
-
-        {modalOpen && (
-          <ModalShell title="Nuevo movimiento" onClose={() => setModalOpen(false)}>
-            <form onSubmit={handleSave}>
-              <div className="row g-3 mb-3">
-                <div className="col-6">
-                  <label className="form-label small fw-medium">
-                    Documento <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control rounded-3"
-                    required
-                    maxLength={50}
-                    value={form.documento}
-                    onChange={(e) => setForm((f) => ({ ...f, documento: e.target.value }))}
-                  />
-                </div>
-                <div className="col-6">
-                  <label className="form-label small fw-medium">
-                    Fecha <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    className="form-control rounded-3"
-                    required
-                    value={form.fecha}
-                    onChange={(e) => setForm((f) => ({ ...f, fecha: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label small fw-medium">Tipo</label>
-                <select
-                  className="form-select rounded-3"
-                  value={form.tipo}
-                  onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}
-                >
-                  {TIPOS.filter((t) => !t.value.startsWith("TRANSFERENCIA")).map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="row g-3 mb-3">
-                <div className="col-6">
-                  <label className="form-label small fw-medium">
-                    Almacén <span className="text-danger">*</span>
-                  </label>
-                  <select
-                    className="form-select rounded-3"
-                    required
-                    value={form.almacenUuid}
-                    onChange={(e) => setForm((f) => ({ ...f, almacenUuid: e.target.value }))}
-                  >
-                    <option value="">Seleccionar...</option>
-                    {almacenes.map((a) => (
-                      <option key={a.uuid} value={a.uuid}>
-                        {a.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-6">
-                  <label className="form-label small fw-medium">
-                    Artículo <span className="text-danger">*</span>
-                  </label>
-                  <select
-                    className="form-select rounded-3"
-                    required
-                    value={form.articuloUuid}
-                    onChange={(e) => handleArticuloChange(e.target.value, setForm)}
-                  >
-                    <option value="">Seleccionar...</option>
-                    {articulos.map((p) => (
-                      <option key={p.uuid} value={p.uuid}>
-                        {p.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="row g-3 mb-3">
-                <div className="col-4">
-                  <label className="form-label small fw-medium">
-                    Cantidad <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    required
-                    className="form-control rounded-3"
-                    value={form.cantidad}
-                    onChange={(e) => setForm((f) => ({ ...f, cantidad: e.target.value }))}
-                  />
-                </div>
-                <div className="col-4">
-                  <label className="form-label small fw-medium">Unidad</label>
-                  <select
-                    className="form-select rounded-3"
-                    value={form.unidadUuid}
-                    onChange={(e) => setForm((f) => ({ ...f, unidadUuid: e.target.value }))}
-                  >
-                    <option value="">Base del artículo</option>
-                    {unidades.map((u) => (
-                      <option key={u.uuid} value={u.uuid}>
-                        {u.simbolo}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-4">
-                  <label className="form-label small fw-medium">Costo unitario</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="form-control rounded-3"
-                    value={form.costoUnitario}
-                    onChange={(e) => setForm((f) => ({ ...f, costoUnitario: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="row g-3 mb-3">
-                <div className="col-6">
-                  <label className="form-label small fw-medium">Lote</label>
-                  <input
-                    type="text"
-                    className="form-control rounded-3"
-                    maxLength={50}
-                    value={form.lote}
-                    onChange={(e) => setForm((f) => ({ ...f, lote: e.target.value }))}
-                  />
-                </div>
-                <div className="col-6">
-                  <label className="form-label small fw-medium">Fecha de vencimiento</label>
-                  <input
-                    type="date"
-                    className="form-control rounded-3"
-                    value={form.fechaVencimiento}
-                    onChange={(e) => setForm((f) => ({ ...f, fechaVencimiento: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label small fw-medium">Motivo</label>
-                <select
-                  className="form-select rounded-3"
-                  value={form.motivoUuid}
-                  onChange={(e) => setForm((f) => ({ ...f, motivoUuid: e.target.value }))}
-                >
-                  <option value="">Sin motivo</option>
-                  {motivos.map((m) => (
-                    <option key={m.uuid} value={m.uuid}>
-                      {m.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label small fw-medium">Observaciones</label>
-                <textarea
-                  className="form-control rounded-3"
-                  rows={2}
-                  maxLength={500}
-                  value={form.observaciones}
-                  onChange={(e) => setForm((f) => ({ ...f, observaciones: e.target.value }))}
-                />
-              </div>
-
-              {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
-
-              <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setModalOpen(false)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
-                  {saving ? "Guardando..." : "Guardar"}
-                </button>
-              </div>
-            </form>
-          </ModalShell>
-        )}
 
         {transferModalOpen && (
           <ModalShell title="Nueva transferencia" onClose={() => setTransferModalOpen(false)}>
@@ -701,6 +459,20 @@ export default function MovimientosPage() {
               </div>
             </form>
           </ModalShell>
+        )}
+        {loteModo && (
+          <MovimientoLoteModal
+            modo={loteModo}
+            almacenes={almacenes}
+            articulos={articulos}
+            unidades={unidades}
+            motivos={motivos}
+            onClose={() => setLoteModo(null)}
+            onGuardado={() => {
+              setLoteModo(null);
+              load();
+            }}
+          />
         )}
       </div>
     </RequirePermission>

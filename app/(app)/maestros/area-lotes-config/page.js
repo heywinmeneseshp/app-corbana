@@ -17,6 +17,10 @@ export default function AreaLotesConfigPage() {
   const [fincas, setFincas] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Filtros de la lista de configuraciones.
+  const [filtroFinca, setFiltroFinca] = useState("");
+  const [filtroRol, setFiltroRol] = useState("");
+  const [filtroRecurrencia, setFiltroRecurrencia] = useState("");
   const [error, setError] = useState("");
 
   // Modal "Nueva configuración": varios roles y varias fincas a la vez (una
@@ -78,7 +82,7 @@ export default function AreaLotesConfigPage() {
     setError("");
     try {
       const [configData, fincasData, rolesData] = await Promise.all([
-        apiFetch("/lote-area-config?limit=50"),
+        apiFetch("/lote-area-config?limit=100"),
         apiFetch("/fincas?limit=100"),
         // roles.ver es un permiso aparte de area_lote.ver/configurar — sin
         // él, el picker de rol del formulario "Nueva configuración" queda
@@ -100,6 +104,16 @@ export default function AreaLotesConfigPage() {
   useEffect(() => {
     cargarTodo();
   }, []);
+
+  // Lista filtrada por finca, rol y "se repite" (la recurrencia). Los roles del filtro son los que aparecen en las
+  // configuraciones (no depende de que el usuario pueda ver el catálogo de roles).
+  const configsFiltradas = configs.filter(
+    (c) =>
+      (!filtroFinca || c.finca?.uuid === filtroFinca) &&
+      (!filtroRol || String(c.rol?.id) === filtroRol) &&
+      (!filtroRecurrencia || c.recurrencia === filtroRecurrencia),
+  );
+  const rolesEnConfigs = [...new Map(configs.filter((c) => c.rol).map((c) => [c.rol.id, c.rol])).values()].sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
 
   const abrirModal = () => {
     setFincasSel([]);
@@ -357,8 +371,62 @@ export default function AreaLotesConfigPage() {
           <div className="card border-0 shadow-sm rounded-4">
             <div className="card-body p-4">
               <h2 className="h6 fw-semibold mb-3">Configuración</h2>
+              {configs.length > 0 && (
+                <div className="row g-2 align-items-end mb-3">
+                  <div className="col-12 col-md-4">
+                    <label className="form-label small fw-medium">Finca</label>
+                    <select className="form-select form-select-sm rounded-3" value={filtroFinca} onChange={(e) => setFiltroFinca(e.target.value)}>
+                      <option value="">Todas</option>
+                      {fincas.map((f) => (
+                        <option key={f.uuid} value={f.uuid}>
+                          {f.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small fw-medium">Rol</label>
+                    <select className="form-select form-select-sm rounded-3" value={filtroRol} onChange={(e) => setFiltroRol(e.target.value)}>
+                      <option value="">Todos</option>
+                      {rolesEnConfigs.map((r) => (
+                        <option key={r.id} value={String(r.id)}>
+                          {r.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small fw-medium">Se repite</label>
+                    <select className="form-select form-select-sm rounded-3" value={filtroRecurrencia} onChange={(e) => setFiltroRecurrencia(e.target.value)}>
+                      <option value="">Todas</option>
+                      {RECURRENCIAS.map((r) => (
+                        <option key={r.valor} value={r.valor}>
+                          {r.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {(filtroFinca || filtroRol || filtroRecurrencia) && (
+                    <div className="col-12 col-md-auto">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-brand rounded-3 w-100"
+                        onClick={() => {
+                          setFiltroFinca("");
+                          setFiltroRol("");
+                          setFiltroRecurrencia("");
+                        }}
+                      >
+                        Limpiar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               {configs.length === 0 ? (
                 <p className="text-secondary small mb-0">Todavía no hay ninguna configuración.</p>
+              ) : configsFiltradas.length === 0 ? (
+                <p className="text-secondary small mb-0">Ninguna configuración coincide con los filtros.</p>
               ) : (
                 <div className="table-responsive">
                   <table className="table table-sm align-middle mb-0">
@@ -373,7 +441,7 @@ export default function AreaLotesConfigPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {configs.map((c) => (
+                      {configsFiltradas.map((c) => (
                         <tr key={c.uuid}>
                           <td>{c.finca?.nombre}</td>
                           <td>{c.rol?.nombre}</td>

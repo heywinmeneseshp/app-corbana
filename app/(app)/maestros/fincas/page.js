@@ -791,6 +791,10 @@ function LotesModal({ finca, onClose }) {
         // campo de producción está vacío se conserva la vigente en esa semana.
         const vig = vigenteEn(l.uuid, semanaElegida);
         const prodVal = p !== "" && !Number.isNaN(Number(p)) ? Number(p) : vig ? Number(vig.area) : null;
+        // Regla: el área total siempre es mayor o igual que el área en producción.
+        if (t !== "" && prodVal !== null && prodVal > Number(t) + 0.005) {
+          throw new Error(`Lote ${l.nombre}: el área en producción (${prodVal}) no puede ser mayor que el área total (${Number(t)}).`);
+        }
         if (prodVal !== null) {
           await apiFetch(`/lotes/${l.uuid}/area-produccion`, {
             method: "POST",
@@ -892,6 +896,7 @@ function LotesModal({ finca, onClose }) {
     if (!edicion.loteUuid || !sem) return setError("Elige el lote y la semana.");
     if (edicion.area === "" || Number.isNaN(area) || area < 0) return setError("El área en producción debe ser un número (0 o más).");
     if (edicion.areaTotal !== "" && (Number.isNaN(Number(edicion.areaTotal)) || Number(edicion.areaTotal) < 0)) return setError("El área total debe ser un número (0 o más).");
+    if (edicion.areaTotal !== "" && area > Number(edicion.areaTotal) + 0.005) return setError("El área en producción no puede ser mayor que el área total.");
     setGuardandoEdicion(true);
     setError("");
     try {

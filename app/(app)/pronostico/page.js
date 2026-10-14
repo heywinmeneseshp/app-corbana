@@ -5,6 +5,8 @@ import Link from "next/link";
 import { FiActivity, FiDownload, FiRefreshCw, FiChevronDown, FiChevronUp, FiAlertTriangle } from "react-icons/fi";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
+import ProyeccionAnual from "@/components/proyeccion/ProyeccionAnual";
+import { hasPermission } from "@/lib/auth";
 
 const SEMANAS_OPCIONES = [4, 8, 12, 26, 52];
 const SEMANAS_MAX = 53; // hasta un año calendario completo
@@ -42,7 +44,7 @@ function DistribucionEdad({ ageBreakdown }) {
   );
 }
 
-export default function PronosticoPage() {
+function PronosticoSemanal() {
   const [fincas, setFincas] = useState([]);
   const [fincaUuidsSeleccionadas, setFincaUuidsSeleccionadas] = useState([]);
   const [todasFincas, setTodasFincas] = useState(true);
@@ -179,12 +181,12 @@ export default function PronosticoPage() {
   }, [data]);
 
   return (
-    <RequirePermission code="menu.pronostico">
-      <div className="p-4 p-md-5">
+    <>
+      <div>
         <div className="mb-4 d-flex flex-wrap align-items-start justify-content-between gap-3">
           <div>
             <h1 className="fw-bold h3 mb-1 d-flex align-items-center gap-2">
-              <FiActivity /> Pronóstico de Cajas
+              <FiActivity /> Proyección
             </h1>
             <p className="text-secondary mb-0">Proyección de cajas 20kg por finca a partir del historial de embolses y cortes.</p>
           </div>
@@ -445,6 +447,33 @@ export default function PronosticoPage() {
           color: #fff;
         }
       `}</style>
+    </>
+  );
+}
+
+// Pestañas: el pronóstico semanal de siempre y la proyección anual con escenarios (hectáreas nuevas, % no cosechado).
+export default function PronosticoPage() {
+  const puedeProyeccion = hasPermission("proyeccion.ver");
+  const [vista, setVista] = useState("pronostico");
+  return (
+    <RequirePermission code="menu.pronostico">
+      <div className="p-4 p-md-5">
+        {puedeProyeccion && (
+          <ul className="nav nav-pills gap-1 mb-3">
+            <li className="nav-item">
+              <button type="button" className={`nav-link btn-sm py-1 px-3 ${vista === "pronostico" ? "active" : ""}`} onClick={() => setVista("pronostico")}>
+                Pronóstico
+              </button>
+            </li>
+            <li className="nav-item">
+              <button type="button" className={`nav-link btn-sm py-1 px-3 ${vista === "anual" ? "active" : ""}`} onClick={() => setVista("anual")}>
+                Proyección anual
+              </button>
+            </li>
+          </ul>
+        )}
+        {vista === "anual" && puedeProyeccion ? <ProyeccionAnual /> : <PronosticoSemanal />}
+      </div>
     </RequirePermission>
   );
 }

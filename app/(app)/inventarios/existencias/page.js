@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 
@@ -11,6 +11,14 @@ export default function ExistenciasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filtros, setFiltros] = useState({ almacenUuid: "", articuloUuid: "" });
+  // Texto escrito en los campos con sugerencias (datalist); al coincidir exactamente con una opción se fija el filtro.
+  const [textoAlmacen, setTextoAlmacen] = useState("");
+  const [textoArticulo, setTextoArticulo] = useState("");
+
+  const etiquetaAlmacen = (a) => a.nombre;
+  const etiquetaArticulo = (p) => (p.codigo ? `${p.nombre} (${p.codigo})` : p.nombre);
+  const unicasAlmacen = useMemo(() => new Map(almacenes.map((a) => [etiquetaAlmacen(a), a.uuid])), [almacenes]);
+  const unicasArticulo = useMemo(() => new Map(articulos.map((p) => [etiquetaArticulo(p), p.uuid])), [articulos]);
 
   async function load() {
     setLoading(true);
@@ -58,33 +66,41 @@ export default function ExistenciasPage() {
           <div className="row g-2 align-items-end">
             <div className="col-auto">
               <label className="form-label small fw-medium mb-1">Almacén</label>
-              <select
-                className="form-select form-select-sm rounded-3"
-                value={filtros.almacenUuid}
-                onChange={(e) => setFiltros((f) => ({ ...f, almacenUuid: e.target.value }))}
-              >
-                <option value="">Todos</option>
+              <input
+                list="existencias-almacenes"
+                className="form-control form-control-sm rounded-3"
+                style={{ minWidth: 220 }}
+                placeholder="Todos"
+                value={textoAlmacen}
+                onChange={(e) => {
+                  setTextoAlmacen(e.target.value);
+                  setFiltros((f) => ({ ...f, almacenUuid: unicasAlmacen.get(e.target.value) || "" }));
+                }}
+              />
+              <datalist id="existencias-almacenes">
                 {almacenes.map((a) => (
-                  <option key={a.uuid} value={a.uuid}>
-                    {a.nombre}
-                  </option>
+                  <option key={a.uuid} value={etiquetaAlmacen(a)} />
                 ))}
-              </select>
+              </datalist>
             </div>
             <div className="col-auto">
               <label className="form-label small fw-medium mb-1">Artículo</label>
-              <select
-                className="form-select form-select-sm rounded-3"
-                value={filtros.articuloUuid}
-                onChange={(e) => setFiltros((f) => ({ ...f, articuloUuid: e.target.value }))}
-              >
-                <option value="">Todos</option>
+              <input
+                list="existencias-articulos"
+                className="form-control form-control-sm rounded-3"
+                style={{ minWidth: 260 }}
+                placeholder="Todos"
+                value={textoArticulo}
+                onChange={(e) => {
+                  setTextoArticulo(e.target.value);
+                  setFiltros((f) => ({ ...f, articuloUuid: unicasArticulo.get(e.target.value) || "" }));
+                }}
+              />
+              <datalist id="existencias-articulos">
                 {articulos.map((p) => (
-                  <option key={p.uuid} value={p.uuid}>
-                    {p.nombre}
-                  </option>
+                  <option key={p.uuid} value={etiquetaArticulo(p)} />
                 ))}
-              </select>
+              </datalist>
             </div>
             <div className="col-auto">
               <button type="button" className="btn btn-brand btn-sm rounded-3" onClick={load}>
@@ -104,19 +120,20 @@ export default function ExistenciasPage() {
                   <th>Almacén</th>
                   <th>Artículo</th>
                   <th className="text-end">Saldo</th>
+                  <th>Unidad</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={3} className="text-center text-secondary py-4">
+                    <td colSpan={4} className="text-center text-secondary py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="text-center text-secondary py-4">
+                    <td colSpan={4} className="text-center text-secondary py-4">
                       No hay existencias para los filtros seleccionados.
                     </td>
                   </tr>
@@ -127,6 +144,7 @@ export default function ExistenciasPage() {
                       <td className="small text-secondary">{e.almacen?.nombre || "—"}</td>
                       <td className="fw-medium">{e.articulo?.nombre || "—"}</td>
                       <td className={`text-end fw-medium ${e.saldo < 0 ? "text-danger" : ""}`}>{Number(e.saldo).toFixed(2)}</td>
+                      <td className="small text-secondary">{e.unidad ? `${e.unidad.simbolo} · ${e.unidad.nombre}` : "—"}</td>
                     </tr>
                   ))}
               </tbody>
