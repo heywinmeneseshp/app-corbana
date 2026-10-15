@@ -3,11 +3,13 @@
 import { Fragment, useMemo, useState } from "react";
 import { FiChevronDown, FiChevronRight, FiColumns } from "react-icons/fi";
 import GraficasFincaModal from "./GraficasFincaModal";
+import PorProducto from "./PorProducto";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-const METRICAS = [
-  { id: "cajas", label: "Cajas 20kg", bajo: "cajasBajo", alto: "cajasAlto" },
+// La unidad de caja es la de referencia del sistema: su peso es la tasa de conversión configurada (18.6 por defecto).
+const metricas = (tasa) => [
+  { id: "cajas", label: `Cajas ${tasa}`, bajo: "cajasBajo", alto: "cajasAlto" },
   { id: "embolses", label: "Embolses", bajo: "embolsesBajo", alto: "embolsesAlto" },
   { id: "racimos", label: "Racimos cosechados" },
 ];
@@ -21,7 +23,7 @@ const fmtD = (n, d) => Number(n ?? 0).toLocaleString("es", { minimumFractionDigi
 
 // Construye las filas del cálculo de una semana. Orden: hectáreas, embolses por ha, embolses, racimos que aporta cada edad
 // (embolse de la semana de origen × tasa de corte), racimos, ratio y cajas.
-function filasCalculo(semana, fincas, filaDe) {
+function filasCalculo(semana, fincas, filaDe, tasa) {
   const de = (uuid) => filaDe.get(`${uuid}|${semana}`);
   const suma = (campo) => fincas.reduce((a, f) => a + (de(f.uuid)?.[campo] || 0), 0);
   const ejemplo = fincas.map((f) => de(f.uuid)).find(Boolean);
@@ -64,13 +66,14 @@ function filasCalculo(semana, fincas, filaDe) {
       resalta: true,
       ayuda: (u) => (de(u)?.fuente === "real" ? "Ratio real de la semana" : `Promedio histórico de esta semana del año: ${de(u)?.ratioHistorico}`),
     },
-    { clave: "caj", titulo: "Cajas 20kg = racimos × ratio", celda: (u) => fmt(de(u)?.cajas), total: () => fmt(caj), resalta: true },
+    { clave: "caj", titulo: `Cajas ${tasa} = racimos × ratio`, celda: (u) => fmt(de(u)?.cajas), total: () => fmt(caj), resalta: true },
   ];
   return filas;
 }
 
 function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
   const { filas, porSemana } = resultado;
+  const tasa = resultado.meta.tasaConversion ?? 18.6;
   // Semanas desplegadas: debajo de la semana aparecen las filas con el cálculo (ha, embolses, racimos por edad, ratio, cajas).
   const [abiertas, setAbiertas] = useState(() => new Set());
   const alternar = (clave) =>
@@ -145,7 +148,7 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
             const desplegable = periodo === "semana";
             const abierta = desplegable && abiertas.has(pr.clave);
             // Filas del cálculo de esta semana: cada una trae su valor por finca y el total de las fincas visibles.
-            const detalle = abierta ? filasCalculo(pr.clave, fincas, filaDe) : [];
+            const detalle = abierta ? filasCalculo(pr.clave, fincas, filaDe, tasa) : [];
             // Semana desplegada: borde grueso y oscuro arriba de la semana y debajo de su última fila, para separar el bloque.
             const bordeArriba = abierta ? { borderTop: "3px solid #14532d" } : {};
             return (
@@ -209,7 +212,7 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
 }
 
 function Grafico({ resultado, metrica }) {
-  const m = METRICAS.find((x) => x.id === metrica);
+  const m = metricas(resultado.meta.tasaConversion ?? 18.6).find((x) => x.id === metrica);
   const [a1, a2] = resultado.comparativo.anios;
   const datos = resultado.porSemana.map((s, i) => {
     const comp = resultado.comparativo.porSemana[i]?.valores || {};
@@ -251,7 +254,7 @@ function Comparativo({ resultado }) {
       <div className="row g-3 mb-3">
         {[
           { t: "Embolses", k: "embolses" },
-          { t: "Cajas 20kg", k: "cajas" },
+          { t: `Cajas ${resultado.meta.tasaConversion ?? 18.6}`, k: "cajas" },
         ].map(({ t, k }) => (
           <div key={k} className="col-12 col-md-6">
             <div className="border rounded-3 p-3">
@@ -280,7 +283,7 @@ function Comparativo({ resultado }) {
             <tr>
               <th rowSpan={2}>Mes</th>
               <th colSpan={3} className="text-center">Embolses</th>
-              <th colSpan={3} className="text-center">Cajas 20kg</th>
+              <th colSpan={3} className="text-center">Cajas {resultado.meta.tasaConversion ?? 18.6}</th>
             </tr>
             <tr>
               <th className="text-end">{meta.anio} proy.</th>
@@ -354,7 +357,8 @@ function SelectorColumnas({ fincas, ocultas, onChange }) {
   );
 }
 
-export default function ResultadosProyeccion({ resultado }) {
+export default function ResultadosProyeccion({ resultado, productos = [], onProductosChange = () => {}, puedeEditar = false, nombreEscenario = "" }) {
+  const METRICAS = metricas(resultado.meta.tasaConversion ?? 18.6);
   const [vista, setVista] = useState("semanal");
   const [metrica, setMetrica] = useState("cajas");
   const [ocultas, setOcultas] = useState(() => new Set()); // fincas (columnas) ocultas en las tablas
@@ -367,6 +371,7 @@ export default function ResultadosProyeccion({ resultado }) {
   const vistas = [
     ["semanal", "Por semana y finca"],
     ["mensual", "Por mes y finca"],
+    ["producto", "Por producto"],
     ["grafico", "Gráfico anual"],
     ["comparativo", "Comparar con el histórico"],
   ];
@@ -402,7 +407,7 @@ export default function ResultadosProyeccion({ resultado }) {
         </div>
         {vista !== "comparativo" && (
           <div className="d-flex align-items-center gap-2">
-            {(vista === "semanal" || vista === "mensual") && <SelectorColumnas fincas={fincasLista} ocultas={ocultas} onChange={setOcultas} />}
+            {(vista === "semanal" || vista === "mensual" || vista === "producto") && <SelectorColumnas fincas={fincasLista} ocultas={ocultas} onChange={setOcultas} />}
             <select className="form-select form-select-sm" style={{ width: "auto" }} value={metrica} onChange={(e) => setMetrica(e.target.value)}>
               {METRICAS.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -416,6 +421,7 @@ export default function ResultadosProyeccion({ resultado }) {
 
       {vista === "semanal" && <Pivot resultado={resultado} metrica={metrica} periodo="semana" ocultas={ocultas} onGraficas={setGraficas} />}
       {vista === "mensual" && <Pivot resultado={resultado} metrica={metrica} periodo="mes" ocultas={ocultas} onGraficas={setGraficas} />}
+      {vista === "producto" && <PorProducto resultado={resultado} ocultas={ocultas} productos={productos} onChange={onProductosChange} puedeEditar={puedeEditar} nombreEscenario={nombreEscenario} />}
       {vista === "grafico" && <Grafico resultado={resultado} metrica={metrica} />}
       {vista === "comparativo" && <Comparativo resultado={resultado} />}
       {vista === "semanal" && <p className="small text-secondary mt-2 mb-0">* Semana ya transcurrida: usa el dato real. Haz clic en el nombre de una finca para ver sus gráficas, y en una semana para desplegar el cálculo de sus cajas (hectáreas, embolses, racimos por edad y ratio) debajo de ella.</p>}

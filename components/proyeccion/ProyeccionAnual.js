@@ -11,6 +11,7 @@ import {
   actualizarEscenario,
   eliminarEscenario,
   guardarAreas,
+  guardarProductos,
   getResultado,
   exportarEscenario,
 } from "@/lib/proyeccion/api";
@@ -78,7 +79,7 @@ export default function ProyeccionAnual() {
     async (id) => {
       const e = await getEscenario(id);
       setEscenario(e);
-      setDraft({ nombre: e.nombre, descripcion: e.descripcion || "", params: { ...PARAMS_VACIOS, ...e.params }, areas: e.areas });
+      setDraft({ nombre: e.nombre, descripcion: e.descripcion || "", params: { ...PARAMS_VACIOS, ...e.params }, areas: e.areas, productos: e.productos || [] });
       // Semanas elegibles para el plan de hectáreas: las del año del escenario y las del año anterior que aún no han llegado
       // (unas hectáreas que entran a fines del año anterior dan su primera cosecha en el año proyectado).
       const hoy = new Date().toISOString().slice(0, 10);
@@ -114,6 +115,7 @@ export default function ProyeccionAnual() {
       draft.nombre !== escenario.nombre ||
       (draft.descripcion || "") !== (escenario.descripcion || "") ||
       !mismoJson({ ...PARAMS_VACIOS, ...escenario.params }, draft.params) ||
+      !mismoJson((escenario.productos || []).map((x) => [x.uuid, x.modo, x.porcentaje ?? null, x.contenedores ?? null, x.cajasContenedor ?? null, x.cadaSemanas || 1, x.desdeSemana || 1]), (draft.productos || []).map((x) => [x.uuid, x.modo, x.porcentaje === "" ? null : x.porcentaje ?? null, x.contenedores === "" ? null : x.contenedores ?? null, x.cajasContenedor ?? null, x.cadaSemanas || 1, x.desdeSemana || 1])) ||
       !mismoJson(escenario.areas.map((a) => [a.fincaUuid, a.semanaUuid, a.hectareas, a.rampaPct ?? null, a.rampaSemanas ?? null, a.nota || null]), draft.areas.map((a) => [a.fincaUuid, a.semanaUuid, a.hectareas, a.rampaPct ?? null, a.rampaSemanas ?? null, a.nota || null]))
     );
   }, [escenario, draft]);
@@ -125,6 +127,7 @@ export default function ProyeccionAnual() {
     try {
       await actualizarEscenario(uuid, { nombre: draft.nombre, descripcion: draft.descripcion, params: draft.params });
       await guardarAreas(uuid, draft.areas.map((a) => ({ fincaUuid: a.fincaUuid, semanaUuid: a.semanaUuid, hectareas: a.hectareas, rampaPct: a.hectareas > 0 ? a.rampaPct ?? null : null, rampaSemanas: a.hectareas > 0 ? a.rampaSemanas ?? null : null, nota: a.nota || undefined })));
+      await guardarProductos(uuid, (draft.productos || []).map((x) => ({ productoUuid: x.uuid, modo: x.modo || "PORCENTAJE", porcentaje: x.modo === "PORCENTAJE" || !x.modo ? Number(x.porcentaje) : null, contenedores: x.modo === "CONTENEDORES" ? Number(x.contenedores) : null, cajasContenedor: x.modo === "CONTENEDORES" ? x.cajasContenedor ?? null : null, cadaSemanas: x.modo === "CONTENEDORES" ? x.cadaSemanas || 1 : 1, desdeSemana: x.modo === "CONTENEDORES" ? x.desdeSemana || 1 : 1 })));
       await cargarLista(uuid);
       await cargarEscenario(uuid);
       await calcular(uuid);
@@ -312,7 +315,7 @@ export default function ProyeccionAnual() {
             ) : resultado ? (
               <>
                 {sucio && <div className="alert alert-info py-2 small">Hay cambios sin guardar: los resultados corresponden a la última versión guardada.</div>}
-                <ResultadosProyeccion resultado={resultado} />
+                <ResultadosProyeccion resultado={resultado} productos={draft.productos || []} onProductosChange={(productos) => setDraft((d) => ({ ...d, productos }))} puedeEditar={puedeEditar} nombreEscenario={draft.nombre} />
               </>
             ) : null)}
 

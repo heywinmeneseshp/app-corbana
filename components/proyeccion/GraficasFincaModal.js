@@ -14,7 +14,7 @@ const GRAFICAS = [
   { id: "ratio", titulo: "Ratio (cajas por racimo)", dec: 3 },
   { id: "embolses", titulo: "Embolses", dec: 0 },
   { id: "embolsesPorHa", titulo: "Embolses por hectárea", dec: 1 },
-  { id: "cajas", titulo: "Cajas producidas (20kg)", dec: 0 },
+  { id: "cajas", titulo: "Cajas producidas", dec: 0 },
   { id: "hectareas", titulo: "Hectáreas en producción (total)", dec: 1, ancha: true, sinPromedio: true },
 ];
 
@@ -127,7 +127,9 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
         </div>
       </div>
       <div className="row g-3">
-        {GRAFICAS.map((g) => (
+        {GRAFICAS.map((g0) => {
+          const g = g0.id === "cajas" ? { ...g0, titulo: `Cajas producidas (${resultado.meta.tasaConversion ?? 18.6})` } : g0;
+          return (
           <div key={g.id} className={g.ancha ? "col-12" : "col-12 col-lg-6"}>
             <div className="border rounded-3 p-2">
               <div className="fw-semibold small mb-1 ps-1">{g.titulo}</div>
@@ -151,7 +153,8 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
       </div>
     </ModalShell>
