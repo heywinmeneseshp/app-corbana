@@ -17,6 +17,11 @@ import { esAdministrador } from "@/lib/laborEstados";
 // sincronizar-estacion-meteorologica; acá también hay un botón para
 // forzar una sincronización puntual.
 
+const ESTACIONES = [
+  { id: 1, nombre: "Pantoja 01 Norte" },
+  { id: 2, nombre: "San Francisco Consola" },
+];
+
 function fmtFechaHora(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("es-CO", { timeZone: "America/Bogota", dateStyle: "medium", timeStyle: "short" });
@@ -72,6 +77,7 @@ export default function EstacionMeteorologicaPage() {
   const [modalConfig, setModalConfig] = useState(false);
   const [tab, setTab] = useState("estacion"); // "estacion" | "openmeteo" | "graficas"
   const [ucBases, setUcBases] = useState([14]);
+  const [estacion, setEstacion] = useState(1);
   const esAdmin = esAdministrador();
 
   // Rango para la sincronización manual — arranca en el último mes, mismo
@@ -79,16 +85,20 @@ export default function EstacionMeteorologicaPage() {
   const [fechaDesde, setFechaDesde] = useState(haceUnMesIso());
   const [fechaHasta, setFechaHasta] = useState(hoyIso());
 
-  async function load() {
+  async function load(est = estacion) {
     setLoading(true);
     setError("");
     try {
       const [actualData, historicoData, basesData] = await Promise.all([
-        apiFetch("/estacion-meteorologica/actual"),
-        apiFetch("/estacion-meteorologica/historico"),
+        apiFetch(`/estacion-meteorologica/actual?estacion=${est}`).catch((e) => {
+          setError(e.message);
+          return null;
+        }),
+        apiFetch(`/estacion-meteorologica/historico?estacion=${est}`),
         apiFetch("/estacion-meteorologica/uc-bases").catch(() => [14]),
       ]);
       setActual(actualData);
+      if (actualData) setError("");
       if (Array.isArray(basesData) && basesData.length) setUcBases(basesData);
       setHistorico((historicoData.items || []).slice().reverse());
     } catch (err) {
@@ -100,7 +110,7 @@ export default function EstacionMeteorologicaPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
+    load(estacion);
 
     // Relleno automático, en segundo plano, de los días del último mes que
     // todavía no tengan dato — no bloquea la carga inicial; si rellenó algo,
@@ -109,8 +119,8 @@ export default function EstacionMeteorologicaPage() {
     (async () => {
       setRellenandoFaltantes(true);
       try {
-        const res = await apiFetch("/estacion-meteorologica/sincronizar-faltantes", { method: "POST", body: JSON.stringify({}) });
-        if (res?.sincronizados?.length) await load();
+        const res = await apiFetch("/estacion-meteorologica/sincronizar-faltantes", { method: "POST", body: JSON.stringify({ estacion }) });
+        if (res?.sincronizados?.length) await load(estacion);
       } catch {
         // Silencioso: esto es un relleno en segundo plano, no se le muestra
         // un error al usuario por esto — el botón de sincronizar manual
@@ -119,7 +129,8 @@ export default function EstacionMeteorologicaPage() {
         setRellenandoFaltantes(false);
       }
     })();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estacion]);
 
   async function handleSincronizar() {
     setSincError("");
@@ -127,9 +138,9 @@ export default function EstacionMeteorologicaPage() {
     try {
       await apiFetch("/estacion-meteorologica/sincronizar", {
         method: "POST",
-        body: JSON.stringify({ fechaDesde, fechaHasta }),
+        body: JSON.stringify({ fechaDesde, fechaHasta, estacion }),
       });
-      await load();
+      await load(estacion);
     } catch (err) {
       setSincError(err.message);
     } finally {
@@ -167,9 +178,27 @@ export default function EstacionMeteorologicaPage() {
         <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
           <div>
             <h1 className="h4 fw-bold mb-1">Estación Meteorológica</h1>
-            <p className="text-secondary small mb-0">Pantoja 01 Norte — datos en vivo vía WeatherLink.</p>
+            <p className="text-secondary small mb-0">{ESTACIONES.find((e) => e.id === estacion)?.nombre} — datos en vivo vía WeatherLink.</p>
           </div>
           <div className="d-flex align-items-end gap-2 flex-wrap">
+            <div>
+              <label className="form-label small text-secondary mb-1">Estación</label>
+              <select
+                className="form-select form-select-sm rounded-3"
+                value={estacion}
+                onChange={(e) => {
+                  setEstacion(Number(e.target.value));
+                  setActual(null);
+                  setHistorico([]);
+                }}
+              >
+                {ESTACIONES.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="form-label small text-secondary mb-1">Desde</label>
               <input
@@ -241,7 +270,7 @@ export default function EstacionMeteorologicaPage() {
                       <Stat icon={FiWind} label="Viento" value={actual.vientoVelocidadKmh} unidad="km/h" />
                       <Stat icon={FiCloudRain} label="Lluvia hoy" value={actual.lluviaHoyMm} unidad="mm" />
                     </div>
-                    <div className="row g-3">
+                    <div className="row g-3 justify-content-center">
                       <Stat icon={FiCloudRain} label="Lluvia última hora" value={actual.lluviaUltimaHoraMm} unidad="mm" />
                       <Stat icon={FiCloudRain} label="Lluvia del mes" value={actual.lluviaMesMm} unidad="mm" />
                       <Stat icon={FiCloudRain} label="Lluvia del año" value={actual.lluviaAnioMm} unidad="mm" />

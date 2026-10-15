@@ -159,7 +159,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
       for (const p of productos) t.productos[p.uuid] += f.productos[p.uuid] || 0;
       m.set(idx, t);
     }
-    return [...m.values()].sort((a, b) => a.clave - b.clave).map((t) => ({ ...t, semanaCodigo: MESES[t.clave], titulo: `${MESES[t.clave]} (${t.semanasN} sem.)` }));
+    return [...m.values()].sort((a, b) => a.clave - b.clave).map((t) => ({ ...t, semanaCodigo: MESES[t.clave], titulo: MESES[t.clave] }));
   })();
   const filas = periodo === "mes" ? filasMes : filasSemana; // base de los totales del año (no incluye subtotales)
   // Fila de semestre: suma de los meses del semestre (I = enero a junio, II = julio a diciembre).
@@ -174,7 +174,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
       t.faltante = t.faltante || m.faltante;
       for (const p of productos) t.productos[p.uuid] += m.productos[p.uuid] || 0;
     }
-    return { ...t, titulo: `Total semestre ${n === 1 ? "I" : "II"} (${t.semanasN} sem.)` };
+    return { ...t, titulo: `Total semestre ${n === 1 ? "I" : "II"}` };
   };
   // Después de junio se inserta el total del semestre I y después de diciembre el del semestre II.
   const conSemestre = (idx) => (idx === 5 ? filaSemestre(1) : idx === 11 ? filaSemestre(2) : null);
@@ -195,7 +195,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
       const idx = mesDe(f.fechaInicio);
       const sig = filasSemana[i + 1];
       if (!sig || mesDe(sig.fechaInicio) !== idx) {
-        out.push({ ...porMes.get(idx), esSubtotal: true, titulo: `Total ${MESES[idx]} (${porMes.get(idx).semanasN} sem.)` });
+        out.push({ ...porMes.get(idx), esSubtotal: true, titulo: `Total ${MESES[idx]}` });
         const sem = conSemestre(idx);
         if (sem) out.push(sem);
       }
