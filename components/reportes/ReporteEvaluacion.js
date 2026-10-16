@@ -173,6 +173,12 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
                   </>
                 )}
                 {tab === "Conteo de Hojas" && <th>Hojas Funcionales</th>}
+                {tab === "Emisión Foliar" && (
+                  <>
+                    <th>Hojas Totales</th>
+                    <th>Candela</th>
+                  </>
+                )}
                 {tab === "Suma Bruta" && (
                   <>
                     <th>Hojas Funcionales</th>
@@ -180,7 +186,7 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
                     <th>Suma Bruta</th>
                   </>
                 )}
-                {(tab === "Índice de infección" || tab === "Conteo de Hojas" || tab === "Suma Bruta") && <th>Registrado por</th>}
+                {(tab === "Índice de infección" || tab === "Conteo de Hojas" || tab === "Suma Bruta" || tab === "Emisión Foliar") && <th>Registrado por</th>}
                 {(tab === "Índice de infección" || tab === "Suma Bruta") && <th></th>}
               </tr>
             </thead>
@@ -220,6 +226,13 @@ export default function ReporteEvaluacion({ tipoEvaluacionUuid, tab }) {
                     {tab === "Conteo de Hojas" && (
                       <>
                         <td>{ev.conteoHojas?.hojasFuncionales ?? "—"}</td>
+                        <td>{ev.usuario?.usuario || "—"}</td>
+                      </>
+                    )}
+                    {tab === "Emisión Foliar" && (
+                      <>
+                        <td>{ev.emisionFoliar?.hojasTotales ?? "—"}</td>
+                        <td>{ev.emisionFoliar?.candela ?? "—"}</td>
                         <td>{ev.usuario?.usuario || "—"}</td>
                       </>
                     )}

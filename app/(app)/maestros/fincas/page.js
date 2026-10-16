@@ -16,12 +16,15 @@ import {
   FiDownload,
 } from "react-icons/fi";
 import { MapContainer, TileLayer, Polygon, CircleMarker, Tooltip } from "react-leaflet";
+import LotesPoligonos from "@/components/LotesPoligonos";
+import CapasMapa from "@/components/CapasMapa";
+import ImportarKmzModal from "@/components/ImportarKmzModal";
 import ExcelJS from "exceljs";
 import { apiFetch, apiFetchFormData } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
 import RequirePermission from "@/components/RequirePermission";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
-import { parseKmlPolygon, descargarKml, normalizarPerimetro } from "@/lib/kml";
+import { parseKmlPolygon, descargarKmlFinca, normalizarPerimetro } from "@/lib/kml";
 
 export default function FincasPage() {
   const [fincas, setFincas] = useState([]);
@@ -34,6 +37,7 @@ export default function FincasPage() {
   const [lotesModal, setLotesModal] = useState(null); // null | finca
   const [syncModal, setSyncModal] = useState(false);
   const [areasMasivoModal, setAreasMasivoModal] = useState(false);
+  const [kmzModal, setKmzModal] = useState(false);
   const [mapaFincasOpen, setMapaFincasOpen] = useState(false); // mapa con las coordenadas de todas las fincas
   const [perimetroModal, setPerimetroModal] = useState(null); // null | finca (a visualizar en el mapa)
   const [importandoUuid, setImportandoUuid] = useState(""); // finca.uuid en curso de importar un .kml
@@ -156,6 +160,16 @@ export default function FincasPage() {
             title="Actualizar el área de muchos lotes a la vez con un Excel"
           >
             <FiUpload size={15} /> Actualizar áreas
+          </button>
+        )}
+        {hasPermission("finca.editar") && hasPermission("lote.editar") && (
+          <button
+            type="button"
+            className="btn btn-light btn-sm rounded-3 text-nowrap d-flex align-items-center gap-2 px-3 text-secondary"
+            onClick={() => setKmzModal(true)}
+            title="Cargar los perímetros de fincas y lotes desde un .kmz/.kml"
+          >
+            <FiUpload size={15} /> Importar KMZ
           </button>
         )}
         {hasPermission("finca.crear") && (
@@ -291,7 +305,7 @@ export default function FincasPage() {
                               className="btn btn-sm btn-link p-1 d-inline-flex"
                               style={{ color: "#16a34a" }}
                               title="Exportar .kml"
-                              onClick={() => descargarKml(normalizarPerimetro(finca.perimetro), finca.codigo || "perimetro")}
+                              onClick={() => descargarKmlFinca(finca, finca.codigo || "perimetro").catch((err) => setError(err.message))}
                             >
                               <FiDownload size={15} />
                             </button>
@@ -397,6 +411,7 @@ export default function FincasPage() {
       {lotesModal && <LotesModal finca={lotesModal} onClose={() => setLotesModal(null)} />}
 
       {syncModal && <SyncModal onClose={() => setSyncModal(false)} onSynced={loadFincas} />}
+      {kmzModal && <ImportarKmzModal onClose={() => setKmzModal(false)} onDone={loadFincas} />}
       {areasMasivoModal && <AreasMasivoModal onClose={() => setAreasMasivoModal(false)} onDone={loadFincas} />}
 
       {mapaFincasOpen && <MapaFincasModal fincas={fincas} onClose={() => setMapaFincasOpen(false)} />}
@@ -649,6 +664,8 @@ function VerPerimetroModal({ finca, onClose }) {
             positions={perimetro}
             pathOptions={{ color: "#facc15", weight: 2, fillColor: "#facc15", fillOpacity: 0.1 }}
           />
+          <LotesPoligonos fincaUuid={finca.uuid} />
+          <CapasMapa fincaUuid={finca.uuid} />
         </MapContainer>
         )}
       </div>

@@ -14,7 +14,7 @@ import {
 import { FiMaximize2 } from "react-icons/fi";
 import ModalShell from "@/components/ModalShell";
 
-// Ratio de aptos por hectárea: año actual (azul sólida) vs promedio
+// Ratio cajas ÷ racimos cosechados: año actual (azul sólida) vs promedio
 // histórico de la misma semana (verde punteada). Mismo diseño que el
 // gráfico de ratio de Estimaciones de Fincas.
 export default function GraficoRatio({ datos, alcance }) {
@@ -29,7 +29,7 @@ export default function GraficoRatio({ datos, alcance }) {
           <YAxis tick={{ fontSize: 10 }} width={45} domain={["auto", "auto"]} />
           <Tooltip formatter={(v) => (v == null ? "—" : Number(v).toLocaleString("es", { maximumFractionDigits: 2 }))} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
-          <Line type="monotone" dataKey="ratioActual" name="Ratio año actual (aptos/ha)" stroke="#2563eb" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} />
+          <Line type="monotone" dataKey="ratioActual" name="Ratio año actual (cajas/racimo)" stroke="#2563eb" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} />
           <Line
             type="monotone"
             dataKey="promedio"

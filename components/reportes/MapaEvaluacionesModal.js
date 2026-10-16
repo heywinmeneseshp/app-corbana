@@ -7,6 +7,8 @@ import { FiMapPin } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { normalizarPerimetro } from "@/lib/kml";
 import ModalShell from "@/components/ModalShell";
+import LotesPoligonos from "@/components/LotesPoligonos";
+import CapasMapa from "@/components/CapasMapa";
 
 // Paleta de colores distintos para identificar cada tipo de evaluación en
 // el mapa — se asigna en orden de aparición, así que dos fincas muestran el
@@ -337,6 +339,8 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
                 pathOptions={{ color: "#facc15", weight: 2, fillColor: "#facc15", fillOpacity: 0.08 }}
               />
             )}
+            <LotesPoligonos fincaUuid={fincaUuid} loteUuidResaltado={loteUuid} />
+            <CapasMapa fincaUuid={fincaUuid} />
             {verRuta && (
               <Polyline
                 positions={rutaPosiciones}

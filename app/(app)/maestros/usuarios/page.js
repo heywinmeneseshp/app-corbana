@@ -14,6 +14,8 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [fincasFiltro, setFincasFiltro] = useState([]);
+  const [fincaFiltro, setFincaFiltro] = useState("");
 
   const [usuarioModal, setUsuarioModal] = useState(null); // null | {} | usuario
   const [rolesModal, setRolesModal] = useState(null); // null | usuario
@@ -33,11 +35,11 @@ export default function UsuariosPage() {
     setMiUuid(getCurrentUser()?.uuid || null);
   }, []);
 
-  async function loadUsuarios() {
+  async function loadUsuarios(fincaUuid = fincaFiltro) {
     setLoading(true);
     setError("");
     try {
-      const { items } = await apiFetch(`/users?limit=100${search ? `&search=${encodeURIComponent(search)}` : ""}`);
+      const { items } = await apiFetch(`/users?limit=100${search ? `&search=${encodeURIComponent(search)}` : ""}${fincaUuid ? `&fincaUuid=${fincaUuid}` : ""}`);
       setUsuarios(items);
     } catch (err) {
       setError(err.message);
@@ -48,6 +50,9 @@ export default function UsuariosPage() {
 
   useEffect(() => {
     loadUsuarios();
+    apiFetch("/fincas?limit=100")
+      .then((d) => setFincasFiltro(d.items || []))
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -147,6 +152,21 @@ export default function UsuariosPage() {
             onKeyDown={(e) => e.key === "Enter" && loadUsuarios()}
           />
         </div>
+        <select
+          className="form-select rounded-3"
+          style={{ maxWidth: "14rem" }}
+          value={fincaFiltro}
+          onChange={(e) => {
+            setFincaFiltro(e.target.value);
+            loadUsuarios(e.target.value);
+          }}
+          title="Filtrar por finca asignada"
+        >
+          <option value="">Todas las fincas</option>
+          {fincasFiltro.map((f) => (
+            <option key={f.uuid} value={f.uuid}>{f.codigo} — {f.nombre}</option>
+          ))}
+        </select>
         <button type="button" className="btn btn-brand btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setUsuarioModal({})}>
           <FiPlus /> Nuevo Usuario
         </button>

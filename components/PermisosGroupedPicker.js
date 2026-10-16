@@ -29,7 +29,6 @@ const MENU_TREE = [
       { codigo: "menu.maestros.motivos_recuse", nombre: "Motivos de Recuse", prefijos: ["motivo_recuse."] },
       { codigo: "menu.maestros.categorias_labor", nombre: "Categorías de Labor", prefijos: ["categoria_labor."] },
       { codigo: "menu.maestros.labores", nombre: "Labores", prefijos: ["labor."] },
-      { codigo: "menu.maestros.colaboradores", nombre: "Colaboradores", prefijos: ["colaborador."] },
       { codigo: "menu.maestros.estadios_sigatoka", nombre: "Estadios de Sigatoka", prefijos: ["estadio_sigatoka."] },
       { codigo: "menu.maestros.version_app", nombre: "Versión App Móvil", prefijos: [] },
     ],
@@ -91,6 +90,10 @@ const MENU_TREE = [
       },
       { codigo: "menu.sanidad_vegetal.ingredientes_activos", nombre: "Ingredientes Activos", prefijos: ["ingrediente_activo."] },
       { codigo: "menu.sanidad_vegetal.insumos", nombre: "Insumos", prefijos: [] },
+      // Estos dos mantienen su código histórico menu.inventarios.* (así no se
+      // pierden los roles ya armados), pero en el menú real viven acá.
+      { codigo: "menu.inventarios.elaboraciones", nombre: "Mezclas", prefijos: [] },
+      { codigo: "menu.inventarios.mezclas", nombre: "Pruebas de laboratorio", prefijos: [] },
     ],
   },
   {
@@ -127,8 +130,6 @@ const MENU_TREE = [
       { codigo: "menu.inventarios.almacenes", nombre: "Almacenes", prefijos: [] },
       { codigo: "menu.inventarios.motivos", nombre: "Motivos", prefijos: [] },
       { codigo: "menu.inventarios.movimientos", nombre: "Movimientos (incluye Existencias y Kardex)", prefijos: [] },
-      { codigo: "menu.inventarios.mezclas", nombre: "Mezclas", prefijos: [] },
-      { codigo: "menu.inventarios.elaboraciones", nombre: "Mezclas", prefijos: [] },
       { codigo: "menu.inventarios.proformas", nombre: "Proformas", prefijos: [] },
       { codigo: "menu.inventarios.facturas", nombre: "Facturas", prefijos: [] },
       { codigo: "menu.inventarios.equipos", nombre: "Equipos", prefijos: [] },
@@ -150,6 +151,11 @@ const ITEMS_PLANOS = [
   { codigo: "menu.estimaciones", nombre: "Estimaciones de Fincas", prefijos: ["estimacion."] },
   { codigo: "menu.pronostico", nombre: "Proyección", prefijos: ["pronostico."] },
   { codigo: "menu.programacion_corte", nombre: "Programación de Corte", prefijos: ["programacion_corte."] },
+  // La sección "Colaboradores" del menú no tiene permiso propio: se muestra si
+  // se tiene cualquiera de estos dos accesos.
+  { codigo: "menu.maestros.colaboradores", nombre: "Colaboradores", prefijos: ["colaborador."] },
+  { codigo: "menu.asistencia", nombre: "Asistencia", prefijos: ["asistencia."] },
+  { codigo: "menu.precalibracion", nombre: "Precalibración", prefijos: ["precalibracion."] },
   { codigo: "menu.estacion_meteorologica", nombre: "Estación Meteorológica", prefijos: ["estacion_meteorologica."] },
 ];
 
