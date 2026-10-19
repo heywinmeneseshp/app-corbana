@@ -3,11 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
+import { construirGrafoUnidades, convertirCantidad, unidadesAlcanzables } from "@/lib/unidadConversion";
 
 export default function ExistenciasPage() {
   const [items, setItems] = useState([]);
   const [almacenes, setAlmacenes] = useState([]);
   const [articulos, setArticulos] = useState([]);
+  const [unidades, setUnidades] = useState([]);
+  const [conversiones, setConversiones] = useState([]);
+  // Unidad elegida por fila (clave almacén+artículo) para ver el saldo convertido; sin elegir = la del artículo.
+  const [unidadSel, setUnidadSel] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filtros, setFiltros] = useState({ almacenUuid: "", articuloUuid: "" });
@@ -15,6 +20,8 @@ export default function ExistenciasPage() {
   const [textoAlmacen, setTextoAlmacen] = useState("");
   const [textoArticulo, setTextoArticulo] = useState("");
 
+  const grafo = useMemo(() => construirGrafoUnidades(conversiones), [conversiones]);
+  const unidadPorUuid = useMemo(() => new Map(unidades.map((u) => [u.uuid, u])), [unidades]);
   const etiquetaAlmacen = (a) => a.nombre;
   const etiquetaArticulo = (p) => (p.codigo ? `${p.nombre} (${p.codigo})` : p.nombre);
   const unicasAlmacen = useMemo(() => new Map(almacenes.map((a) => [etiquetaAlmacen(a), a.uuid])), [almacenes]);
@@ -37,12 +44,16 @@ export default function ExistenciasPage() {
 
   async function loadCombos() {
     try {
-      const [a, p] = await Promise.all([
+      const [a, p, u, c] = await Promise.all([
         apiFetch("/inventarios/almacenes?limit=100&estado=true"),
         apiFetch("/inventarios/articulos?limit=100&estado=true"),
+        apiFetch("/inventarios/unidades?limit=100&estado=true"),
+        apiFetch("/inventarios/unidades/conversiones").catch(() => []),
       ]);
       setAlmacenes(a.items || []);
       setArticulos(p.items || []);
+      setUnidades(u.items || []);
+      setConversiones(Array.isArray(c) ? c : c.items || []);
     } catch (err) {
       setError(err.message);
     }
@@ -139,14 +150,43 @@ export default function ExistenciasPage() {
                   </tr>
                 )}
                 {!loading &&
-                  items.map((e, idx) => (
-                    <tr key={`${e.almacen?.uuid || idx}-${e.articulo?.uuid || idx}`}>
-                      <td className="small text-secondary">{e.almacen?.nombre || "—"}</td>
-                      <td className="fw-medium">{e.articulo?.nombre || "—"}</td>
-                      <td className={`text-end fw-medium ${e.saldo < 0 ? "text-danger" : ""}`}>{Number(e.saldo).toFixed(2)}</td>
-                      <td className="small text-secondary">{e.unidad ? `${e.unidad.simbolo} · ${e.unidad.nombre}` : "—"}</td>
-                    </tr>
-                  ))}
+                  items.map((e, idx) => {
+                    const clave = `${e.almacen?.uuid || idx}-${e.articulo?.uuid || idx}`;
+                    const baseUuid = e.unidad?.uuid;
+                    const elegida = unidadSel[clave] || baseUuid;
+                    const convertido = baseUuid ? convertirCantidad(grafo, baseUuid, elegida, Number(e.saldo)) : null;
+                    const opciones = baseUuid ? [...unidadesAlcanzables(grafo, baseUuid)].map((u) => unidadPorUuid.get(u)).filter(Boolean) : [];
+                    return (
+                      <tr key={clave}>
+                        <td className="small text-secondary">{e.almacen?.nombre || "—"}</td>
+                        <td className="fw-medium">{e.articulo?.nombre || "—"}</td>
+                        <td className={`text-end fw-medium ${e.saldo < 0 ? "text-danger" : ""}`}>
+                          {convertido === null ? Number(e.saldo).toFixed(2) : Number(convertido.toFixed(4)).toLocaleString("es-CO", { maximumFractionDigits: 4 })}
+                        </td>
+                        <td className="small text-secondary">
+                          {opciones.length > 1 ? (
+                            <select
+                              className="form-select form-select-sm rounded-3"
+                              style={{ minWidth: 150 }}
+                              value={elegida}
+                              onChange={(ev) => setUnidadSel((m) => ({ ...m, [clave]: ev.target.value }))}
+                            >
+                              {opciones.map((u) => (
+                                <option key={u.uuid} value={u.uuid}>
+                                  {u.simbolo} · {u.nombre}
+                                  {u.uuid === baseUuid ? " (base)" : ""}
+                                </option>
+                              ))}
+                            </select>
+                          ) : e.unidad ? (
+                            `${e.unidad.simbolo} · ${e.unidad.nombre}`
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>

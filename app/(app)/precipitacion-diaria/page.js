@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiPlus, FiTrash2, FiCloudRain, FiAlertTriangle, FiCheck, FiChevronDown, FiChevronRight, FiTool } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
+import GraficoPrecipitacion from "@/components/GraficoPrecipitacion";
 import RequirePermission from "@/components/RequirePermission";
 import { hasPermission } from "@/lib/auth";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
@@ -473,6 +474,8 @@ export default function PrecipitacionDiariaPage() {
                 )}
               </div>
             </div>
+
+            <GraficoPrecipitacion filtros={paramsDeFiltros().toString()} fincaFiltrada={!!filtroFincaUuid} />
 
             <div className="card border-0 shadow-sm rounded-4">
               <div className="card-body p-4">

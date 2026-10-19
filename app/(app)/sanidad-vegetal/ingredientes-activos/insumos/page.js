@@ -107,7 +107,7 @@ function emptyForm() {
 }
 
 // Insumos (Sanidad Vegetal) — mismo recurso Articulo que Inventarios, pero
-// SIEMPRE caen en la categoría fija "Sanidad Vegetal" (la resuelve/crea el
+// SIEMPRE caen en la categoría fija "Insumo Sanidad Vegetal" (tipo Insumo; la resuelve/crea el
 // backend, ver ingredienteActivoInsumo.service.js) — por eso este
 // formulario no tiene selector de categoría. Pueden además amarrarse
 // (opcional) a los ingredientes activos que los componen.
@@ -407,7 +407,7 @@ export default function InsumosSanidadVegetalPage() {
             <h1 className="fw-bold h4 mb-1">Insumos</h1>
             <p className="text-secondary mb-0">
               Artículos de inventario tipo insumo usados en Sanidad Vegetal — siempre quedan en la categoría{" "}
-              &quot;Sanidad Vegetal&quot; y pueden amarrarse (opcional) a los ingredientes activos que los componen.
+              &quot;Insumo Sanidad Vegetal&quot; y pueden amarrarse (opcional) a los ingredientes activos que los componen.
             </p>
           </div>
           <div className="d-flex gap-2">
