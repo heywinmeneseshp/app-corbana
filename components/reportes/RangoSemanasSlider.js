@@ -8,11 +8,23 @@ export function filtrarSemanas(datos, rango, campo = "numeroSemana") {
   return datos.filter((d) => d[campo] >= rango[0] && d[campo] <= rango[1]);
 }
 
+// Quita las últimas `n` semanas CON REGISTROS (valor > 0) de una serie semanal; se cuenta desde la última semana que
+// tiene registro, no desde el final del calendario. Sirve para esconder las semanas incompletas del año en curso.
+export function recortarUltimasSemanas(items, n, valor, campo = "numeroSemana") {
+  if (!n || !items.length) return items;
+  const conRegistro = items.filter((it) => Number(valor(it)) > 0).map((it) => it[campo]);
+  if (conRegistro.length === 0) return items;
+  const limite = Math.max(...conRegistro) - n;
+  return items.filter((it) => it[campo] <= limite);
+}
+
 // Slider de rango como el de Power BI: una línea con dos círculos que se
 // arrastran; el tramo entre ambos se resalta. `value` = [desde, hasta] o null
 // (todo el rango). Emite null cuando abarca todo, para volver al eje original.
 // `rotulo`/`max`: semanas (1-53) por defecto, o días del año (1-366).
-export default function RangoSemanasSlider({ value, onChange, min = 1, max = 53, rotulo = "Semanas" }) {
+// `onExcluirChange` (opcional): muestra, en la misma fila de las casillas, "Excluir últimas semanas de <anioExcluir>" con
+// `excluirUltimas` (texto) — el padre aplica el recorte con recortarUltimasSemanas.
+export default function RangoSemanasSlider({ value, onChange, min = 1, max = 53, rotulo = "Semanas", excluirUltimas = "", onExcluirChange, anioExcluir }) {
   const pista = useRef(null);
   // Texto en edición de las casillas (null = muestra el valor actual).
   const [editA, setEditA] = useState(null);
@@ -87,7 +99,7 @@ export default function RangoSemanasSlider({ value, onChange, min = 1, max = 53,
         <div style={manija(a)} onPointerDown={iniciar} onPointerMove={moverA} />
         <div style={manija(b)} onPointerDown={iniciar} onPointerMove={moverB} />
       </div>
-      <div className="d-flex align-items-center justify-content-center gap-2 mt-3 small text-secondary">
+      <div className="d-flex flex-wrap align-items-center justify-content-center gap-2 mt-3 small text-secondary">
         <span>{rotulo}: desde</span>
         <input
           type="number"
@@ -112,6 +124,20 @@ export default function RangoSemanasSlider({ value, onChange, min = 1, max = 53,
           onBlur={() => confirmar("b")}
           onKeyDown={tecla("b")}
         />
+        {onExcluirChange && (
+          <>
+            <span className="ms-4">Excluir últimas semanas de {anioExcluir}</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="form-control form-control-sm bg-white text-center"
+              style={casilla}
+              placeholder="0"
+              value={excluirUltimas}
+              onChange={(e) => /^\d{0,2}$/.test(e.target.value) && onExcluirChange(e.target.value)}
+            />
+          </>
+        )}
       </div>
     </div>
   );

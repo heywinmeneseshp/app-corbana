@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import ModalShell from "@/components/ModalShell";
+import RangoSemanasSlider, { filtrarSemanas } from "@/components/reportes/RangoSemanasSlider";
 
 const COLOR_PROYECCION = "#16a34a";
 const COLOR_PROMEDIO = "#d97706";
@@ -31,6 +32,11 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
     return new Set([...presentes].filter((y) => !usados.has(y)));
   });
   const [verPromedio, setVerPromedio] = useState(true);
+  // Rango de semanas visible en todas las gráficas (null = año completo).
+  const [rangoSemanas, setRangoSemanas] = useState(null);
+  // Cuántas de las últimas semanas con datos reales del año actual se dejan fuera de todas las gráficas (y del promedio).
+  const [excluirUltimas, setExcluirUltimas] = useState(0);
+  const [excluirTexto, setExcluirTexto] = useState("");
 
   const { datos, anios } = useMemo(() => {
     const sel = new Set(uuids);
@@ -63,6 +69,13 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
       proy.set(f.numeroSemana, t);
     }
     const ys = [...aniosHist].sort();
+    // Última semana con datos reales del año actual: de ahí se descuentan las semanas excluidas.
+    let ultimaSemanaActual = 0;
+    for (const k of hist.keys()) {
+      const [y, n] = k.split("|").map(Number);
+      if (y === anioProy && n > ultimaSemanaActual) ultimaSemanaActual = n;
+    }
+    const limiteActual = ultimaSemanaActual - excluirUltimas;
     const filas = [];
     for (let n = 1; n <= 53; n++) {
       const fila = { semana: n };
@@ -77,6 +90,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
       for (const y of ys) {
         const h = hist.get(`${y}|${n}`);
         if (!h) continue;
+        if (y === anioProy && excluirUltimas > 0 && n > limiteActual) continue;
         fila[`${y}_ratio`] = h.c > 0 && h.j > 0 ? h.j / h.c : null;
         fila[`${y}_embolses`] = h.e;
         fila[`${y}_embolsesPorHa`] = h.ha > 0 && h.e > 0 ? h.e / h.ha : null;
@@ -91,7 +105,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
       filas.push(fila);
     }
     return { datos: filas, anios: ys };
-  }, [resultado, uuids, excluidos]);
+  }, [resultado, uuids, excluidos, excluirUltimas, anioProy]);
 
   const alternarAnio = (y) =>
     setExcluidos((prev) => {
@@ -101,6 +115,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
       return n;
     });
   const visibles = anios.filter((y) => !excluidos.has(y));
+  const datosVista = useMemo(() => filtrarSemanas(datos, rangoSemanas, "semana"), [datos, rangoSemanas]);
 
   return (
     <ModalShell title={titulo} onClose={onClose} fullscreen>
@@ -119,12 +134,37 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
             </label>
           </div>
         ))}
+        {anios.includes(anioProy) && (
+          <div className="d-flex align-items-center gap-2 ms-2">
+            <label className="small mb-0" htmlFor="gf-excluir" title={`Deja fuera de todas las gráficas las últimas semanas con datos reales de ${anioProy} (y del promedio), por si todavía están incompletas`}>
+              Excluir últimas semanas de {anioProy}
+            </label>
+            <input
+              id="gf-excluir"
+              type="text"
+              inputMode="numeric"
+              className="form-control form-control-sm rounded-3 text-center"
+              style={{ width: "4rem" }}
+              placeholder="0"
+              value={excluirTexto}
+              onChange={(e) => {
+                const t = e.target.value;
+                if (!/^\d{0,2}$/.test(t)) return;
+                setExcluirTexto(t);
+                setExcluirUltimas(t === "" ? 0 : Math.min(Number(t), 53));
+              }}
+            />
+          </div>
+        )}
         <div className="form-check mb-0 ms-2">
           <input type="checkbox" className="form-check-input" id="gf-promedio" checked={verPromedio} onChange={() => setVerPromedio((v) => !v)} />
           <label className="form-check-label small" htmlFor="gf-promedio">
             Promedio de los años marcados
           </label>
         </div>
+      </div>
+      <div className="mb-3 px-2">
+        <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} />
       </div>
       <div className="row g-3">
         {GRAFICAS.map((g0) => {
@@ -135,7 +175,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
               <div className="fw-semibold small mb-1 ps-1">{g.titulo}</div>
               <div style={{ height: "clamp(240px, 32vh, 380px)" }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={datos} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
+                  <LineChart data={datosVista} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="semana" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} width={g.dec ? 44 : 50} domain={["auto", "auto"]} tickFormatter={(v) => (g.dec ? fmt(v, g.dec === 3 ? 2 : 0) : v >= 10000 ? `${Math.round(v / 1000)}k` : fmt(v))} />

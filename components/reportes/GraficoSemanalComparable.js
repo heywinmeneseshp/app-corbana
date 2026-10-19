@@ -68,6 +68,7 @@ export default function GraficoSemanalComparable({
   ocultarSiVacio = false,
   onPuntoClick,
   precipitacion = true,
+  ocultarLeyendaSiUna = false, // sin leyenda cuando solo hay una serie (el título ya la nombra)
   ayuda,
   diario = false, // eje X por día del año (items con numeroDia) en vez de por semana
   // Datos ya cargados por el padre ([{ serie, items }]): evita que cada gráfica
@@ -227,7 +228,7 @@ export default function GraficoSemanalComparable({
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <div className="d-flex flex-wrap justify-content-center gap-3 mt-1 small">
+          <div className={`d-flex flex-wrap justify-content-center gap-3 mt-1 small ${ocultarLeyendaSiUna && claves.length <= 1 ? "d-none" : ""}`}>
             {claves.map((c) => (
               <span key={c.dataKey} className="d-inline-flex align-items-center gap-1">
                 <span className="d-inline-block rounded-circle" style={{ width: 10, height: 10, backgroundColor: c.color }} />

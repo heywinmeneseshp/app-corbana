@@ -7,7 +7,7 @@
 // tiene permiso.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FiBarChart2, FiTrendingUp, FiPackage, FiActivity, FiCheckCircle, FiMaximize } from "react-icons/fi";
+import { FiBarChart2, FiTrendingUp, FiPackage, FiActivity, FiCheckCircle, FiMaximize, FiThermometer } from "react-icons/fi";
 import { GiCancel } from "react-icons/gi";
 import { hasPermission } from "@/lib/auth";
 
@@ -19,6 +19,7 @@ const TABS = [
   { href: "/reportes/ratio", label: "Ratio", icon: FiActivity, permCode: "menu.reportes" },
   { href: "/reportes/aprovechamiento", label: "Aprovechamiento", icon: FiCheckCircle, permCode: "menu.reportes" },
   { href: "/reportes/hectareas", label: "Hectáreas", icon: FiMaximize, permCode: "menu.reportes" },
+  { href: "/reportes/uc-embolse", label: "UC por embolse", icon: FiThermometer, permCode: "menu.reportes" },
 ];
 
 export default function ReportesTabs() {

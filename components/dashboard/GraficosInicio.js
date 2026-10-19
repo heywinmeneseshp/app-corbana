@@ -78,6 +78,7 @@ function GraficoInicio({ c, fincas, dashboard, etiquetaBase }) {
       yUnit={c.yUnit}
       formato={c.decimal ? (v) => `${Number(v).toLocaleString("es", { maximumFractionDigits: 2 })}${c.yUnit || ""}` : undefined}
       precipitacion={false}
+      ocultarLeyendaSiUna
       alto={230}
       mensajeVacio="Sin datos"
       filtrosExpandido={<BarraSelecciones sel={sel} />}

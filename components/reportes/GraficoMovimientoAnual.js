@@ -23,6 +23,7 @@ import ReportesTabs from "@/components/ReportesTabs";
 import SelectorCanastas from "@/components/reportes/SelectorCanastas";
 import CollapsibleCard from "@/components/reportes/CollapsibleCard";
 import SortableTh, { ordenarFilas } from "@/components/reportes/SortableTh";
+import { dominioAjustado } from "@/lib/dominioY";
 import RangoSemanasSlider, { filtrarSemanas } from "@/components/reportes/RangoSemanasSlider";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 import { COLOR_HEX } from "@/lib/semanaColor";
@@ -30,7 +31,7 @@ import { COLOR_HEX } from "@/lib/semanaColor";
 const YEAR_COLORS = ["#16a34a", "#2563eb", "#d97706", "#dc2626", "#7c3aed", "#0891b2"];
 const SERIE_COLORS = ["#16a34a", "#2563eb", "#d97706", "#dc2626", "#7c3aed", "#0891b2", "#be185d", "#65a30d"];
 
-function pivotData(anios) {
+function pivotData(anios, campo = "totalEmbolsado") {
   const todasSemanas = new Set();
   for (const a of anios) {
     for (const p of a.puntos) {
@@ -42,7 +43,7 @@ function pivotData(anios) {
     const point = { numeroSemana: semana };
     for (const a of anios) {
       const p = a.puntos.find((p) => p.numeroSemana === semana);
-      point[String(a.anio)] = p ? p.totalEmbolsado : null;
+      point[String(a.anio)] = p ? p[campo] ?? null : null;
     }
     return point;
   });
@@ -50,12 +51,22 @@ function pivotData(anios) {
 
 // Igual que pivotData, pero mezclando N series (objetivo × año) en vez de
 // solo años — usado en modo comparación (2+ fincas/grupos elegidos).
-function pivotSeries(seriesData) {
+// Quita las últimas `n` semanas CON REGISTROS de una serie (las del año en curso suelen estar incompletas). Se
+// cuenta desde la última semana que tiene registro (total > 0), no desde el final del calendario.
+function recortarUltimas(puntos, n) {
+  if (!n || !puntos.length) return puntos;
+  const conRegistro = puntos.filter((p) => Number(p.totalEmbolsado) > 0).map((p) => p.numeroSemana);
+  if (conRegistro.length === 0) return puntos;
+  const limite = Math.max(...conRegistro) - n;
+  return puntos.filter((p) => p.numeroSemana <= limite);
+}
+
+function pivotSeries(seriesData, campo = "totalEmbolsado") {
   const porSemana = new Map();
   for (const { serie, puntos } of seriesData) {
     for (const p of puntos) {
       if (!porSemana.has(p.numeroSemana)) porSemana.set(p.numeroSemana, { numeroSemana: p.numeroSemana });
-      porSemana.get(p.numeroSemana)[serie.key] = p.totalEmbolsado;
+      porSemana.get(p.numeroSemana)[serie.key] = p[campo] ?? null;
     }
   }
   return [...porSemana.values()].sort((a, b) => a.numeroSemana - b.numeroSemana);
@@ -102,9 +113,15 @@ export default function GraficoMovimientoAnual({
   // Repique trae desglose por motivo (gráfico de barras clicable); Embolse
   // no tiene motivo, así que este bloque va oculto por defecto.
   mostrarMotivos = false,
+  // Embolse: opción para ver también la gráfica por hectárea debajo de la principal (mismos filtros).
+  permitirPorHectarea = false,
 }) {
   // Rango de semanas visible (slider bajo la gráfica): null = todo el año.
   const [rangoSemanas, setRangoSemanas] = useState(null);
+  // Cuántas de las últimas semanas del año en curso se dejan fuera de la gráfica.
+  const [excluirUltimas, setExcluirUltimas] = useState("");
+  const [verPorHa, setVerPorHa] = useState(false);
+  const nExcluir = parseInt(excluirUltimas, 10) || 0;
   const [fincas, setFincas] = useState([]);
   const [canastas, setCanastas] = useState([{ id: "c0", nombre: "", objetivos: [], anios: [new Date().getFullYear()] }]);
   const [semanas, setSemanas] = useState([]);
@@ -274,7 +291,9 @@ export default function GraficoMovimientoAnual({
     setSortRanking((prev) => (prev.field === field ? { field, dir: prev.dir === "asc" ? "desc" : "asc" } : { field, dir: "desc" }));
   }
 
-  const chartData = data ? pivotData(data.anios) : [];
+  const aniosVista = data ? data.anios.map((a) => (a.anio === anioActual ? { ...a, puntos: recortarUltimas(a.puntos, nExcluir) } : a)) : [];
+  const chartData = data ? pivotData(aniosVista) : [];
+  const chartDataPorHa = data ? pivotData(aniosVista, "porHectarea") : [];
 
   const totalRanking = (data?.rankingFincas || []).reduce((acc, f) => acc + f.totalEmbolsado, 0);
   const variacionPorFinca = new Map((data?.rankingSemanal?.fincas || []).map((f) => [f.fincaId, f]));
@@ -285,6 +304,7 @@ export default function GraficoMovimientoAnual({
       nombre: (f) => f.nombre,
       total: (f) => f.totalEmbolsado,
       participacion: (f) => (totalRanking > 0 ? f.totalEmbolsado / totalRanking : null),
+      ...Object.fromEntries((data?.anios || []).map((a) => [`porHa_${a.anio}`, (f) => f.porHectareaAnual?.[a.anio] ?? null])),
       actual: (f) => variacionPorFinca.get(f.fincaId)?.actual ?? null,
       anterior: (f) => variacionPorFinca.get(f.fincaId)?.anterior ?? null,
       variacion: (f) => variacionPorFinca.get(f.fincaId)?.variacionPct ?? null,
@@ -305,15 +325,19 @@ export default function GraficoMovimientoAnual({
         out.push({
           key: `${objetivo.tipo}-${objetivo.uuid}-${a.anio}`,
           label: aniosDistintos.size > 1 ? `${objetivo.nombre} ${a.anio}` : objetivo.nombre,
-          puntos: a.puntos,
+          puntos: a.anio === anioActual ? recortarUltimas(a.puntos, nExcluir) : a.puntos,
         });
       }
     }
     return out;
-  }, [seriesResultado, objetivosEfectivos]);
+  }, [seriesResultado, objetivosEfectivos, anioActual, nExcluir]);
 
   const chartDataComparacion = useMemo(
     () => pivotSeries(seriesResultado ? seriesList.map((s) => ({ serie: s, puntos: s.puntos })) : []),
+    [seriesResultado, seriesList],
+  );
+  const chartDataComparacionPorHa = useMemo(
+    () => pivotSeries(seriesResultado ? seriesList.map((s) => ({ serie: s, puntos: s.puntos })) : [], "porHectarea"),
     [seriesResultado, seriesList],
   );
 
@@ -323,6 +347,7 @@ export default function GraficoMovimientoAnual({
   // semana de registro — así que el punto va de un solo color, el de la
   // línea, sin la variación de colores de cinta.
   const usarColorPorCinta = tipo === "EMBOLSE";
+
 
   return (
     <RequirePermission code={permCode}>
@@ -337,6 +362,14 @@ export default function GraficoMovimientoAnual({
 
         <div className="mb-4 d-flex flex-wrap align-items-end gap-2">
           <SelectorCanastas fincas={fincas} anioOpciones={anioOpciones} canastas={canastas} onChange={setCanastas} />
+          {permitirPorHectarea && (
+            <div className="form-check mb-2 ms-2">
+              <input type="checkbox" className="form-check-input" id="ver-por-ha" checked={verPorHa} onChange={(e) => setVerPorHa(e.target.checked)} />
+              <label className="form-check-label small" htmlFor="ver-por-ha">
+                Ver también {etiquetaMetrica.toLowerCase()} por hectárea
+              </label>
+            </div>
+          )}
           {!modoComparacion && (
             <div>
               <label className="form-label small fw-medium mb-1">Semana (filtro)</label>
@@ -460,8 +493,25 @@ export default function GraficoMovimientoAnual({
                   })}
                 </LineChart>
               </ResponsiveContainer>
-              <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} />
+              <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} excluirUltimas={excluirUltimas} onExcluirChange={setExcluirUltimas} anioExcluir={anioActual} />
             </CollapsibleCard>
+
+            {permitirPorHectarea && verPorHa && (
+              <CollapsibleCard titulo={`${etiquetaMetrica} por hectárea`} subtitulo="Por semana, con los mismos filtros" expandible className="mt-3">
+                <ResponsiveContainer width="100%" height={380}>
+                  <LineChart data={filtrarSemanas(chartDataPorHa, rangoSemanas)} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="numeroSemana" tickFormatter={(v) => `S${v}`} tick={{ fontSize: 11 }} interval={rangoSemanas && rangoSemanas[1] - rangoSemanas[0] < 20 ? 0 : 3} />
+                    <YAxis tick={{ fontSize: 11 }} width={50} domain={dominioAjustado} />
+                    <Tooltip formatter={(v, nombre) => [v === null || v === undefined ? "—" : `${Number(v).toLocaleString("es", { maximumFractionDigits: 2 })} / ha`, nombre]} labelFormatter={(l) => `Semana ${l}`} />
+                    <Legend />
+                    {data.anios.map((a, i) => (
+                      <Line key={a.anio} type="monotone" dataKey={String(a.anio)} stroke={YEAR_COLORS[i % YEAR_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </CollapsibleCard>
+            )}
 
             {mostrarMotivos && data.motivosRepique?.length > 0 && (
               <CollapsibleCard
@@ -562,6 +612,9 @@ export default function GraficoMovimientoAnual({
                           <SortableTh label="Finca" field="nombre" sort={sortRanking} onSort={handleSortRanking} align="start" />
                           <SortableTh label={`${etiquetaMetrica} (${data.anios.map((a) => a.anio).join(", ")})`} field="total" sort={sortRanking} onSort={handleSortRanking} />
                           <SortableTh label="Participación" field="participacion" sort={sortRanking} onSort={handleSortRanking} />
+                          {data.anios.map((a) => (
+                            <SortableTh key={a.anio} label={`${etiquetaMetrica} por ha ${a.anio}`} field={`porHa_${a.anio}`} sort={sortRanking} onSort={handleSortRanking} />
+                          ))}
                           {data.rankingSemanal && (
                             <>
                               <SortableTh label="Semana actual" field="actual" sort={sortRanking} onSort={handleSortRanking} />
@@ -592,6 +645,11 @@ export default function GraficoMovimientoAnual({
                               <td className="text-end text-secondary">
                                 {totalRanking > 0 ? `${((f.totalEmbolsado / totalRanking) * 100).toFixed(1)}%` : "—"}
                               </td>
+                              {data.anios.map((a) => (
+                                <td key={a.anio} className="text-end" title="Promedio semanal del año: embolsado de la semana ÷ hectáreas en producción vigentes, hasta la última semana con registros">
+                                  {f.porHectareaAnual?.[a.anio] != null ? Number(f.porHectareaAnual[a.anio]).toLocaleString("es", { maximumFractionDigits: 1 }) : "—"}
+                                </td>
+                              ))}
                               {data.rankingSemanal && (
                                 <>
                                   <td className="text-end fw-medium">{m ? m.actual.toLocaleString("es") : "—"}</td>
@@ -636,7 +694,24 @@ export default function GraficoMovimientoAnual({
                 ))}
               </LineChart>
             </ResponsiveContainer>
-            <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} />
+            <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} excluirUltimas={excluirUltimas} onExcluirChange={setExcluirUltimas} anioExcluir={anioActual} />
+          </CollapsibleCard>
+        )}
+
+        {modoComparacion && seriesResultado && permitirPorHectarea && verPorHa && (
+          <CollapsibleCard titulo={`${etiquetaMetrica} por hectárea`} subtitulo="Comparación entre selecciones, con los mismos filtros" expandible className="mt-3">
+            <ResponsiveContainer width="100%" height={380}>
+              <LineChart data={filtrarSemanas(chartDataComparacionPorHa, rangoSemanas)} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="numeroSemana" tickFormatter={(v) => `S${v}`} tick={{ fontSize: 11 }} interval={rangoSemanas && rangoSemanas[1] - rangoSemanas[0] < 20 ? 0 : 3} />
+                <YAxis tick={{ fontSize: 11 }} width={50} domain={dominioAjustado} />
+                <Tooltip formatter={(v, nombre) => [v === null || v === undefined ? "—" : `${Number(v).toLocaleString("es", { maximumFractionDigits: 2 })} / ha`, nombre]} labelFormatter={(l) => `Semana ${l}`} />
+                <Legend wrapperStyle={{ fontSize: "0.75rem" }} />
+                {seriesList.map((serie, i) => (
+                  <Line key={serie.key} type="monotone" dataKey={serie.key} name={serie.label} stroke={SERIE_COLORS[i % SERIE_COLORS.length]} strokeWidth={2} dot={{ r: 2 }} connectNulls={false} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
           </CollapsibleCard>
         )}
 

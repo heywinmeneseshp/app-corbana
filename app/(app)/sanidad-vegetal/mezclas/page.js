@@ -1065,6 +1065,21 @@ export default function ElaboracionesPage() {
     }
   }
 
+  // Aprueba una receta pendiente: activa su artículo elaborado para poder usarla (no descuenta inventario). Solo un Administrador o un rol
+  // autorizado en Configuración → Parámetros de mezclas puede aprobar; si no, el servidor responde con el motivo.
+  async function aprobarMezcla(m) {
+    const v = m.versiones?.[0];
+    if (!v) return;
+    if (!confirm(`¿Aprobar la mezcla ${m.codigo}? Quedará habilitada para usarse en Programar aspersión. No descuenta inventario.`)) return;
+    try {
+      setError("");
+      await apiFetch(`/inventarios/mezclas/${m.uuid}/versiones/${v.uuid}/aprobar`, { method: "POST" });
+      loadMezclas({ insumoUuid: filtros.insumoUuid, ingredienteActivoUuid: filtros.ingredienteActivoUuid });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function loadMezclas({ insumoUuid, ingredienteActivoUuid } = {}) {
     setLoadingMezclas(true);
     setError("");
@@ -1440,7 +1455,14 @@ export default function ElaboracionesPage() {
                           <span className="text-nowrap">{m.codigo}</span>
                         </td>
                         <td>{m.nombre || <span className="text-secondary fst-italic">Sin nombre</span>}</td>
-                        <td>{m.articuloElaborado?.nombre || "—"}</td>
+                        <td>
+                          {m.articuloElaborado?.nombre || "—"}
+                          {m.versiones?.[0]?.estadoPrueba === "PENDIENTE_APROBACION" && (
+                            <span className="badge rounded-pill ms-2" style={{ backgroundColor: "#fef3c7", color: "#92400e" }} title="Aún no se puede usar en Programar aspersión: falta aprobarla">
+                              Pendiente de aprobación
+                            </span>
+                          )}
+                        </td>
                         <td className="text-center">
                           {m.dosisPorHectarea != null ? (
                             <span className="badge rounded-pill text-bg-light text-secondary">
@@ -1451,6 +1473,11 @@ export default function ElaboracionesPage() {
                           )}
                         </td>
                         <td className="pe-4 text-center text-nowrap" onClick={(ev) => ev.stopPropagation()}>
+                          {m.versiones?.[0]?.estadoPrueba === "PENDIENTE_APROBACION" && (
+                            <button type="button" className="btn btn-sm btn-link p-1 me-1 text-success text-decoration-none fw-medium" title="Aprobar la receta y activar su artículo elaborado" onClick={() => aprobarMezcla(m)}>
+                              Aprobar
+                            </button>
+                          )}
                           {hasPermission("inventario.mezclas.editar") && (
                             <button type="button" className="btn btn-sm btn-link p-1 me-1 text-secondary" title="Editar" onClick={() => abrirEditar(m)}>
                               <FiEdit2 />

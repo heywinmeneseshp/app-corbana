@@ -30,7 +30,7 @@ import SelectorCanastas from "@/components/reportes/SelectorCanastas";
 import { ejeAjustado } from "@/lib/dominioY";
 import CollapsibleCard from "@/components/reportes/CollapsibleCard";
 import SortableTh, { ordenarFilas } from "@/components/reportes/SortableTh";
-import RangoSemanasSlider, { filtrarSemanas } from "@/components/reportes/RangoSemanasSlider";
+import RangoSemanasSlider, { filtrarSemanas, recortarUltimasSemanas } from "@/components/reportes/RangoSemanasSlider";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 
 const SERIE_COLORS = ["#16a34a", "#2563eb", "#d97706", "#dc2626", "#7c3aed", "#0891b2", "#be185d", "#65a30d"];
@@ -93,6 +93,9 @@ export default function MetricaAnualChart({
   // Con el año completo se mantienen los ticks fijos 1, 10, 20...; al acotar el
   // rango, el eje se adapta solo.
   const [rangoSemanas, setRangoSemanas] = useState(null);
+  // Últimas semanas con registros del año en curso que se dejan fuera de la gráfica.
+  const [excluirUltimas, setExcluirUltimas] = useState("");
+  const nExcluir = parseInt(excluirUltimas, 10) || 0;
   const [metricaId, setMetricaId] = useState(metricas?.[0]?.id ?? null);
   const metricaSel = metricas?.find((m) => m.id === metricaId) ?? metricas?.[0] ?? null;
   const titulo = metricaSel?.titulo ?? tituloProp;
@@ -232,7 +235,11 @@ export default function MetricaAnualChart({
   }, [seriesList, semanaUuid, modoComparacion]);
 
   // --- Modo simple: igual que antes ---
-  const puntos = useMemo(() => data?.[arrayField] || [], [data, arrayField]);
+  const puntosBase = useMemo(() => data?.[arrayField] || [], [data, arrayField]);
+  const puntos = useMemo(
+    () => (seriesList[0]?.anio === anioActual ? recortarUltimasSemanas(puntosBase, nExcluir, (p) => p[metricKey]) : puntosBase),
+    [puntosBase, seriesList, anioActual, nExcluir, metricKey],
+  );
   const hayDatosSimple = useMemo(() => puntos.some((p) => p[metricKey] !== null && p[metricKey] !== undefined), [puntos, metricKey]);
 
   const rankingSinOrdenar = useMemo(() => {
@@ -275,7 +282,8 @@ export default function MetricaAnualChart({
     const porSemana = new Map();
     const codigos = new Map();
     for (const { serie, res } of seriesData) {
-      for (const p of res[arrayField] || []) {
+      const puntosSerie = res[arrayField] || [];
+      for (const p of serie.anio === anioActual ? recortarUltimasSemanas(puntosSerie, nExcluir, (q) => q[metricKey]) : puntosSerie) {
         if (!porSemana.has(p.numeroSemana)) porSemana.set(p.numeroSemana, { numeroSemana: p.numeroSemana });
         porSemana.get(p.numeroSemana)[serie.key] = p[metricKey];
         if (!codigos.has(p.numeroSemana)) codigos.set(p.numeroSemana, p.semanaCodigo);
@@ -285,7 +293,7 @@ export default function MetricaAnualChart({
       chartDataComparacion: [...porSemana.values()].sort((a, b) => a.numeroSemana - b.numeroSemana),
       semanaCodigoPorNumero: codigos,
     };
-  }, [seriesData, arrayField, metricKey]);
+  }, [seriesData, arrayField, metricKey, anioActual, nExcluir]);
 
   // Solo Aprovechamiento ajusta el eje Y del punto más bajo al más alto de lo
   // visible (con marcas parejas); el resto (Cajas, Ratio) conserva su eje.
@@ -416,7 +424,7 @@ export default function MetricaAnualChart({
           )}
         </div>
         {(modoComparacion ? hayDatosComparacion : hayDatosSimple) && (
-          <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} />
+          <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} excluirUltimas={excluirUltimas} onExcluirChange={setExcluirUltimas} anioExcluir={anioActual} />
         )}
         </CollapsibleCard>
 

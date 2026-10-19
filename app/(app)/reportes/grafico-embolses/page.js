@@ -13,6 +13,7 @@ export default function GraficoEmbolsesPage() {
       tipo="EMBOLSE"
       colorPrincipal="#16a34a"
       etiquetaMetrica="Embolsado"
+      permitirPorHectarea
     />
   );
 }

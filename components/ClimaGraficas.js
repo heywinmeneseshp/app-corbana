@@ -253,7 +253,7 @@ export default function ClimaGraficas({ ucBases }) {
               <LineChart data={filas} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="etiqueta" tick={{ fontSize: 11 }} minTickGap={24} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} domain={[(min) => Math.floor(min), (max) => Math.ceil(max)]} allowDecimals={false} />
                 <Tooltip />
                 <Legend formatter={(v) => nombreSerie(v)} />
                 {series.map((s, i) => (
