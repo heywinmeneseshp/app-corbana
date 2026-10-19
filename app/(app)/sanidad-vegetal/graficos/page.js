@@ -1,5 +1,6 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
 import { FiX } from "react-icons/fi";
 import { esAdministrador } from "@/lib/laborEstados";
@@ -210,7 +211,7 @@ export default function SanidadGraficosPage() {
     <RequirePermission code="menu.sanidad_vegetal.graficos">
       <div className="p-3 p-md-4">
         <div className="mb-4">
-          <h1 className="fw-bold h4 mb-1">Gráficos</h1>
+          <h1 className="fw-bold h4 mb-1">Gráficos <InfoModulo titulo={"Gráficos"} secciones={[{"titulo": "Qué muestra", "texto": "Promedios semanales de infección, conteo de hojas, suma bruta y clima."}, {"titulo": "Cómo usarlo", "texto": "Elige la pestaña del indicador y filtra por finca, lote y rango de semanas para comparar su evolución."}]} /></h1>
           <p className="text-secondary mb-0">Promedios semanales de infección, conteo de hojas, suma bruta y clima.</p>
         </div>
 

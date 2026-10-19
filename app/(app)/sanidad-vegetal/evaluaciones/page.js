@@ -1,5 +1,6 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
 import { FiTrendingUp } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
@@ -38,7 +39,7 @@ export default function SanidadEvaluacionesPage() {
     <RequirePermission code="menu.sanidad_vegetal.evaluaciones">
       <div className="p-3 p-md-4">
         <div className="mb-4">
-          <h1 className="fw-bold h4 mb-1">Sanidad Vegetal — Evaluaciones</h1>
+          <h1 className="fw-bold h4 mb-1">Sanidad Vegetal — Evaluaciones <InfoModulo titulo={"Evaluaciones de Sanidad Vegetal"} secciones={[{"titulo": "Qué muestra", "texto": "El detalle de las evaluaciones registradas desde la app móvil."}, {"titulo": "Tipos de evaluación", "items": ["Infección: índice de infección por finca y lote.", "Conteo de hojas.", "Suma bruta.", "Emisión foliar: seguimiento semana a semana de las plantas evaluadas (hojas totales y candela)."]}, {"titulo": "Cómo usarlo", "texto": "Usa las pestañas y los filtros de finca, lote y semana para ver el detalle o comparar."}]} /></h1>
           <p className="text-secondary mb-0">Detalle de evaluaciones de infección, conteo de hojas, suma bruta y emisión foliar.</p>
         </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
 import { FiAlertTriangle, FiCheckCircle, FiCalendar, FiTrendingDown, FiTrendingUp, FiSend, FiX } from "react-icons/fi";
 import BotonConfiguracion from "@/components/BotonConfiguracion";
@@ -96,7 +97,7 @@ export default function SanidadAlertasPage() {
       <div className="p-3 p-md-4">
         <div className="d-flex align-items-center gap-2 mb-1">
           <FiAlertTriangle size={20} className="text-secondary" />
-          <h1 className="fw-bold h4 mb-0">Alertas de Sanidad Vegetal</h1>
+          <h1 className="fw-bold h4 mb-0">Alertas de Sanidad Vegetal <InfoModulo titulo={"Alertas de Sanidad Vegetal"} secciones={[{"titulo": "Qué muestra", "texto": "Las fincas que necesitan atención en la semana seleccionada. Tiene dos pestañas."}, {"titulo": "Indicadores", "items": ["Fincas con YLI por debajo de 8.", "Fincas con Índice de Infección por encima de 33%.", "Fincas con Suma Bruta por Hoja por encima del umbral configurado (ver Gráficos → Suma Bruta)."]}, {"titulo": "FRAC", "texto": "Fincas que incumplen las reglas FRAC de manejo de resistencia en los últimos 12 meses: máximo de aplicaciones, porcentaje, aplicaciones consecutivas, intervalo y uso solo en mezcla."}]} /></h1>
         </div>
         <p className="text-secondary small mb-3" style={{ minHeight: "2.6rem" }}>
           {pestana === "indicadores"

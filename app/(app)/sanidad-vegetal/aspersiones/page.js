@@ -1,5 +1,6 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useId, useMemo, useState, useRef } from "react";
 import ExcelJS from "exceljs";
 import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiLink, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSend, FiAlertTriangle, FiInfo } from "react-icons/fi";
@@ -171,11 +172,19 @@ export default function AspersionesPage() {
   // de su máximo (últimos 12 meses) en la finca elegida.
   const [avisosFrac, setAvisosFrac] = useState([]);
   const [existenciasInsumos, setExistenciasInsumos] = useState({});
+  // Unidad (uuid) en la que viene la existencia de cada insumo: la unidad base del artículo.
+  const [unidadesExistencia, setUnidadesExistencia] = useState({});
   // Texto crudo que el operador está tecleando en "Cantidad necesaria", por
   // articuloUuid — se muestra tal cual mientras escribe, en vez de forzar
   // siempre el valor derivado (.toFixed(2)), que "peleaba" con el usuario y
   // no dejaba borrar dígitos (ver bug reportado: al borrar quedaba igual).
   const [textosCantidadAjustada, setTextosCantidadAjustada] = useState({});
+  // Texto crudo de la columna "Cambiar dosis" (dosis por hectárea editable), por articuloUuid.
+  const [textosDosisEditada, setTextosDosisEditada] = useState({});
+  // La columna "Cambiar dosis" solo se ve si se habilita con el botón sobre la tabla.
+  const [mostrarCambiarDosis, setMostrarCambiarDosis] = useState(false);
+  // Modal informativo "¿Cómo funciona?" de Programar aspersión.
+  const [infoProgramarOpen, setInfoProgramarOpen] = useState(false);
   // Unidad en la que se MUESTRA/EDITA "Cantidad necesaria" por insumo —
   // pedido explícito: por defecto cada insumo respeta su propia unidad de
   // receta (no la unidad global de "Cantidad a preparar"), pero el usuario
@@ -1442,11 +1451,13 @@ export default function AspersionesPage() {
     Promise.all(
       componentesRecetaSeleccionada.map((c) =>
         apiFetch(`/inventarios/movimientos/existencias?almacenUuid=${form.almacenUuid}&articuloUuid=${c.articulo?.uuid}`)
-          .then((res) => [c.articulo?.uuid, res?.[0]?.saldo != null ? Number(res[0].saldo) : 0])
-          .catch(() => [c.articulo?.uuid, null]),
+          .then((res) => [c.articulo?.uuid, res?.[0]?.saldo != null ? Number(res[0].saldo) : 0, res?.[0]?.unidad?.uuid || null])
+          .catch(() => [c.articulo?.uuid, null, null]),
       ),
     ).then((pares) => {
-      if (!cancelado) setExistenciasInsumos(Object.fromEntries(pares));
+      if (cancelado) return;
+      setExistenciasInsumos(Object.fromEntries(pares.map(([u, saldo]) => [u, saldo])));
+      setUnidadesExistencia(Object.fromEntries(pares.map(([u, , unidad]) => [u, unidad])));
     });
     return () => {
       cancelado = true;
@@ -1788,7 +1799,7 @@ export default function AspersionesPage() {
     <RequirePermission code="menu.sanidad_vegetal.aspersiones">
       <div className="p-3 p-md-4">
         <div className="mb-4">
-          <h1 className="fw-bold h4 mb-1">Programación de Aspersiones</h1>
+          <h1 className="fw-bold h4 mb-1">Programación de Aspersiones <InfoModulo titulo={"Programación de Aspersiones"} secciones={[{"titulo": "Para qué sirve", "texto": "Programa a qué finca, qué día y con qué mezcla se hace la aspersión. La semana, la cantidad a preparar (dosis × hectáreas) y el aviso para la finca se calculan solos."}, {"titulo": "Flujo", "items": ["Programar: se elige finca, fecha, mezcla, almacén y hectáreas. El ícono (i) del modal explica la tabla de insumos.", "Aviso: se envía a la finca por correo.", "Ejecutar: se registra la aspersión realizada y se revisa el inventario.", "Comprobante: al ejecutar se genera en borrador en el módulo Comprobante de aspersiones."]}]} /></h1>
           <p className="text-secondary mb-0">
             Programa a qué finca, qué día y con qué mezcla se hace la aspersión — la semana, la cantidad a preparar
             (dosis × hectáreas) y el aviso para la finca se calculan solos.
@@ -2325,7 +2336,24 @@ export default function AspersionesPage() {
         )}
 
         {modalOpen && (
-          <ModalShell title={editingUuid ? "Editar aspersión" : "Programar aspersión"} onClose={() => setModalOpen(false)} width="90vw">
+          <ModalShell
+            title={
+              <span className="d-inline-flex align-items-center gap-2">
+                {editingUuid ? "Editar aspersión" : "Programar aspersión"}
+                <button
+                  type="button"
+                  className="btn btn-link p-0 text-secondary d-inline-flex"
+                  onClick={() => setInfoProgramarOpen(true)}
+                  aria-label="¿Cómo funciona?"
+                  title="¿Cómo funciona?"
+                >
+                  <FiInfo size={16} />
+                </button>
+              </span>
+            }
+            onClose={() => setModalOpen(false)}
+            width="90vw"
+          >
             <form onSubmit={handleCrear}>
               <div className="row g-2 mb-2">
                 <div className="col-3">
@@ -2636,7 +2664,20 @@ export default function AspersionesPage() {
                   const esRegulador = c === componenteRegulador;
 
                   const disponible = existenciasInsumos[articuloUuid];
-                  const insuficiente = disponible != null && disponible < necesaria;
+                  const unidadRecetaStockUuid = c.unidad?.uuid;
+                  const unidadStockUuid = unidadesExistencia[articuloUuid];
+                  // La existencia viene en la unidad base del artículo; la cantidad a programar
+                  // puede estar en otra (ej. receta en Gal, stock en L): se convierte antes de restar.
+                  const necesariaEnStock =
+                    unidadStockUuid && unidadRecetaStockUuid && unidadStockUuid !== unidadRecetaStockUuid
+                      ? convertirCantidad(grafoUnidades, unidadRecetaStockUuid, unidadStockUuid, necesaria) ?? necesaria
+                      : necesaria;
+                  const restante = disponible != null ? disponible - necesariaEnStock : null;
+                  const insuficiente = restante != null && restante < -1e-9;
+                  const simboloStock =
+                    unidadesVolumen.find((u) => u.uuid === unidadStockUuid)?.simbolo ||
+                    unidadesPeso.find((u) => u.uuid === unidadStockUuid)?.simbolo ||
+                    "";
 
                   const dosisRef = dosisRefComponente(c);
                   const dosisMaxima = dosisRef?.dosisMaxima ?? null;
@@ -2650,6 +2691,56 @@ export default function AspersionesPage() {
                       ? convertirCantidad(grafoUnidades, unidadRecetaUuid, unidadDosisMaximaUuid, dosisAplicadaEnUnidadReceta) ?? dosisAplicadaEnUnidadReceta
                       : dosisAplicadaEnUnidadReceta;
                   const excedeDosis = dosisMaxima != null && hectareasNum > 0 && dosisAplicada > dosisMaxima;
+
+                  // Dosis relativa de la receta (X% de otro insumo, o tasa por litro de
+                  // agua): también se puede cambiar desde "Cambiar dosis". Se muestra el
+                  // valor EFECTIVO actual (cantidad necesaria / base) y la base permite
+                  // volver a la cantidad al editarlo.
+                  let reglaTipo = null;
+                  let reglaValor = null;
+                  let reglaSimbolo = "";
+                  let reglaBase = null;
+                  let reglaFactor = 1;
+                  if (c.tipoDosis === "PORCENTAJE" && c.referenciaArticuloId && unidadRecetaUuid) {
+                    const refComp = componentesRecetaSeleccionada.find((x) => x.articulo?.id === c.referenciaArticuloId);
+                    const refUni = refComp?.unidad?.uuid;
+                    if (refComp && refUni) {
+                      const refNativo = necesariaRealNativa(refComp);
+                      const base = refUni === unidadRecetaUuid ? refNativo : convertirCantidad(grafoUnidades, refUni, unidadRecetaUuid, refNativo);
+                      if (base != null && base > 0) {
+                        reglaTipo = "PORCENTAJE";
+                        reglaBase = base;
+                        reglaValor = (necesaria / base) * 100;
+                        reglaSimbolo = "%";
+                      }
+                    }
+                  } else if (c.tipoDosis === "POR_LITRO_AGUA" && componenteAgua?.unidad?.uuid) {
+                    const litro = unidadesVolumen.find((u) => u.nombre === "Litro");
+                    if (litro) {
+                      const aguaNativa = necesariaRealNativa(componenteAgua);
+                      const litros =
+                        componenteAgua.unidad.uuid === litro.uuid
+                          ? aguaNativa
+                          : convertirCantidad(grafoUnidades, componenteAgua.unidad.uuid, litro.uuid, aguaNativa);
+                      if (litros != null && litros > 0) {
+                        reglaTipo = "POR_LITRO_AGUA";
+                        // El ACONDICIONADOR siempre va en GRAMOS por litro de agua (aunque
+                        // la fila esté en Kg): se expresa en g y se vuelve a la unidad de
+                        // la fila al editar (reglaFactor = cuántas unidades de la fila es 1 g).
+                        const gramo = unidadesPeso.find((u) => u.nombre === "Gramo");
+                        if (c === componenteRegulador && gramo && unidadRecetaUuid) {
+                          const f = unidadRecetaUuid === gramo.uuid ? 1 : convertirCantidad(grafoUnidades, gramo.uuid, unidadRecetaUuid, 1);
+                          if (f != null && f > 0) {
+                            reglaFactor = f;
+                            reglaSimbolo = "g/L";
+                          }
+                        }
+                        reglaBase = litros * reglaFactor;
+                        reglaValor = necesaria / reglaBase;
+                        if (!reglaSimbolo) reglaSimbolo = `${c.unidad?.simbolo || ""}/L`;
+                      }
+                    }
+                  }
 
                   // Valores para MOSTRAR (y editar) en pantalla — por
                   // defecto en la unidad propia de la receta de ESTE
@@ -2700,8 +2791,15 @@ export default function AspersionesPage() {
                     esAutomatico,
                     esRegulador,
                     disponible,
+                    restante,
+                    simboloStock,
                     insuficiente,
                     dosisMaxima,
+                    unidadDosisMaximaUuid,
+                    reglaTipo,
+                    reglaValor,
+                    reglaSimbolo,
+                    reglaBase,
                     unidadDosisMaximaSimbolo: dosisRef?.simbolo || "",
                     dosisEsDelRenglon,
                     dosisAplicada,
@@ -2759,9 +2857,91 @@ export default function AspersionesPage() {
                   }
                 }
 
+                // Columna "Cambiar dosis": el operador escribe la dosis por hectárea
+                // (en la unidad de la dosis del insumo) y se traduce a la cantidad
+                // necesaria (dosis x hectáreas, en la unidad de la receta) por el
+                // MISMO camino que editar "Cantidad necesaria" a mano: si es el
+                // principal arrastra a los demás en proporción y las dosis
+                // relativas se recalculan.
+                function cambiarDosis(fila, escrito) {
+                  const { articuloUuid: uuid, c: comp, unidadRecetaUuid: uRec, unidadDosisMaximaUuid: uDosis } = fila;
+                  if (escrito === "") {
+                    setTextosDosisEditada((t) => ({ ...t, [uuid]: "" }));
+                    return;
+                  }
+                  if (!/^\d*[.,]?\d*$/.test(escrito)) return;
+                  setTextosDosisEditada((t) => ({ ...t, [uuid]: escrito }));
+                  const dosisNueva = Number(escrito.replace(",", "."));
+                  if (Number.isNaN(dosisNueva) || !(hectareasNum > 0)) return;
+                  const enUnidadDosis = dosisNueva * hectareasNum;
+                  const nativo =
+                    uDosis && uRec && uDosis !== uRec
+                      ? convertirCantidad(grafoUnidades, uDosis, uRec, enUnidadDosis) ?? enUnidadDosis
+                      : enUnidadDosis;
+                  aplicarNativo(uuid, comp, escrito, nativo);
+                }
+
+                // Cambia la dosis RELATIVA de una fila (% de otro insumo o tasa por litro
+                // de agua) y la traduce a cantidad necesaria.
+                function cambiarRegla(fila, escrito) {
+                  const { articuloUuid: uuid, c: comp, reglaTipo, reglaBase } = fila;
+                  if (escrito === "") {
+                    setTextosDosisEditada((t) => ({ ...t, [uuid]: "" }));
+                    return;
+                  }
+                  if (!/^\d*[.,]?\d*$/.test(escrito)) return;
+                  setTextosDosisEditada((t) => ({ ...t, [uuid]: escrito }));
+                  const valor = Number(escrito.replace(",", "."));
+                  if (Number.isNaN(valor) || !(reglaBase > 0)) return;
+                  aplicarNativo(uuid, comp, escrito, reglaTipo === "PORCENTAJE" ? (reglaBase * valor) / 100 : valor * reglaBase);
+                }
+
+                function aplicarNativo(uuid, comp, escrito, nativo) {
+                  const esEdicionPrincipal = comp.esPrincipal;
+                  setTextosDosisEditada((t) => ({ ...t, [uuid]: escrito }));
+                  setTextosCantidadAjustada((t) => {
+                    const next = { ...t };
+                    delete next[uuid];
+                    if (esEdicionPrincipal) {
+                      for (const ff of filas) if (ff.articuloUuid !== uuid && !ff.esAutomatico) delete next[ff.articuloUuid];
+                    } else {
+                      for (const u of seguidoresTransitivos(uuid)) delete next[u];
+                    }
+                    return next;
+                  });
+                  setForm((f) => {
+                    const next = { ...f.componentesAjustados, [uuid]: String(nativo) };
+                    if (esEdicionPrincipal) {
+                      const sugeridaPrincipal = filas.find((ff) => ff.articuloUuid === uuid)?.necesariaSugeridaRedondeada;
+                      if (sugeridaPrincipal > 0) {
+                        const ratio = nativo / sugeridaPrincipal;
+                        for (const ff of filas) {
+                          if (ff.articuloUuid === uuid || ff.esAutomatico || ff.esRegulador) continue;
+                          if (ff.c?.tipoDosis === "POR_LITRO_AGUA") continue;
+                          if (ff.necesariaSugeridaRedondeada != null) {
+                            next[ff.articuloUuid] = (ff.necesariaSugeridaRedondeada * ratio).toFixed(4);
+                          }
+                        }
+                      }
+                    }
+                    propagarReglasDosis(next, uuid);
+                    return { ...f, componentesAjustados: next };
+                  });
+                }
+
                 return (
                   <div className="mb-2 p-2 rounded-3" style={{ backgroundColor: "#f8f9fa" }}>
-                    <p className="small fw-medium mb-1">Insumos que componen la mezcla (a esta cantidad)</p>
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <p className="small fw-medium mb-0">Insumos que componen la mezcla (a esta cantidad)</p>
+                      <button
+                        type="button"
+                        className={`btn btn-link btn-sm p-0 text-decoration-none ${mostrarCambiarDosis ? "fw-semibold text-success" : "text-secondary"}`}
+                        onClick={() => setMostrarCambiarDosis((v) => !v)}
+                        title="Muestra u oculta la columna para cambiar la dosis de cada insumo"
+                      >
+                        Cambiar dosis
+                      </button>
+                    </div>
                     <div className="table-responsive rounded-3 overflow-hidden">
                       <table className="table table-sm mb-0">
                         <thead>
@@ -2771,11 +2951,14 @@ export default function AspersionesPage() {
                               cualquier color puesto en el <tr> padre. */}
                           <tr className="small">
                             <th style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>Insumo</th>
-                            <th style={{ minWidth: "6.5rem", backgroundColor: "var(--brand-900)", color: "#fff" }}>Receta</th>
-                            <th style={{ minWidth: "6rem", backgroundColor: "var(--brand-900)", color: "#fff" }}>Cantidad necesaria</th>
-                            <th className="text-end" style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>Disponible</th>
-                            <th className="text-end" style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>Dosis por hectárea</th>
-                            <th className="text-end" style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>% sobre dosis</th>
+                            <th className="text-center" style={{ minWidth: "6.5rem", backgroundColor: "var(--brand-900)", color: "#fff" }}>Receta</th>
+                            <th className="text-center" style={{ minWidth: "6rem", backgroundColor: "var(--brand-900)", color: "#fff" }}>Cantidad necesaria</th>
+                            <th className="text-center" style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>Disponible</th>
+                            {mostrarCambiarDosis && (
+                              <th className="text-center" style={{ minWidth: "6.5rem", backgroundColor: "var(--brand-900)", color: "#fff" }}>Cambiar dosis</th>
+                            )}
+                            <th className="text-center" style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>Dosis por hectárea</th>
+                            <th className="text-center" style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>% sobre dosis</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2784,9 +2967,16 @@ export default function AspersionesPage() {
                               c,
                               articuloUuid,
                               disponible,
+                              restante,
+                              simboloStock,
                               insuficiente,
                               dosisMaxima,
                               unidadDosisMaximaSimbolo,
+                              unidadDosisMaximaUuid,
+                              reglaTipo,
+                              reglaValor,
+                              reglaSimbolo,
+                              reglaBase,
                               dosisAplicada,
                               excedeDosis,
                               teoricaDisplayValor,
@@ -2826,7 +3016,7 @@ export default function AspersionesPage() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="small text-secondary">
+                                <td className="small text-secondary text-center">
                                   {teoricaDisplayValor.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {simboloDisplay}
                                   {/* El enlace solo sale si ESTA fila se editó a
                                       mano (tiene override) — antes salía siempre
@@ -2887,12 +3077,11 @@ export default function AspersionesPage() {
                                     </>
                                   )}
                                 </td>
-                                <td className="small">
-                                  <div className="input-group input-group-sm" style={{ width: "9rem" }}>
+                                <td className="small text-center">
+                                  <div className="input-group input-group-sm mx-auto" style={{ width: "9rem" }}>
                                     <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0.01"
+                                      type="text"
+                                      inputMode="decimal"
                                       disabled={esAutomatico}
                                       title={
                                         esAutomatico
@@ -2906,6 +3095,7 @@ export default function AspersionesPage() {
                                       value={textosCantidadAjustada[articuloUuid] ?? necesariaDisplayValor.toFixed(2)}
                                       onChange={(e) => {
                                         const escrito = e.target.value;
+                                        if (!/^\d*[.,]?\d*$/.test(escrito)) return;
                                         // Lo que escribe el operador está en la
                                         // unidad MOSTRADA (simboloDisplay) — se
                                         // convierte a la unidad nativa del
@@ -2929,7 +3119,6 @@ export default function AspersionesPage() {
                                           // desproporcionados).
                                           setTextosCantidadAjustada((t) => {
                                             const next = { ...t };
-                                            delete next[articuloUuid];
                                             if (esEdicionPrincipal) {
                                               for (const ff of filas) {
                                                 if (!ff.esAutomatico) delete next[ff.articuloUuid];
@@ -2941,6 +3130,7 @@ export default function AspersionesPage() {
                                               // texto crudo viejo).
                                               for (const u of seguidoresTransitivos(articuloUuid)) delete next[u];
                                             }
+                                            next[articuloUuid] = "";
                                             return next;
                                           });
                                           setForm((f) => {
@@ -2960,7 +3150,7 @@ export default function AspersionesPage() {
                                           });
                                           return;
                                         }
-                                        const numEscrito = Number(escrito);
+                                        const numEscrito = Number(escrito.replace(",", "."));
                                         if (Number.isNaN(numEscrito)) return;
                                         const nativo = aNativo(numEscrito);
                                         // Se guarda el texto tal cual se está
@@ -3052,10 +3242,67 @@ export default function AspersionesPage() {
                                     )}
                                   </div>
                                 </td>
-                              <td className={`small text-end ${insuficiente ? "text-danger fw-medium" : "text-secondary"}`}>
-                                {disponible != null ? disponible.toLocaleString("es-CO", { maximumFractionDigits: 2 }) : "—"}
+                              <td className={`small text-center ${insuficiente ? "text-danger fw-medium" : "text-secondary"}`}>
+                                {disponible != null ? (
+                                  <span title={`Saldo actual ${disponible.toLocaleString("es-CO", { maximumFractionDigits: 2 })} menos lo que se programa`}>
+                                    {restante.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {simboloStock}
+                                  </span>
+                                ) : (
+                                  "—"
+                                )}
                               </td>
-                              <td className={`small text-end ${excedeDosis ? "text-danger fw-medium" : "text-secondary"}`}>
+                              {mostrarCambiarDosis && (
+                              <td className="small text-center">
+                                {dosisMaxima != null && !esAutomatico ? (
+                                  <div className="input-group input-group-sm mx-auto" style={{ width: "6.5rem" }}>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      className="form-control rounded-start-3 px-1"
+                                      title="Escribe la dosis por hectárea que quieres aplicar; la cantidad necesaria se recalcula (dosis x hectáreas)"
+                                      value={textosDosisEditada[articuloUuid] ?? Number(dosisAplicada.toFixed(3))}
+                                      onChange={(e) =>
+                                        cambiarDosis({ articuloUuid, c, unidadRecetaUuid, unidadDosisMaximaUuid }, e.target.value)
+                                      }
+                                      onBlur={() =>
+                                        setTextosDosisEditada((t) => {
+                                          const next = { ...t };
+                                          delete next[articuloUuid];
+                                          return next;
+                                        })
+                                      }
+                                    />
+                                    <span className="input-group-text small px-1 rounded-end-3">{unidadDosisMaximaSimbolo}/ha</span>
+                                  </div>
+                                ) : reglaTipo && !esAutomatico ? (
+                                  <div className="input-group input-group-sm mx-auto" style={{ width: "6.5rem" }}>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      className="form-control rounded-start-3 px-1"
+                                      title={
+                                        reglaTipo === "PORCENTAJE"
+                                          ? "Dosis relativa: % de la cantidad del insumo de referencia. Escribe otro % y la cantidad se recalcula"
+                                          : "Dosis por litro de agua. Escribe otra tasa y la cantidad se recalcula con el agua actual"
+                                      }
+                                      value={textosDosisEditada[articuloUuid] ?? Number(reglaValor.toFixed(3))}
+                                      onChange={(e) => cambiarRegla({ articuloUuid, c, reglaTipo, reglaBase }, e.target.value)}
+                                      onBlur={() =>
+                                        setTextosDosisEditada((t) => {
+                                          const next = { ...t };
+                                          delete next[articuloUuid];
+                                          return next;
+                                        })
+                                      }
+                                    />
+                                    <span className="input-group-text small px-1 rounded-end-3">{reglaSimbolo}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-secondary">—</span>
+                                )}
+                              </td>
+                              )}
+                              <td className={`small text-center ${excedeDosis ? "text-danger fw-medium" : "text-secondary"}`}>
                                 {dosisMaxima != null ? (
                                   <>
                                     {dosisAplicada.toLocaleString("es-CO", { maximumFractionDigits: 2 })} / {dosisMaxima.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {unidadDosisMaximaSimbolo}
@@ -3070,7 +3317,7 @@ export default function AspersionesPage() {
                                   "—"
                                 )}
                               </td>
-                              <td className={`small text-end ${excedeDosis ? "text-danger fw-medium" : "text-secondary"}`}>
+                              <td className={`small text-center ${excedeDosis ? "text-danger fw-medium" : "text-secondary"}`}>
                                 {dosisMaxima != null && dosisMaxima > 0 ? (
                                   <>
                                     {((dosisAplicada / dosisMaxima) * 100).toLocaleString("es-CO", { maximumFractionDigits: 0 })}%
@@ -3089,25 +3336,27 @@ export default function AspersionesPage() {
                               <td style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>
                                 Total{simboloVolumenTotal ? ` (${simboloVolumenTotal})` : ""}
                               </td>
-                              <td style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>
+                              <td className="text-center" style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>
                                 {totalVolumen.teorica.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {simboloVolumenTotal}
                               </td>
-                              <td style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>
+                              <td className="text-center" style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>
                                 {totalVolumen.ajustada.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {simboloVolumenTotal}
                               </td>
                               <td style={{ backgroundColor: "var(--brand-900)" }} />
                               <td style={{ backgroundColor: "var(--brand-900)" }} />
                               <td style={{ backgroundColor: "var(--brand-900)" }} />
+                              {mostrarCambiarDosis && <td style={{ backgroundColor: "var(--brand-900)" }} />}
                             </tr>
                           )}
                           {[...totalesPorUnidad.entries()].map(([simbolo, { teorica, ajustada }]) => (
                             <tr key={simbolo || "sin-unidad"} className="small fw-medium">
                               <td style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>Total{simbolo ? ` (${simbolo})` : ""}</td>
-                              <td style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>{teorica.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {simbolo}</td>
-                              <td style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>{ajustada.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {simbolo}</td>
+                              <td className="text-center" style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>{teorica.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {simbolo}</td>
+                              <td className="text-center" style={{ backgroundColor: "var(--brand-900)", color: "#fff" }}>{ajustada.toLocaleString("es-CO", { maximumFractionDigits: 2 })} {simbolo}</td>
                               <td style={{ backgroundColor: "var(--brand-900)" }} />
                               <td style={{ backgroundColor: "var(--brand-900)" }} />
                               <td style={{ backgroundColor: "var(--brand-900)" }} />
+                              {mostrarCambiarDosis && <td style={{ backgroundColor: "var(--brand-900)" }} />}
                             </tr>
                           ))}
                         </tfoot>
@@ -3247,6 +3496,53 @@ export default function AspersionesPage() {
                 </button>
               </div>
             </form>
+          </ModalShell>
+        )}
+
+        {modalOpen && infoProgramarOpen && (
+          <ModalShell title="¿Cómo funciona Programar aspersión?" onClose={() => setInfoProgramarOpen(false)} size="lg">
+            <div className="small">
+              <p className="fw-semibold mb-1">1. Datos de la aspersión</p>
+              <p className="text-secondary">
+                Elige la finca, la fecha (la semana se detecta sola), el tipo de aspersión, la mezcla y el almacén de donde salen los
+                insumos. Solo aparecen mezclas activas que tengan Volumen / ha configurado.
+              </p>
+
+              <p className="fw-semibold mb-1">2. Cantidad a preparar</p>
+              <p className="text-secondary">
+                Con las hectáreas y el Volumen / ha el sistema calcula la cantidad total a preparar y reparte la receta de la mezcla
+                entre sus insumos. El Agua completa el volumen y el ACONDICIONADOR se calcula en gramos por litro de agua.
+              </p>
+
+              <p className="fw-semibold mb-1">3. Tabla de insumos</p>
+              <ul className="text-secondary ps-3">
+                <li>
+                  <strong>Receta:</strong> la cantidad teórica de cada insumo según la receta para esa cantidad a preparar.
+                </li>
+                <li>
+                  <strong>Cantidad necesaria:</strong> lo que realmente se va a usar. Puedes editarla y cambiarle la unidad. Si editas el
+                  insumo principal, los demás se mueven en la misma proporción. «usar dosis» devuelve la fila a lo sugerido.
+                </li>
+                <li>
+                  <strong>Disponible:</strong> el saldo del almacén después de restar lo que estás programando. Se pone en rojo si no
+                  alcanza.
+                </li>
+                <li>
+                  <strong>Cambiar dosis:</strong> el botón sobre la tabla muestra una columna para cambiar la dosis por hectárea de cada
+                  insumo (o el % de otro insumo, o los g/L del ACONDICIONADOR) y recalcula la cantidad necesaria.
+                </li>
+                <li>
+                  <strong>Dosis por hectárea y % sobre dosis:</strong> lo que se aplicaría frente a la dosis máxima del insumo. Se marca
+                  en rojo si la pasa.
+                </li>
+              </ul>
+
+              <p className="fw-semibold mb-1">4. Programar y ejecutar</p>
+              <p className="text-secondary mb-0">
+                Al programar queda registrada la aspersión con sus cantidades. Al ejecutarla se revisa el inventario y, si falta stock,
+                te avisa antes de continuar. Si la mezcla supera el límite de aplicaciones FRAC de la finca, verás un aviso.
+              </p>
+            </div>
           </ModalShell>
         )}
 

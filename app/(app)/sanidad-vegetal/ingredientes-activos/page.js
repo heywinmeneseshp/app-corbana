@@ -1,5 +1,6 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -252,7 +253,7 @@ export default function IngredientesActivosPage() {
         </ul>
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h4 mb-1">Ingredientes Activos</h1>
+            <h1 className="fw-bold h4 mb-1">Ingredientes Activos <InfoModulo titulo={"Ingredientes Activos"} secciones={[{"titulo": "Para qué sirve", "texto": "Maestro de referencia de los ingredientes activos que componen los agroquímicos usados en las aspersiones."}, {"titulo": "Clasificación FRAC", "texto": "Cada ingrediente se clasifica en un grupo químico, y cada grupo pertenece a un código FRAC con su modo de acción. Esa clasificación alimenta las reglas de resistencia."}]} /></h1>
             <p className="text-secondary mb-0">
               Maestro de referencia de los ingredientes activos que componen los agroquímicos usados en las aspersiones.
             </p>

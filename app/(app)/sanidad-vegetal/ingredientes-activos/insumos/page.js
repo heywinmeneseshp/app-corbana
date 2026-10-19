@@ -1,5 +1,6 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -404,7 +405,7 @@ export default function InsumosSanidadVegetalPage() {
 
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h4 mb-1">Insumos</h1>
+            <h1 className="fw-bold h4 mb-1">Insumos <InfoModulo titulo={"Insumos"} secciones={[{"titulo": "Qué son", "texto": "Artículos de inventario tipo insumo usados en Sanidad Vegetal. Siempre quedan en la categoría «Insumo Sanidad Vegetal»."}, {"titulo": "Ingredientes activos", "texto": "Opcionalmente se amarran a los ingredientes activos que los componen."}, {"titulo": "Dosis por hectárea", "texto": "La dosis de referencia de cada insumo se usa en las mezclas y en Programar aspersión para calcular la dosis real y avisar si se pasa."}, {"titulo": "Cargue masivo", "texto": "Se pueden crear y actualizar muchos insumos desde un archivo Excel."}]} /></h1>
             <p className="text-secondary mb-0">
               Artículos de inventario tipo insumo usados en Sanidad Vegetal — siempre quedan en la categoría{" "}
               &quot;Insumo Sanidad Vegetal&quot; y pueden amarrarse (opcional) a los ingredientes activos que los componen.

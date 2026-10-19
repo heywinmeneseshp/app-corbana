@@ -1,5 +1,6 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
 import { FiPlus, FiEdit2, FiTrash2, FiTarget, FiSave, FiX } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
@@ -136,7 +137,7 @@ export default function ObjetivosEvaluacionPage() {
       <div className="p-3 p-md-4">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-medium h4 mb-1">Objetivos de Evaluación</h1>
+            <h1 className="fw-medium h4 mb-1">Objetivos de Evaluación <InfoModulo titulo={"Objetivos de Evaluación"} secciones={[{"titulo": "Qué son", "texto": "La meta semanal de cantidad de evaluaciones por finca o por lote."}, {"titulo": "Conteo de hojas", "texto": "Además se define un rango de edad de la planta (semanas desde su embolse). La cantidad se exige por cada edad del rango, no como un total combinado."}, {"titulo": "Dónde se ve el avance", "texto": "En la app móvil, arriba de cada evaluación (llevas X de Y, faltan Z), y al subir pendientes."}]} /></h1>
             <p className="text-secondary small mb-0">
               Meta semanal de cantidad de evaluaciones por finca o lote. Para Conteo de Hojas, además se define un
               rango de edad de la planta (semanas desde su embolse) — la cantidad se exige por cada edad del

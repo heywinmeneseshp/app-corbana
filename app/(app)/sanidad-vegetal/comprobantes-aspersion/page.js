@@ -1,5 +1,6 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
 import { FiEye, FiDownload, FiEdit2, FiCheck, FiTrash2, FiSearch, FiFileText } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
@@ -214,7 +215,7 @@ export default function ComprobantesAspersionPage() {
         <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
           <div>
             <h1 className="fw-bold h4 mb-1 d-flex align-items-center gap-2">
-              <FiFileText /> Comprobante de aspersiones
+              <FiFileText /> Comprobante de aspersiones <InfoModulo titulo={"Comprobante de aspersiones"} secciones={[{"titulo": "Para qué sirve", "texto": "Se genera en borrador al ejecutar una aspersión. Complétalo y emítelo."}, {"titulo": "Qué incluye el PDF", "items": ["La mezcla y las hectáreas.", "El piloto.", "Los galones.", "Quién ejecutó la aspersión."]}]} />
             </h1>
             <p className="text-secondary small mb-0">
               Se genera en borrador al ejecutar una aspersión. Complétalo y emítelo; el PDF muestra la mezcla, las hectáreas, el

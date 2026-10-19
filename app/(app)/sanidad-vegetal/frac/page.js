@@ -1,5 +1,6 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
 import { useState } from "react";
 import Link from "next/link";
 import RequirePermission from "@/components/RequirePermission";
@@ -42,7 +43,7 @@ export default function SanidadFracPage() {
 
         <div className="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h4 mb-1">FRAC</h1>
+            <h1 className="fw-bold h4 mb-1">FRAC <InfoModulo titulo={"FRAC"} secciones={[{"titulo": "Para qué sirve", "texto": "Clasificación FRAC de los ingredientes activos y reglas de manejo de resistencia a fungicidas."}, {"titulo": "Reglas que se vigilan", "items": ["Máximo de aplicaciones por periodo.", "Porcentaje de aplicaciones de un mismo grupo.", "Aplicaciones consecutivas permitidas.", "Intervalo mínimo entre aplicaciones.", "Grupos que solo se pueden usar en mezcla."]}, {"titulo": "Dónde se ve", "texto": "Al programar una aspersión se avisa si la mezcla supera el límite de la finca, y las fincas que incumplen aparecen en Alertas → FRAC. El cargue masivo permite actualizar la clasificación desde un archivo."}]} /></h1>
             <p className="text-secondary mb-0">
               Clasificación FRAC de los ingredientes activos y reglas de manejo de resistencia a fungicidas.
             </p>

@@ -1,5 +1,6 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -235,6 +236,32 @@ function vistaPreviaDosisRelativa(row, rows, { grafoUnidades, totalRef = null, a
 // ACONDICIONADOR sí admite regla POR_LITRO_AGUA (o queda en el 0.8 legacy).
 function esAguaArticulo(articuloUuid, articulos) {
   return articulos.find((a) => a.uuid === articuloUuid)?.nombre === "Agua";
+}
+
+// Reglas del ACONDICIONADOR (corrector de pH): su dosis es SIEMPRE gramos por
+// litro de agua (regla POR_LITRO_AGUA, tasa en gramos; 0.8 g/L por defecto) y
+// donde haya Agua siempre debe ir el ACONDICIONADOR — si la receta lleva Agua
+// y no lo tiene, se agrega solo. Se aplica al cambiar de artículo una fila.
+function aplicarReglasAcondicionador(rows, articulos, unidades) {
+  const gramo = unidades.find((u) => u.nombre === "Gramo");
+  const acondicionador = articulos.find((a) => a.nombre === "ACONDICIONADOR");
+  if (!acondicionador) return rows;
+  const esAcond = (r) => r.articuloUuid === acondicionador.uuid;
+  const enGramos = (r) => ({
+    ...r,
+    tipoDosis: "POR_LITRO_AGUA",
+    unidadUuid: gramo ? gramo.uuid : r.unidadUuid,
+    tasa: r.tasa !== "" ? r.tasa : "0.8",
+    referenciaArticuloUuid: "",
+    porcentajeReferencia: "",
+    tasaUnidadUuid: "",
+  });
+  let resultado = rows.map((r) => (esAcond(r) && r.tipoDosis !== "POR_LITRO_AGUA" ? enGramos(r) : r));
+  const hayAgua = resultado.some((r) => esAguaArticulo(r.articuloUuid, articulos));
+  if (hayAgua && !resultado.some(esAcond)) {
+    resultado = [...resultado, enGramos({ ...emptyInsumoRow(), articuloUuid: acondicionador.uuid })];
+  }
+  return resultado;
 }
 
 // Litros de agua estimados de una receta en edición (para previsualizar
@@ -811,6 +838,7 @@ export default function ElaboracionesPage() {
     setEditarForm({
       codigo: mezcla.codigo || "",
       nombre: mezcla.nombre || "",
+      articuloNombre: mezcla.articuloElaborado?.nombre || "",
       dosisPorHectarea: mezcla.dosisPorHectarea != null ? String(mezcla.dosisPorHectarea) : "",
       dosisPorHectareaUnidadUuid: mezcla.dosisPorHectareaUnidad?.uuid || "",
       rendimiento: "",
@@ -888,7 +916,10 @@ export default function ElaboracionesPage() {
   }
 
   function updateEditarInsumoRow(key, patch) {
-    setEditarInsumoRows((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    setEditarInsumoRows((rows) => {
+      const siguientes = rows.map((r) => (r.key === key ? { ...r, ...patch } : r));
+      return "articuloUuid" in patch ? aplicarReglasAcondicionador(siguientes, articulos, unidades) : siguientes;
+    });
   }
 
   // Solo un insumo puede ser "Principal" (mismo criterio que Mezclas —
@@ -952,6 +983,9 @@ export default function ElaboracionesPage() {
           ...(rendimientoNuevo !== undefined ? { rendimiento: rendimientoNuevo } : {}),
           codigo: editarForm.codigo || null,
           nombre: editarForm.nombre,
+          ...(editarForm.articuloNombre && editarForm.articuloNombre !== (editarMezcla.articuloElaborado?.nombre || "")
+            ? { articuloNombre: editarForm.articuloNombre }
+            : {}),
           dosisPorHectarea: editarForm.dosisPorHectarea === "" ? null : Number(editarForm.dosisPorHectarea),
           dosisPorHectareaUnidadUuid: editarForm.dosisPorHectareaUnidadUuid || null,
           componentes,
@@ -1099,8 +1133,22 @@ export default function ElaboracionesPage() {
     setModalOpen(true);
   }
 
+  // Galones que equivale la "Cantidad a producir" (si ya está en galones, la misma cantidad). Reemplaza al
+  // antiguo campo "Galones ref.": se calcula solo, sin digitarlo.
+  const galonesRefCrear = (() => {
+    const cantidad = Number(form.cantidadElaborada);
+    const galon = unidades.find((u) => u.nombre === "Galón");
+    const unidadUuid = directaForm.articuloUnidadMedidaUuid;
+    if (!(cantidad > 0) || !galon || !unidadUuid) return "";
+    if (unidadUuid === galon.uuid) return cantidad;
+    return convertirCantidad(construirGrafoUnidades(conversiones), unidadUuid, galon.uuid, cantidad) ?? "";
+  })();
+
   function updateInsumoRow(key, patch) {
-    setInsumoRows((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    setInsumoRows((rows) => {
+      const siguientes = rows.map((r) => (r.key === key ? { ...r, ...patch } : r));
+      return "articuloUuid" in patch ? aplicarReglasAcondicionador(siguientes, articulos, unidades) : siguientes;
+    });
   }
 
   // Solo un insumo puede ser "Principal" — ver marcarPrincipalEditar.
@@ -1120,7 +1168,7 @@ export default function ElaboracionesPage() {
     const grafoCrear = construirGrafoUnidades(conversiones);
     const totalRefCrear = totalRefFormulario(
       {
-        galonesReferencia: form.galonesReferencia,
+        galonesReferencia: galonesRefCrear,
         rendimiento: form.cantidadElaborada,
         unidadRendimientoUuid: directaForm.articuloUnidadMedidaUuid,
       },
@@ -1252,7 +1300,7 @@ export default function ElaboracionesPage() {
         {/* Mismo diseño de encabezado, filtros y tabla que Sanidad Vegetal → Evaluación de Labores. */}
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h4 mb-1">Mezclas</h1>
+            <h1 className="fw-bold h4 mb-1">Mezclas <InfoModulo titulo={"Mezclas"} secciones={[{"titulo": "Qué son", "texto": "Maestro de mezclas: cada una tiene su consecutivo, su nombre comercial y su artículo elaborado (un nombre interno de inventario)."}, {"titulo": "Receta", "items": ["Se arma con los insumos, su cantidad y su unidad. La cantidad a producir es el rendimiento de la receta.", "Con el Volumen / ha se calculan la dosis real de cada insumo y las hectáreas que cubriría.", "Un insumo puede ser principal, llevar un % de otro insumo, una tasa por volumen o una tasa por litro de agua."]}, {"titulo": "Reglas del Agua y el ACONDICIONADOR", "texto": "Si la receta lleva Agua, siempre debe llevar ACONDICIONADOR. Su dosis es siempre en gramos por litro de agua (0,8 g/L por defecto)."}, {"titulo": "Editar", "texto": "Desde Editar puedes cambiar el nombre comercial, el nombre interno del artículo elaborado y los insumos."}]} /></h1>
             <p className="text-secondary mb-0">Maestro de mezclas: cada una tiene su consecutivo y su artículo elaborado.</p>
           </div>
           <div className="d-flex gap-2">
@@ -1377,7 +1425,7 @@ export default function ElaboracionesPage() {
                 <thead className="table-light">
                   <tr>
                     <th className="ps-4 text-center text-nowrap">Código</th>
-                    <th>Nombre</th>
+                    <th>Nombre comercial</th>
                     <th>Artículo elaborado</th>
                     <th className="text-center text-nowrap" title="Volumen por hectárea">Vol./ha</th>
                     {verEliminados && <th className="text-center">Eliminado</th>}
@@ -1456,7 +1504,7 @@ export default function ElaboracionesPage() {
         )}
 
         {modalOpen && (
-          <ModalShell title="Nueva mezcla" onClose={() => setModalOpen(false)} width="80vw">
+          <ModalShell title="Nueva mezcla" onClose={() => setModalOpen(false)} width="95vw">
             <form onSubmit={handleCrearMezcla}>
               <p className="small text-secondary">
                 Elegí los insumos y creá el artículo elaborado directamente, sin pasar por la prueba de laboratorio
@@ -1479,7 +1527,7 @@ export default function ElaboracionesPage() {
                 </div>
                 <div className="col-5">
                   <label className="form-label small fw-medium mb-1">
-                    Nombre del producto <span className="text-danger">*</span>
+                    Nombre comercial <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text"
@@ -1572,33 +1620,34 @@ export default function ElaboracionesPage() {
                 </div>
                 <div className="col-2">
                   <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-1">
-                    Galones ref.
+                    Equivale a
                     <FiInfo
                       size={13}
                       className="text-secondary"
-                      title="Cuántos galones se van a preparar — con Volumen/ha se calculan solas las hectáreas que cubrirían (galones ÷ Volumen/ha)."
+                      title="Se calcula solo: la cantidad a producir en galones (si está en otra unidad de volumen) y las hectáreas que cubriría según el Volumen/ha (galones ÷ Volumen/ha)."
                     />
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="form-control form-control-sm rounded-3"
-                    value={form.galonesReferencia}
-                    onChange={(e) => setForm((f) => ({ ...f, galonesReferencia: e.target.value }))}
-                  />
                   {(() => {
-                    const grafoUnidades = construirGrafoUnidades(conversiones);
+                    const galon = unidades.find((u) => u.nombre === "Galón");
+                    const enOtraUnidad = galonesRefCrear !== "" && directaForm.articuloUnidadMedidaUuid !== galon?.uuid;
                     const hectareasCalculadas = calcularHectareasDesdeGalones(
-                      form.galonesReferencia,
+                      galonesRefCrear,
                       form.volumenPorHectarea,
                       form.volumenPorHectareaUnidadUuid,
                       unidades,
-                      grafoUnidades,
+                      construirGrafoUnidades(conversiones),
                     );
-                    return hectareasCalculadas != null ? (
-                      <p className="form-text small mb-0">≈ {hectareasCalculadas.toLocaleString("es-CO", { maximumFractionDigits: 3 })} ha</p>
-                    ) : null;
+                    if (!enOtraUnidad && hectareasCalculadas == null) return <p className="form-text small mb-0">—</p>;
+                    return (
+                      <>
+                        {enOtraUnidad && (
+                          <p className="small mb-0">{Number(galonesRefCrear).toLocaleString("es-CO", { maximumFractionDigits: 3 })} Gal</p>
+                        )}
+                        {hectareasCalculadas != null && (
+                          <p className="small mb-0 text-secondary">≈ {hectareasCalculadas.toLocaleString("es-CO", { maximumFractionDigits: 3 })} ha</p>
+                        )}
+                      </>
+                    );
                   })()}
                 </div>
               </div>
@@ -1629,7 +1678,7 @@ export default function ElaboracionesPage() {
                     {insumoRows.map((row) => {
                       const grafoUnidades = construirGrafoUnidades(conversiones);
                       const hectareasCalculadas = calcularHectareasDesdeGalones(
-                        form.galonesReferencia,
+                        galonesRefCrear,
                         form.volumenPorHectarea,
                         form.volumenPorHectareaUnidadUuid,
                         unidades,
@@ -1640,7 +1689,7 @@ export default function ElaboracionesPage() {
                       // digitada.
                       const totalRefCrear = totalRefFormulario(
                         {
-                          galonesReferencia: form.galonesReferencia,
+                          galonesReferencia: galonesRefCrear,
                           rendimiento: form.cantidadElaborada,
                           unidadRendimientoUuid: directaForm.articuloUnidadMedidaUuid,
                         },
@@ -1674,7 +1723,7 @@ export default function ElaboracionesPage() {
                       // Solo el Agua va sin columna de regla (rellena el total).
                       const sinRegla = esAgua;
                       const ajusteAgua = esAgua
-                        ? calcularAjusteAgua(insumoRows, articulos, unidades, grafoUnidades, form.galonesReferencia)
+                        ? calcularAjusteAgua(insumoRows, articulos, unidades, grafoUnidades, galonesRefCrear)
                         : null;
                       return (
                       <tr key={row.key}>
@@ -1790,19 +1839,21 @@ export default function ElaboracionesPage() {
                             >
                               <FiSliders size={12} /> Ajustar dosis
                             </button>
-                          ) : (
-                            cantidadAjustada != null && (
-                              <button
-                                type="button"
-                                className="btn btn-link btn-sm p-1 d-inline-flex align-items-center gap-1 text-secondary text-decoration-none"
-                                style={{ fontSize: "0.7rem" }}
-                                title="Ajustar la cantidad de esta fila para que la dosis real quede exacta en la dosis por hectárea del artículo"
-                                onClick={() => updateInsumoRow(row.key, { cantidad: String(cantidadAjustada) })}
-                              >
-                                <FiSliders size={12} /> Ajustar dosis
-                              </button>
-                            )
-                          )}
+                          ) : cantidadAjustada != null ? (
+                            <button
+                              type="button"
+                              className="btn btn-link btn-sm p-1 d-inline-flex align-items-center gap-1 text-secondary text-decoration-none"
+                              style={{ fontSize: "0.7rem" }}
+                              title="Ajustar la cantidad de esta fila para que la dosis real quede exacta en la dosis por hectárea del artículo"
+                              onClick={() => updateInsumoRow(row.key, { cantidad: String(cantidadAjustada) })}
+                            >
+                              <FiSliders size={12} /> Ajustar dosis
+                            </button>
+                          ) : dosisRefFila(row, articulos, unidades) && (!form.volumenPorHectarea || !Number(form.cantidadElaborada)) ? (
+                            <span className="text-secondary" style={{ fontSize: "0.7rem" }}>
+                              Para ajustar la dosis llena Volumen / ha y Cantidad a producir
+                            </span>
+                          ) : null}
                         </td>
                         <td className={`small text-center ${dosis.excede ? "text-danger fw-medium" : "text-secondary"}`}>
                           {dosis.dosisReal != null
@@ -2113,11 +2164,11 @@ export default function ElaboracionesPage() {
         )}
 
         {editarOpen && (
-          <ModalShell title="Editar mezcla" onClose={() => setEditarOpen(false)} width="80vw">
+          <ModalShell title="Editar mezcla" onClose={() => setEditarOpen(false)} width="95vw">
             <form onSubmit={handleGuardarEdicion}>
               {editarError && <div className="alert alert-danger py-2 small">{editarError}</div>}
               <div className="row g-2 mb-2">
-                <div className="col-2">
+                <div className="col-6 col-lg-1">
                   <label className="form-label small fw-medium mb-1">Código</label>
                   <input
                     type="text"
@@ -2126,9 +2177,9 @@ export default function ElaboracionesPage() {
                     onChange={(e) => setEditarForm((f) => ({ ...f, codigo: e.target.value }))}
                   />
                 </div>
-                <div className="col-4">
+                <div className="col-12 col-lg-4">
                   <label className="form-label small fw-medium mb-1">
-                    Nombre <span className="text-danger">*</span>
+                    Nombre comercial <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text"
@@ -2138,7 +2189,16 @@ export default function ElaboracionesPage() {
                     onChange={(e) => setEditarForm((f) => ({ ...f, nombre: e.target.value }))}
                   />
                 </div>
-                <div className="col-4">
+                <div className="col-12 col-lg-4">
+                  <label className="form-label small fw-medium mb-1">Artículo elaborado (nombre interno)</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm rounded-3"
+                    value={editarForm.articuloNombre || ""}
+                    onChange={(e) => setEditarForm((f) => ({ ...f, articuloNombre: e.target.value }))}
+                  />
+                </div>
+                <div className="col-7 col-lg-2">
                   <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-1">
                     Volumen / ha
                     <FiInfo
@@ -2170,7 +2230,7 @@ export default function ElaboracionesPage() {
                     </select>
                   </div>
                 </div>
-                <div className="col-2">
+                <div className="col-5 col-lg-1">
                   <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-1">
                     Galones ref.
                     <FiInfo
