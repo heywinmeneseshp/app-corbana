@@ -183,6 +183,9 @@ export default function AspersionesPage() {
   const [textosDosisEditada, setTextosDosisEditada] = useState({});
   // La columna "Cambiar dosis" solo se ve si se habilita con el botón sobre la tabla.
   const [mostrarCambiarDosis, setMostrarCambiarDosis] = useState(false);
+  // Insumos ADICIONALES: artículos que se agregan a esta aspersión y no están en la receta de la mezcla. [{ key, articuloUuid, cantidad, unidadUuid }]
+  const [insumosAdicionales, setInsumosAdicionales] = useState([]);
+  const [articulosInsumo, setArticulosInsumo] = useState([]);
   // "Usar decimales": las cantidades de los insumos NO se redondean a pasos de 0.5 (ni 0.1 el ACONDICIONADOR); quedan exactas a 2 decimales.
   const [usarDecimales, setUsarDecimales] = useState(false);
   // Modal informativo "¿Cómo funciona?" de Programar aspersión.
@@ -293,6 +296,9 @@ export default function AspersionesPage() {
   }
 
   async function loadCombos() {
+    apiFetch("/inventarios/articulos?limit=100&estado=true&tipo=INSUMO")
+      .then((r) => setArticulosInsumo(r.items || []))
+      .catch(() => {});
     try {
       const anioActual = new Date().getFullYear();
       const [fincasRes, mezclasRes, almacenesRes, semanasRes, conversionesRes, unidadesVolumenRes, unidadesPesoRes] = await Promise.all([
@@ -586,6 +592,19 @@ export default function AspersionesPage() {
         observaciones: d.observaciones || "",
       });
       setTextosCantidadAjustada(textos);
+      setInsumosAdicionales([]);
+      if (d.mezcla?.uuid) {
+        apiFetch(`/inventarios/mezclas/${d.mezcla.uuid}`)
+          .then((md) => {
+            const recetaUuids = new Set((md.versiones?.[0]?.componentes || []).map((c) => c.articulo?.uuid));
+            setInsumosAdicionales(
+              (d.componentes || [])
+                .filter((c) => c.articulo?.uuid && !recetaUuids.has(c.articulo.uuid))
+                .map((c) => ({ key: Math.random().toString(36).slice(2), articuloUuid: c.articulo.uuid, cantidad: String(Number(c.cantidad)), unidadUuid: c.unidad?.uuid || "" })),
+            );
+          })
+          .catch(() => {});
+      }
       setUsuariosFinca([]);
       setSemanaPreview(null);
       setMezclaDetalle(null);
@@ -599,6 +618,7 @@ export default function AspersionesPage() {
 
   function openCreate() {
     setEditingUuid(null);
+    setInsumosAdicionales([]);
     setTextosCantidadAjustada({});
     setForm(emptyForm());
     setUsuariosFinca([]);
@@ -1396,8 +1416,12 @@ export default function AspersionesPage() {
             ? convertirCantidad(grafoUnidades, deUuid, aUuid, refVal) ?? refVal
             : refVal;
         if (conv == null || !Number.isFinite(conv)) continue;
-        const nuevo = (conv * pct) / 100;
-        if (!Number.isFinite(nuevo)) continue;
+        const exacto = (conv * pct) / 100;
+        if (!Number.isFinite(exacto)) continue;
+        // La dosis relativa también se redondea (0.5 en la unidad propia del insumo; exacta a 2 decimales con "Usar decimales"):
+        // sin esto el seguidor (ej. HIPOTENSOR) quedaba con el valor exacto cuando se cambiaba la dosis de su referencia.
+        const compSeguidor = componentesRecetaSeleccionada.find((c) => c.articulo?.uuid === fol);
+        const nuevo = compSeguidor && exacto > 0 ? redondearEnUnidadPropia(compSeguidor, exacto) : exacto;
         const base = basePorArticulo.get(fol);
         if (base != null && Number.isFinite(base) && Math.abs(nuevo - base) < 1e-9) {
           if (overrides[fol] !== undefined) {
@@ -1489,6 +1513,13 @@ export default function AspersionesPage() {
         .filter((c) => c.articulo?.uuid)
         .map((c) => ({ articuloUuid: c.articulo.uuid, cantidad: necesariaRealNativa(c) }))
         .filter((c) => c.cantidad > 0);
+      // Insumos adicionales (fuera de la receta): solo los completos y que no repitan un insumo de la receta.
+      const uuidsReceta = new Set(componentesRecetaSeleccionada.map((c) => c.articulo?.uuid));
+      for (const ad of insumosAdicionales) {
+        const cantidad = Number(String(ad.cantidad).replace(",", "."));
+        if (!ad.articuloUuid || !(cantidad > 0) || uuidsReceta.has(ad.articuloUuid)) continue;
+        componentesPayload.push({ articuloUuid: ad.articuloUuid, cantidad, ...(ad.unidadUuid ? { unidadUuid: ad.unidadUuid } : {}) });
+      }
 
       await apiFetch(editingUuid ? `/aspersiones/${editingUuid}` : "/aspersiones", {
         method: editingUuid ? "PUT" : "POST",
@@ -3413,6 +3444,126 @@ export default function AspersionesPage() {
                   </div>
                 );
               })()}
+
+              {/* Insumos adicionales: se suman a la mezcla solo en esta aspersión (no cambian la receta) y se descuentan del inventario al ejecutar. */}
+              {mezclaSeleccionada && (
+                <div className="mb-2 p-2 rounded-3" style={{ backgroundColor: "#f8f9fa" }}>
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <p className="small fw-medium mb-0">Insumos adicionales (no están en la receta)</p>
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm p-0 text-decoration-none text-success"
+                      onClick={() => setInsumosAdicionales((rows) => [...rows, { key: Math.random().toString(36).slice(2), articuloUuid: "", cantidad: "", unidadUuid: "" }])}
+                    >
+                      + Agregar insumo
+                    </button>
+                  </div>
+                  {insumosAdicionales.length === 0 && <div className="small text-secondary">Sin insumos adicionales.</div>}
+                  {insumosAdicionales.map((ad) => {
+                    const art = articulosInsumo.find((a) => a.uuid === ad.articuloUuid);
+                    const unidadBase = art?.unidadMedida?.uuid;
+                    const opcionesUnidad = unidadBase
+                      ? [...unidadesVolumen, ...unidadesPeso].filter((u) => u.uuid === unidadBase || convertirCantidad(grafoUnidades, unidadBase, u.uuid, 1) !== null)
+                      : [];
+                    const cambiar = (patch) => setInsumosAdicionales((rows) => rows.map((r) => (r.key === ad.key ? { ...r, ...patch } : r)));
+                    const enReceta = componentesRecetaSeleccionada.some((c) => c.articulo?.uuid === ad.articuloUuid);
+                    // Dosis por hectárea del adicional (cantidad ÷ hectáreas) y su % sobre la dosis máxima configurada en el artículo.
+                    const cantNum = Number(String(ad.cantidad).replace(",", "."));
+                    const unidadFilaAd = ad.unidadUuid || unidadBase;
+                    const simboloAd = opcionesUnidad.find((u) => u.uuid === ad.unidadUuid)?.simbolo || art?.unidadMedida?.simbolo || "";
+                    const dosisCalc = cantNum > 0 && hectareasNum > 0 ? cantNum / hectareasNum : null;
+                    const dosisMaxAd = Number(art?.dosisPorHectarea) > 0 ? Number(art.dosisPorHectarea) : null;
+                    const unidadMaxAd = art?.dosisUnidad?.uuid || art?.unidadMedida?.uuid;
+                    let pctAd = null;
+                    if (dosisCalc != null && dosisMaxAd && unidadFilaAd) {
+                      const aplicada = unidadMaxAd && unidadMaxAd !== unidadFilaAd ? convertirCantidad(grafoUnidades, unidadFilaAd, unidadMaxAd, dosisCalc) : dosisCalc;
+                      if (aplicada != null) pctAd = (aplicada / dosisMaxAd) * 100;
+                    }
+                    return (
+                      <div key={ad.key} className="row g-1 align-items-center mb-1">
+                        <div className="col-4">
+                          <input
+                            type="text"
+                            list={`adic-${ad.key}`}
+                            className={`form-control form-control-sm rounded-3 ${enReceta ? "is-invalid" : ""}`}
+                            placeholder="Escribe para buscar el insumo..."
+                            autoComplete="off"
+                            defaultValue={art?.nombre || ""}
+                            key={`${ad.key}-${ad.articuloUuid}`}
+                            onChange={(e) => {
+                              const exacto = articulosInsumo.find((a) => a.nombre.toLowerCase() === e.target.value.trim().toLowerCase());
+                              if (exacto) cambiar({ articuloUuid: exacto.uuid, unidadUuid: exacto.unidadMedida?.uuid || "" });
+                              else if (e.target.value.trim() === "") cambiar({ articuloUuid: "", unidadUuid: "" });
+                            }}
+                          />
+                          <datalist id={`adic-${ad.key}`}>
+                            {articulosInsumo.map((a) => (
+                              <option key={a.uuid} value={a.nombre} />
+                            ))}
+                          </datalist>
+                          {enReceta && <div className="invalid-feedback d-block small">Ya está en la receta: cambia su cantidad en la tabla de arriba.</div>}
+                        </div>
+                        <div className="col-2">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            className="form-control form-control-sm rounded-3 text-end"
+                            placeholder="Cantidad"
+                            value={ad.cantidad}
+                            onChange={(e) => /^\d*[.,]?\d*$/.test(e.target.value) && cambiar({ cantidad: e.target.value, dosisTexto: undefined })}
+                          />
+                        </div>
+                        <div className="col-2">
+                          {opcionesUnidad.length > 1 ? (
+                            <select className="form-select form-select-sm rounded-3 px-1" value={ad.unidadUuid} onChange={(e) => cambiar({ unidadUuid: e.target.value })}>
+                              {opcionesUnidad.map((u) => (
+                                <option key={u.uuid} value={u.uuid}>
+                                  {u.simbolo}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="small text-secondary">{art?.unidadMedida?.simbolo || ""}</span>
+                          )}
+                        </div>
+                        <div className="col-2">
+                          <div className="input-group input-group-sm">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              className="form-control rounded-start-3 px-1 text-end"
+                              placeholder="Dosis/ha"
+                              title="Dosis por hectárea: se calcula de la cantidad; también puedes escribirla y se calcula la cantidad"
+                              disabled={!(hectareasNum > 0)}
+                              value={ad.dosisTexto ?? (dosisCalc != null ? String(Number(dosisCalc.toFixed(4))) : "")}
+                              onChange={(e) => {
+                                const t = e.target.value;
+                                if (!/^\d*[.,]?\d*$/.test(t)) return;
+                                const d = Number(t.replace(",", "."));
+                                cambiar({ dosisTexto: t, cantidad: t !== "" && d > 0 && hectareasNum > 0 ? String(Number((d * hectareasNum).toFixed(4))) : "" });
+                              }}
+                              onBlur={() => cambiar({ dosisTexto: undefined })}
+                            />
+                            <span className="input-group-text px-1 small">{simboloAd ? `${simboloAd}/ha` : "/ha"}</span>
+                          </div>
+                        </div>
+                        <div className="col-1 text-center small">
+                          {pctAd != null && (
+                            <span className={pctAd > 100 ? "text-danger fw-semibold" : "text-secondary"} title="% de la dosis máxima por hectárea configurada en el insumo">
+                              {pctAd.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                        <div className="col-1 text-end">
+                          <button type="button" className="btn btn-link btn-sm p-0 text-danger" title="Quitar" onClick={() => setInsumosAdicionales((rows) => rows.filter((r) => r.key !== ad.key))}>
+                            <FiX />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <div className="row g-2 mb-2">
                 <div className="col-8">
