@@ -273,7 +273,8 @@ export default function AspersionesPage() {
     setLoading(true);
     setError("");
     try {
-      const qs = new URLSearchParams({ page: String(page), limit: "50" });
+      // Más antigua primero y las recientes al final.
+      const qs = new URLSearchParams({ page: String(page), limit: "50", orden: "asc" });
       if (f.fincaUuid) qs.set("fincaUuid", f.fincaUuid);
       if (f.semanaUuid) qs.set("semanaUuid", f.semanaUuid);
       if (f.mezclaUuid) qs.set("mezclaUuid", f.mezclaUuid);
@@ -2005,16 +2006,18 @@ export default function AspersionesPage() {
 
         <div className="card border-0 rounded-2 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="table-responsive">
-            <table className="table table-sm table-hover mb-0 align-middle">
+            <table className="table table-sm table-hover mb-0 align-middle" style={{ fontSize: "0.72rem" }}>
               <thead>
-                <tr className="table-light small text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
-                  <th className="fw-medium">Número</th>
+                <tr className="table-light text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
+                  <th className="fw-medium text-nowrap">Semana</th>
+                  <th className="fw-medium text-nowrap">Fecha</th>
                   <th className="fw-medium">Finca</th>
-                  <th className="fw-medium">Fecha</th>
-                  <th className="fw-medium">Semana</th>
                   <th className="fw-medium">Mezcla</th>
+                  <th className="fw-medium text-nowrap">Vehículo</th>
+                  <th className="fw-medium text-nowrap" title="Días desde la aspersión anterior de la misma finca">Intervalo</th>
+                  <th className="fw-medium">Número</th>
                   <th className="fw-medium">Hectáreas</th>
-                  <th className="fw-medium">Cantidad</th>
+                  <th className="fw-medium text-nowrap">Cantidad</th>
                   <th className="fw-medium">Estado</th>
                   <th className="fw-medium text-end">Acciones</th>
                 </tr>
@@ -2022,14 +2025,14 @@ export default function AspersionesPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={9} className="text-center text-secondary py-3 small">
+                    <td colSpan={11} className="text-center text-secondary py-3 small">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center text-secondary py-3 small">
+                    <td colSpan={11} className="text-center text-secondary py-3 small">
                       No hay aspersiones programadas todavía.
                     </td>
                   </tr>
@@ -2039,7 +2042,13 @@ export default function AspersionesPage() {
                     const info = ESTADO_INFO[a.estado] || ESTADO_INFO.PROGRAMADA;
                     return (
                       <tr key={a.uuid}>
-                        <td className="small fw-medium">
+                        <td className="fw-medium text-nowrap">{a.semana?.codigo || "—"}</td>
+                        <td className="text-nowrap">{a.fecha}</td>
+                        <td >{a.finca?.nombre || "—"}</td>
+                        <td className="text-secondary" style={{ lineHeight: 1.25 }}>{a.mezcla?.nombre || a.mezcla?.codigo || "—"}</td>
+                        <td className="text-secondary text-nowrap">{a.medio === "DRON" ? "Dron" : a.medio === "AVION" ? "Avión" : "—"}</td>
+                        <td className="text-secondary text-center">{a.diasDesdeUltima != null ? a.diasDesdeUltima : "—"}</td>
+                        <td className="text-secondary">
                           {a.numero}
                           {a.partesCiclo > 1 && (
                             <span className="ms-1 text-secondary fw-normal" title="Una misma aplicación hecha en varias partes (días): FRAC la cuenta como una sola">
@@ -2047,15 +2056,11 @@ export default function AspersionesPage() {
                             </span>
                           )}
                         </td>
-                        <td className="small">{a.finca?.nombre || "—"}</td>
-                        <td className="small text-secondary">{a.fecha}</td>
-                        <td className="small text-secondary">{a.semana?.codigo || "—"}</td>
-                        <td className="small text-secondary">{a.mezcla?.nombre || a.mezcla?.codigo || "—"}</td>
-                        <td className="small text-secondary">{Number(a.hectareas).toFixed(2)}</td>
-                        <td className="small text-secondary">
-                          {Number(a.cantidadCalculada).toFixed(2)} {a.mezcla?.unidadRendimiento?.simbolo || ""}
+                        <td className="text-secondary">{Number(a.hectareas).toFixed(2)}</td>
+                        <td className="text-secondary text-nowrap">
+                          {Math.round(Number(a.cantidadCalculada)).toLocaleString("es-CO")} {a.mezcla?.unidadRendimiento?.simbolo || ""}
                         </td>
-                        <td className="small">
+                        <td >
                           <span className="badge rounded-pill small" style={{ backgroundColor: info.bg, color: info.color }}>
                             {info.label}
                           </span>
@@ -2327,7 +2332,8 @@ export default function AspersionesPage() {
                                     {items.length > 0 && (
                                       <div className="d-flex flex-column align-items-center gap-1">
                                         {visibles.map((it) => {
-                                          const nombreMezcla = it.mezcla?.nombre || it.mezcla?.codigo || "—";
+                                          // El calendario muestra el insumo principal; si la mezcla no tiene uno marcado, el nombre de la mezcla.
+                                          const nombreMezcla = it.insumoPrincipalNombre || it.mezcla?.nombre || it.mezcla?.codigo || "—";
                                           const cancelada = it.estado === "CANCELADA";
                                           const info = ESTADO_INFO[it.estado] || ESTADO_INFO.PROGRAMADA;
                                           return (
