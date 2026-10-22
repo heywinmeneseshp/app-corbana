@@ -7,7 +7,7 @@ import Link from "next/link";
 import * as XLSX from "xlsx";
 import { FiPlus, FiEye, FiX, FiInfo, FiUploadCloud, FiDownload, FiArchive, FiRotateCcw, FiTrash2, FiEdit2, FiSliders, FiFilter, FiChevronRight } from "react-icons/fi";
 import { apiFetch, apiUpload } from "@/lib/api";
-import { hasPermission } from "@/lib/auth";
+import { hasAnyPermission, hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
@@ -1099,28 +1099,31 @@ export default function ElaboracionesPage() {
   }
 
   async function loadCombos() {
-    try {
-      const [alms, categorias, arts, unis, convs, insumos, ingredientesActivos] = await Promise.all([
-        apiFetch("/inventarios/almacenes?limit=100&estado=true"),
-        apiFetch("/inventarios/categorias?limit=100&tipo=ELABORADO&estado=true"),
-        apiFetch("/inventarios/articulos?limit=100&estado=true"),
-        apiFetch("/inventarios/unidades?limit=100&estado=true"),
-        apiFetch("/inventarios/unidades/conversiones"),
-        apiFetch("/inventarios/articulos?limit=100&estado=true&tipo=INSUMO"),
-        apiFetch("/ingredientes-activos?limit=100&estado=true"),
-      ]);
-      setAlmacenes(alms.items || []);
-      setCategoriasElaborado(categorias.items || []);
-      setArticulos(arts.items || []);
-      setUnidades(unis.items || []);
-      setConversiones(Array.isArray(convs) ? convs : convs.items || []);
-      // Todos los artículos de tipo Insumo: una receta lleva también aceite, adherente, agua, etc., que no son de la
-      // categoría "Sanidad Vegetal". Filtrar solo por esa categoría dejaba esos renglones sin artículo al editar.
-      setInsumosOpciones(insumos.items || []);
-      setIngredientesActivosOpciones(ingredientesActivos.items || []);
-    } catch (err) {
-      setError(err.message);
-    }
+    // Cada lista se pide por separado: si una falla (p. ej. un rol sin permiso para Ingredientes Activos) las demás se cargan igual,
+    // en vez de dejar vacíos los desplegables de categoría y unidades.
+    const pedir = (ruta) => apiFetch(ruta).then((r) => ({ ok: true, r }), (e) => ({ ok: false, e }));
+    const [alms, categorias, arts, unis, convs, insumos, ingredientesActivos] = await Promise.all([
+      pedir("/inventarios/almacenes?limit=100&estado=true"),
+      pedir("/inventarios/categorias?limit=100&tipo=ELABORADO&estado=true"),
+      pedir("/inventarios/articulos?limit=100&estado=true"),
+      pedir("/inventarios/unidades?limit=100&estado=true"),
+      pedir("/inventarios/unidades/conversiones"),
+      pedir("/inventarios/articulos?limit=100&estado=true&tipo=INSUMO"),
+      hasAnyPermission(["ingrediente_activo.ver", "inventario.mezclas.ver"]) ? pedir("/ingredientes-activos?limit=100&estado=true") : Promise.resolve({ ok: true, r: { items: [] } }),
+    ]);
+    const items = (x) => (x.ok ? x.r.items || [] : []);
+    setAlmacenes(items(alms));
+    setCategoriasElaborado(items(categorias));
+    setArticulos(items(arts));
+    setUnidades(items(unis));
+    setConversiones(convs.ok ? (Array.isArray(convs.r) ? convs.r : convs.r.items || []) : []);
+    // Todos los artículos de tipo Insumo: una receta lleva también aceite, adherente, agua, etc., que no son de la
+    // categoría "Sanidad Vegetal". Filtrar solo por esa categoría dejaba esos renglones sin artículo al editar.
+    setInsumosOpciones(items(insumos));
+    setIngredientesActivosOpciones(items(ingredientesActivos));
+    // Solo se avisa si falla algo esencial para crear la mezcla (los ingredientes activos son opcionales: solo filtran).
+    const fallo = [alms, categorias, unis, insumos].find((x) => !x.ok);
+    if (fallo) setError(fallo.e.message);
   }
 
   useEffect(() => {

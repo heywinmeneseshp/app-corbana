@@ -2531,7 +2531,7 @@ export default function AspersionesPage() {
                   <div className="input-group input-group-sm">
                     <input
                       type="number"
-                      step="0.5"
+                      step="any"
                       min="0"
                       className="form-control rounded-start-3"
                       disabled={!mezclaSeleccionada}
