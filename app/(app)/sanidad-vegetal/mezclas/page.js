@@ -145,6 +145,45 @@ function InsumoCombo({ opciones, value, onChange }) {
   );
 }
 
+// Borrador de "Nueva mezcla": lo escrito se guarda en el navegador (localStorage) mientras el modal está abierto, para no perderlo si se
+// cierra la pestaña o se va la luz. Se descarta al crear la mezcla o con "Cancelar"; al cerrar con la X se conserva.
+const LS_BORRADOR_NUEVA = "corbana.mezcla.nueva.borrador";
+function leerBorrador() {
+  try {
+    const raw = window.localStorage.getItem(LS_BORRADOR_NUEVA);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function guardarBorrador(datos) {
+  try {
+    window.localStorage.setItem(LS_BORRADOR_NUEVA, JSON.stringify(datos));
+  } catch {
+    // sin almacenamiento disponible (modo privado, cuota llena): simplemente no hay borrador
+  }
+}
+function borrarBorrador() {
+  try {
+    window.localStorage.removeItem(LS_BORRADOR_NUEVA);
+  } catch {
+    // nada que borrar
+  }
+}
+// Solo cuenta como borrador si el usuario escribió o eligió algo (el código sugerido solo no basta).
+function borradorTieneContenido({ form, directaForm, insumoRows }) {
+  return Boolean(
+    directaForm.articuloNombre ||
+      directaForm.articuloElaboradoNombre ||
+      directaForm.articuloCategoriaUuid ||
+      directaForm.articuloUnidadMedidaUuid ||
+      form.cantidadElaborada ||
+      form.volumenPorHectarea ||
+      form.observaciones ||
+      insumoRows.some((r) => r.articuloUuid),
+  );
+}
+
 function emptyForm() {
   return {
     mezclaUuid: "",
@@ -806,6 +845,7 @@ export default function ElaboracionesPage() {
   const [insumoRows, setInsumoRows] = useState([emptyInsumoRow()]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [borradorRecuperado, setBorradorRecuperado] = useState(false);
   const [exportando, setExportando] = useState(false);
 
   // Trae el detalle (con la receta) de cada mezcla del listado actual y
@@ -1182,12 +1222,41 @@ export default function ElaboracionesPage() {
   }
 
   function openCreate() {
-    setForm(emptyForm());
-    setDirectaForm({ ...emptyDirectaForm(), articuloCodigo: siguienteCodigoSugerido(todasLasMezclas) });
-    setInsumoRows([emptyInsumoRow()]);
+    const b = leerBorrador();
+    if (b && b.form && b.directaForm && Array.isArray(b.insumoRows) && b.insumoRows.length > 0) {
+      setForm({ ...emptyForm(), ...b.form });
+      setDirectaForm({ ...emptyDirectaForm(), ...b.directaForm });
+      setInsumoRows(b.insumoRows);
+      setBorradorRecuperado(true);
+    } else {
+      setForm(emptyForm());
+      setDirectaForm({ ...emptyDirectaForm(), articuloCodigo: siguienteCodigoSugerido(todasLasMezclas) });
+      setInsumoRows([emptyInsumoRow()]);
+      setBorradorRecuperado(false);
+    }
     setFormError("");
     setModalOpen(true);
   }
+
+  // Descarta el borrador y deja el formulario en blanco.
+  function descartarBorrador() {
+    borrarBorrador();
+    setForm(emptyForm());
+    setDirectaForm({ ...emptyDirectaForm(), articuloCodigo: siguienteCodigoSugerido(todasLasMezclas) });
+    setInsumoRows([emptyInsumoRow()]);
+    setBorradorRecuperado(false);
+  }
+
+  // Guarda el borrador (con una pequeña espera, para no escribir en cada tecla) mientras el modal está abierto.
+  useEffect(() => {
+    if (!modalOpen) return undefined;
+    const id = setTimeout(() => {
+      const datos = { form, directaForm, insumoRows };
+      if (borradorTieneContenido(datos)) guardarBorrador({ ...datos, guardadoEn: Date.now() });
+      else borrarBorrador();
+    }, 400);
+    return () => clearTimeout(id);
+  }, [modalOpen, form, directaForm, insumoRows]);
 
   // Galones que equivale la "Cantidad a producir" (si ya está en galones, la misma cantidad). Reemplaza al
   // antiguo campo "Galones ref.": se calcula solo, sin digitarlo.
@@ -1257,6 +1326,7 @@ export default function ElaboracionesPage() {
       }),
     });
     const pendiente = resultado.version?.estadoPrueba === "PENDIENTE_APROBACION";
+    borrarBorrador();
     setModalOpen(false);
     loadMezclas({ insumoUuid: filtros.insumoUuid, ingredienteActivoUuid: filtros.ingredienteActivoUuid });
     alert(
@@ -1575,6 +1645,14 @@ export default function ElaboracionesPage() {
         {modalOpen && (
           <ModalShell title="Nueva mezcla" onClose={() => setModalOpen(false)} width="95vw">
             <form onSubmit={handleCrearMezcla}>
+              {borradorRecuperado && (
+                <div className="alert alert-warning py-2 small d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <span>Se recuperó lo que habías escrito y no se había guardado.</span>
+                  <button type="button" className="btn btn-sm btn-outline-secondary rounded-1" onClick={descartarBorrador}>
+                    Descartar borrador
+                  </button>
+                </div>
+              )}
               <p className="small text-secondary">
                 Elegí los insumos y creá el artículo elaborado directamente, sin pasar por la prueba de laboratorio
                 (pH/CE). No se descuenta ningún insumo al crear la receta — la cantidad de acá abajo es solo el
@@ -2003,7 +2081,14 @@ export default function ElaboracionesPage() {
               </div>
               {formError && <div className="alert alert-danger py-2 small">{formError}</div>}
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setModalOpen(false)}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-link text-secondary text-decoration-none"
+                  onClick={() => {
+                    borrarBorrador();
+                    setModalOpen(false);
+                  }}
+                >
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
