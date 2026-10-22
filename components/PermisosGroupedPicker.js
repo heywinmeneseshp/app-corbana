@@ -92,7 +92,7 @@ const MENU_TREE = [
       { codigo: "menu.sanidad_vegetal.insumos", nombre: "Insumos", prefijos: [] },
       // Estos dos mantienen su código histórico menu.inventarios.* (así no se
       // pierden los roles ya armados), pero en el menú real viven acá.
-      { codigo: "menu.inventarios.elaboraciones", nombre: "Mezclas", prefijos: [] },
+      { codigo: "menu.inventarios.elaboraciones", nombre: "Mezclas", prefijos: ["inventario.mezclas."] },
       { codigo: "menu.inventarios.mezclas", nombre: "Pruebas de laboratorio", prefijos: [] },
     ],
   },

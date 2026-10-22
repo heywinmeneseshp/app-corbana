@@ -930,8 +930,10 @@ export default function AspersionesPage() {
 
   // Al elegir una mezcla se trae su detalle completo (con los componentes
   // de la receta) — la lista de combos no los trae.
+  // Depende también de `modalOpen`: al EDITAR una aspersión con la misma mezcla que ya había en el formulario, `form.mezclaUuid` no
+  // cambia y sin esto el detalle (insumos y cantidades) no se volvía a cargar tras limpiarlo al abrir el modal.
   useEffect(() => {
-    if (!form.mezclaUuid) {
+    if (!modalOpen || !form.mezclaUuid) {
       setMezclaDetalle(null);
       return;
     }
@@ -946,7 +948,7 @@ export default function AspersionesPage() {
     return () => {
       cancelado = true;
     };
-  }, [form.mezclaUuid]);
+  }, [form.mezclaUuid, modalOpen]);
 
   const componentesRecetaSeleccionada = mezclaDetalle?.versiones?.[0]?.componentes || [];
   const rendimientoSeleccionado = Number(mezclaDetalle?.rendimiento || 1) || 1;

@@ -13,6 +13,9 @@ import MapaRecorridoModal from "@/components/precalibracion/MapaRecorridoModal";
 import PotencialCosecha from "@/components/precalibracion/PotencialCosecha";
 import TablaLotes from "@/components/precalibracion/TablaLotes";
 import ConfiguracionPrecalibracion from "@/components/precalibracion/ConfiguracionPrecalibracion";
+import TablaSesiones from "@/components/precalibracion/TablaSesiones";
+import ResumenSemanal from "@/components/precalibracion/ResumenSemanal";
+import RendimientoTrabajadores from "@/components/precalibracion/RendimientoTrabajadores";
 import { hasPermission } from "@/lib/auth";
 import { getDetalleLote, getOpciones, getResumen } from "@/lib/precalibracion/api";
 
@@ -24,7 +27,7 @@ export default function PrecalibracionPage() {
   const [loteDetalleId, setLoteDetalleId] = useState(null);
   const [loteRutaId, setLoteRutaId] = useState(null);
   const [opciones, setOpciones] = useState(null);
-  const [vista, setVista] = useState("visualizacion"); // "visualizacion" | "configuracion"
+  const [vista, setVista] = useState("visualizacion"); // "visualizacion" | "sesiones" | "semanal" | "rendimiento" | "configuracion"
   const puedeConfigurar = hasPermission("precalibracion.configurar");
   const [refresco, setRefresco] = useState(0); // fuerza a recargar el resumen tras guardar un ajuste
   const [resumenEstado, setResumenEstado] = useState({ clave: null, resumen: null, error: "" });
@@ -104,22 +107,43 @@ export default function PrecalibracionPage() {
           </p>
         </div>
 
-        {puedeConfigurar && (
-          <ul className="nav nav-pills gap-1 mb-3">
-            <li className="nav-item">
-              <button type="button" className={`nav-link btn-sm py-1 px-3 ${vista === "visualizacion" ? "active" : ""}`} onClick={() => setVista("visualizacion")}>
-                Visualización
-              </button>
-            </li>
+        <ul className="nav nav-pills gap-1 mb-3">
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 px-3 ${vista === "visualizacion" ? "active" : ""}`} onClick={() => setVista("visualizacion")}>
+              Visualización
+            </button>
+          </li>
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 px-3 ${vista === "sesiones" ? "active" : ""}`} onClick={() => setVista("sesiones")}>
+              Sesiones
+            </button>
+          </li>
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 px-3 ${vista === "semanal" ? "active" : ""}`} onClick={() => setVista("semanal")}>
+              Semanal
+            </button>
+          </li>
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 px-3 ${vista === "rendimiento" ? "active" : ""}`} onClick={() => setVista("rendimiento")}>
+              Rendimiento
+            </button>
+          </li>
+          {puedeConfigurar && (
             <li className="nav-item">
               <button type="button" className={`nav-link btn-sm py-1 px-3 ${vista === "configuracion" ? "active" : ""}`} onClick={() => setVista("configuracion")}>
                 Configuración
               </button>
             </li>
-          </ul>
-        )}
+          )}
+        </ul>
 
-        {vista === "configuracion" && puedeConfigurar ? (
+        {vista === "sesiones" ? (
+          <TablaSesiones opciones={opciones} />
+        ) : vista === "semanal" ? (
+          <ResumenSemanal opciones={opciones} />
+        ) : vista === "rendimiento" ? (
+          opciones ? <RendimientoTrabajadores opciones={opciones} /> : <p className="text-secondary small">Cargando...</p>
+        ) : vista === "configuracion" && puedeConfigurar ? (
           <ConfiguracionPrecalibracion onCambio={() => setRefresco((n) => n + 1)} />
         ) : (
           <>

@@ -22,11 +22,20 @@ function rowKey(row) {
   return `${row.fincaUuid}-${row.semanaUuid}`;
 }
 
+// Origen de los racimos de cada edad: saldo real de la cinta, embolse real, o estimado por hectáreas × embolse por ha histórico.
+const ORIGEN_EDAD = {
+  saldo: { color: "#16a34a", texto: "saldo real" },
+  embolse: { color: "#16a34a", texto: "embolse real" },
+  real: { color: "#16a34a", texto: "real" },
+  estimado: { color: "#f59e0b", texto: "estimado por hectáreas" },
+  mixto: { color: "#65a30d", texto: "saldo real y estimado" },
+};
+
 function DistribucionEdad({ ageBreakdown }) {
   const max = Math.max(1, ...ageBreakdown.map((a) => a.racimos));
   return (
     <div className="d-flex align-items-end gap-1" style={{ height: 28 }} title={
-      ageBreakdown.map((a) => `Edad ${a.edad}: ${a.racimos.toLocaleString("es")} racimos`).join(" · ")
+      ageBreakdown.map((a) => `Edad ${a.edad}: ${a.racimos.toLocaleString("es")} racimos${a.origen ? ` (${ORIGEN_EDAD[a.origen]?.texto || a.origen})` : ""}`).join(" · ")
     }>
       {ageBreakdown.map((a) => (
         <div
@@ -34,7 +43,7 @@ function DistribucionEdad({ ageBreakdown }) {
           style={{
             width: 6,
             height: Math.max(2, Math.round((a.racimos / max) * 24)),
-            backgroundColor: "#16a34a",
+            backgroundColor: ORIGEN_EDAD[a.origen]?.color || "#16a34a",
             opacity: 0.85,
             borderRadius: 1,
           }}
@@ -188,7 +197,7 @@ function PronosticoSemanal() {
             <h1 className="fw-bold h3 mb-1 d-flex align-items-center gap-2">
               <FiActivity /> Proyección
             </h1>
-            <p className="text-secondary mb-0">Proyección de cajas 20kg por finca a partir del historial de embolses y cortes.</p>
+            <p className="text-secondary mb-0">Proyección de cajas 20kg por finca: saldos reales por cinta y, donde no hay saldo, embolse estimado con hectáreas productivas y el comportamiento de años pasados.</p>
           </div>
           <div className="d-flex align-items-center gap-2">
             <button
