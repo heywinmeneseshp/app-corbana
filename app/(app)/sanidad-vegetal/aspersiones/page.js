@@ -183,6 +183,8 @@ export default function AspersionesPage() {
   const [textosDosisEditada, setTextosDosisEditada] = useState({});
   // La columna "Cambiar dosis" solo se ve si se habilita con el botón sobre la tabla.
   const [mostrarCambiarDosis, setMostrarCambiarDosis] = useState(false);
+  // "Usar decimales": las cantidades de los insumos NO se redondean a pasos de 0.5 (ni 0.1 el ACONDICIONADOR); quedan exactas a 2 decimales.
+  const [usarDecimales, setUsarDecimales] = useState(false);
   // Modal informativo "¿Cómo funciona?" de Programar aspersión.
   const [infoProgramarOpen, setInfoProgramarOpen] = useState(false);
   // Unidad en la que se MUESTRA/EDITA "Cantidad necesaria" por insumo —
@@ -859,6 +861,7 @@ export default function AspersionesPage() {
   // 0.1 para el ACONDICIONADOR).
   function redondearAMedios(valor) {
     if (!(valor > 0)) return valor;
+    if (usarDecimales) return Math.round(valor * 100) / 100;
     return Math.round(valor / 0.5) * 0.5;
   }
 
@@ -887,6 +890,7 @@ export default function AspersionesPage() {
   // resultado en la unidad de la receta (la "nativa", que es la que se guarda).
   function redondearEnUnidadPropia(componente, cantidadNativa) {
     if (!(cantidadNativa > 0)) return cantidadNativa;
+    if (usarDecimales) return Math.round(cantidadNativa * 100) / 100;
     const recetaUuid = componente.unidad?.uuid;
     const propiaUuid = unidadPropiaDe(componente);
     if (!recetaUuid || !propiaUuid || propiaUuid === recetaUuid) return redondearAMedios(cantidadNativa);
@@ -1023,7 +1027,7 @@ export default function AspersionesPage() {
         : convertirCantidad(grafoUnidades, kilogramo.uuid, reguladorUnidadUuid, reguladorKg);
     // Siempre a un decimal en la unidad propia del insumo (pedido
     // explícito) — es el valor que se muestra Y el que se guarda/descuenta.
-    return reguladorNativo === null ? null : Math.round(reguladorNativo * 10) / 10;
+    return reguladorNativo === null ? null : usarDecimales ? Math.round(reguladorNativo * 100) / 100 : Math.round(reguladorNativo * 10) / 10;
   }
   function calcularEscenario(aumentoPct) {
     const factorAumento = 1 + aumentoPct / 100;
@@ -2777,6 +2781,7 @@ export default function AspersionesPage() {
                   function aUnidadFila(cantidadNativa) {
                     const convertida = aUnidadFilaExacta(cantidadNativa);
                     if (!(convertida > 0)) return convertida;
+                    if (usarDecimales) return Math.round(convertida * 100) / 100;
                     return c === componenteRegulador ? Math.round(convertida * 10) / 10 : Math.round(convertida / 0.5) * 0.5;
                   }
                   const simboloDisplay =
@@ -2935,14 +2940,29 @@ export default function AspersionesPage() {
                   <div className="mb-2 p-2 rounded-3" style={{ backgroundColor: "#f8f9fa" }}>
                     <div className="d-flex justify-content-between align-items-center mb-1">
                       <p className="small fw-medium mb-0">Insumos que componen la mezcla (a esta cantidad)</p>
-                      <button
-                        type="button"
-                        className={`btn btn-link btn-sm p-0 text-decoration-none ${mostrarCambiarDosis ? "fw-semibold text-success" : "text-secondary"}`}
-                        onClick={() => setMostrarCambiarDosis((v) => !v)}
-                        title="Muestra u oculta la columna para cambiar la dosis de cada insumo"
-                      >
-                        Cambiar dosis
-                      </button>
+                      <div className="d-flex align-items-center gap-3">
+                        <button
+                          type="button"
+                          className={`btn btn-link btn-sm p-0 text-decoration-none ${usarDecimales ? "fw-semibold text-success" : "text-secondary"}`}
+                          onClick={() => {
+                            setUsarDecimales((v) => !v);
+                            // Igual que al cambiar el % de Aumento: se vuelve a la receta para recalcular sin los valores ajustados a mano.
+                            setTextosCantidadAjustada((t) => (Object.keys(t).length ? {} : t));
+                            setForm((f) => ({ ...f, componentesAjustados: Object.keys(f.componentesAjustados).length ? {} : f.componentesAjustados }));
+                          }}
+                          title="Las cantidades de los insumos no se redondean (quedan exactas, con decimales)"
+                        >
+                          Usar decimales
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-link btn-sm p-0 text-decoration-none ${mostrarCambiarDosis ? "fw-semibold text-success" : "text-secondary"}`}
+                          onClick={() => setMostrarCambiarDosis((v) => !v)}
+                          title="Muestra u oculta la columna para cambiar la dosis de cada insumo"
+                        >
+                          Cambiar dosis
+                        </button>
+                      </div>
                     </div>
                     <div className="table-responsive rounded-3 overflow-hidden">
                       <table className="table table-sm mb-0">

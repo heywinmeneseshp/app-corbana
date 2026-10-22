@@ -1,7 +1,7 @@
 "use client";
 
 import InfoModulo from "@/components/InfoModulo";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -107,6 +107,44 @@ function descargarWorkbook(filas, nombreArchivo) {
 // de historial, debe ser solo un maestro de mezclas". Clic en una fila
 // (o el ícono de ojo) lleva al detalle de la receta, la misma pantalla que
 // usa Mezclas — Pruebas de laboratorio.
+// Insumo (artículo) de una fila de la receta: campo de texto con sugerencias que se filtran a medida que se escribe (datalist),
+// en lugar de un listado desplegable largo. Al coincidir el texto con un insumo se selecciona; al salir del campo vuelve a mostrar
+// el insumo elegido (o queda vacío si no se eligió ninguno).
+function InsumoCombo({ opciones, value, onChange }) {
+  const listaId = useId();
+  const nombreActual = opciones.find((a) => a.uuid === value)?.nombre || "";
+  const [texto, setTexto] = useState(null); // null = se muestra el nombre del insumo elegido
+  function cambiar(e) {
+    const t = e.target.value;
+    setTexto(t);
+    if (t.trim() === "") {
+      onChange("");
+      return;
+    }
+    const exacto = opciones.find((a) => a.nombre.toLowerCase() === t.trim().toLowerCase());
+    if (exacto) onChange(exacto.uuid);
+  }
+  return (
+    <>
+      <input
+        type="text"
+        list={listaId}
+        className="form-control form-control-sm rounded-3"
+        placeholder="Escribe para buscar..."
+        autoComplete="off"
+        value={texto ?? nombreActual}
+        onChange={cambiar}
+        onBlur={() => setTexto(null)}
+      />
+      <datalist id={listaId}>
+        {opciones.map((a) => (
+          <option key={a.uuid} value={a.nombre} />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
 function emptyForm() {
   return {
     mezclaUuid: "",
@@ -126,7 +164,7 @@ function emptyForm() {
 }
 
 function emptyDirectaForm() {
-  return { articuloNombre: "", articuloCodigo: "", articuloCategoriaUuid: "", articuloUnidadMedidaUuid: "" };
+  return { articuloNombre: "", articuloElaboradoNombre: "", articuloCodigo: "", articuloCategoriaUuid: "", articuloUnidadMedidaUuid: "" };
 }
 
 // Sugerencia de código: continúa el correlativo "MEZ-000N" de la última
@@ -1206,6 +1244,7 @@ export default function ElaboracionesPage() {
       method: "POST",
       body: JSON.stringify({
         articuloNombre: directaForm.articuloNombre,
+        articuloElaboradoNombre: directaForm.articuloElaboradoNombre || null,
         articuloCodigo: directaForm.articuloCodigo || null,
         articuloCategoriaUuid: directaForm.articuloCategoriaUuid,
         articuloUnidadMedidaUuid: directaForm.articuloUnidadMedidaUuid || null,
@@ -1603,6 +1642,23 @@ export default function ElaboracionesPage() {
               </div>
 
               <div className="row g-2 mb-2">
+                <div className="col-6">
+                  <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-1">
+                    Artículo elaborado (nombre interno)
+                    <FiInfo size={13} className="text-secondary" title="Nombre del artículo de inventario que se crea para esta mezcla. Si lo dejas vacío se llamará 'Mezcla MEZ-000N' (el consecutivo)." />
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={150}
+                    className="form-control form-control-sm rounded-3"
+                    placeholder="Opcional (por defecto: Mezcla MEZ-000N)"
+                    value={directaForm.articuloElaboradoNombre}
+                    onChange={(e) => setDirectaForm((f) => ({ ...f, articuloElaboradoNombre: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="row g-2 mb-2">
                 <div className="col-4">
                   <label className="form-label small fw-medium mb-1">
                     Categoría <span className="text-danger">*</span>
@@ -1758,18 +1814,7 @@ export default function ElaboracionesPage() {
                       return (
                       <tr key={row.key}>
                         <td>
-                          <select
-                            className="form-select form-select-sm rounded-3"
-                            value={row.articuloUuid}
-                            onChange={(e) => updateInsumoRow(row.key, { articuloUuid: e.target.value })}
-                          >
-                            <option value="">Selecciona...</option>
-                            {insumosOpciones.map((a) => (
-                              <option key={a.uuid} value={a.uuid}>
-                                {a.nombre}
-                              </option>
-                            ))}
-                          </select>
+                          <InsumoCombo opciones={insumosOpciones} value={row.articuloUuid} onChange={(uuid) => updateInsumoRow(row.key, { articuloUuid: uuid })} />
                         </td>
                         <td>
                           <select
@@ -2379,18 +2424,7 @@ export default function ElaboracionesPage() {
                           return (
                           <tr key={row.key}>
                             <td>
-                              <select
-                                className="form-select form-select-sm rounded-3"
-                                value={row.articuloUuid}
-                                onChange={(e) => updateEditarInsumoRow(row.key, { articuloUuid: e.target.value })}
-                              >
-                                <option value="">Selecciona...</option>
-                                {insumosOpciones.map((a) => (
-                                  <option key={a.uuid} value={a.uuid}>
-                                    {a.nombre}
-                                  </option>
-                                ))}
-                              </select>
+                              <InsumoCombo opciones={insumosOpciones} value={row.articuloUuid} onChange={(uuid) => updateEditarInsumoRow(row.key, { articuloUuid: uuid })} />
                             </td>
                             <td>
                               <select
