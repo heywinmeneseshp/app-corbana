@@ -1605,8 +1605,16 @@ export default function AspersionesPage() {
         setEjecutarModal((m) => (m && m.aspersion.uuid === aspersion.uuid ? { ...m, candidatas: lista } : m));
       })
       .catch(() => {});
+    // Insumos y cantidades que se van a descontar (informativo).
+    apiFetch(`/aspersiones/${aspersion.uuid}`)
+      .then((d) => {
+        const detalle = d?.data || d;
+        setEjecutarModal((m) => (m && m.aspersion.uuid === aspersion.uuid ? { ...m, insumos: detalle?.componentes || [] } : m));
+      })
+      .catch(() => setEjecutarModal((m) => (m && m.aspersion.uuid === aspersion.uuid ? { ...m, insumos: [] } : m)));
     setEjecutarModal({
       aspersion,
+      insumos: null,
       fechaParteRestante: manana.toISOString().slice(0, 10),
       cicloCon: "",
       candidatas: [],
@@ -2762,7 +2770,14 @@ export default function AspersionesPage() {
                     galonAgua && unidadRecetaUuid && convertirCantidad(grafoUnidades, unidadRecetaUuid, galonAgua.uuid, 1) !== null
                       ? galonAgua.uuid
                       : null;
-                  const unidadFilaUuid = unidadesPorFila[articuloUuid] || aguaEnGalones || unidadPropiaDe(c) || unidadRecetaUuid;
+                  // El ACONDICIONADOR se dosifica en GRAMOS por litro de agua: por defecto su cantidad se muestra (y se digita) en gramos, no en
+                  // la unidad propia del artículo (Kg), para que "1000" sea 1000 g y no 1000 Kg.
+                  const gramoFila = c === componenteRegulador ? unidadesPeso.find((u) => u.nombre === "Gramo") : null;
+                  const gramosEnFila =
+                    gramoFila && unidadRecetaUuid && (unidadRecetaUuid === gramoFila.uuid || convertirCantidad(grafoUnidades, unidadRecetaUuid, gramoFila.uuid, 1) !== null)
+                      ? gramoFila.uuid
+                      : null;
+                  const unidadFilaUuid = unidadesPorFila[articuloUuid] || aguaEnGalones || gramosEnFila || unidadPropiaDe(c) || unidadRecetaUuid;
                   // Convierte a la unidad elegida para esta fila SIN redondear —
                   // se usa para la columna Receta (exacta con dos decimales,
                   // pedido explícito) y para que los TOTALES cuadren con
@@ -2903,7 +2918,18 @@ export default function AspersionesPage() {
                   aplicarNativo(uuid, comp, escrito, reglaTipo === "PORCENTAJE" ? (reglaBase * valor) / 100 : valor * reglaBase);
                 }
 
-                function aplicarNativo(uuid, comp, escrito, nativo) {
+                function aplicarNativo(uuid, comp, escritoDosis, nativoExacto) {
+                  const escrito = escritoDosis;
+                  // La dosis cambiada a mano también respeta la regla de redondeo (0.5 en la unidad propia del insumo; 0.1 el
+                  // ACONDICIONADOR), salvo que "Usar decimales" esté activo.
+                  const nativo =
+                    nativoExacto > 0
+                      ? usarDecimales
+                        ? Math.round(nativoExacto * 100) / 100
+                        : comp === componenteRegulador
+                          ? Math.round(nativoExacto * 10) / 10 || nativoExacto
+                          : redondearEnUnidadPropia(comp, nativoExacto)
+                      : nativoExacto;
                   const esEdicionPrincipal = comp.esPrincipal;
                   setTextosDosisEditada((t) => ({ ...t, [uuid]: escrito }));
                   setTextosCantidadAjustada((t) => {
@@ -3595,6 +3621,30 @@ export default function AspersionesPage() {
                   {ejecutarModal.aspersion.medio === "DRON" ? "Dron" : ejecutarModal.aspersion.medio === "AVION" ? "Avión" : "—"} ·{" "}
                   {Number(ejecutarModal.aspersion.hectareas)} ha programadas
                 </div>
+              </div>
+              <div className="mb-3">
+                <div className="small fw-semibold mb-1">Insumos a descontar</div>
+                {ejecutarModal.insumos === null ? (
+                  <div className="small text-secondary">Cargando insumos...</div>
+                ) : ejecutarModal.insumos.length === 0 ? (
+                  <div className="small text-secondary">Sin insumos.</div>
+                ) : (
+                  <table className="table table-sm small mb-1">
+                    <tbody>
+                      {ejecutarModal.insumos.map((c) => (
+                        <tr key={c.uuid}>
+                          <td>{c.articulo?.nombre || "—"}</td>
+                          <td className="text-end fw-medium text-nowrap">
+                            {Number(c.cantidad).toLocaleString("es-CO", { maximumFractionDigits: 2 })} {c.unidad?.simbolo || ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {Number(ejecutarModal.hectareasAplicadas) > 0 && Number(ejecutarModal.hectareasAplicadas) < Number(ejecutarModal.aspersion.hectareas) && (
+                  <div className="small text-secondary">Son las cantidades de la programación completa; al ejecutar menos hectáreas se descuentan en proporción.</div>
+                )}
               </div>
               {ejecutarModal.error && <div className="alert alert-danger py-2 small">{ejecutarModal.error}</div>}
               <div className="row g-2 mb-2">
