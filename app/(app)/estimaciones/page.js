@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { FiTarget, FiSave, FiEye, FiList, FiAlertTriangle, FiBarChart2, FiDownload, FiChevronDown, FiChevronUp, FiMaximize2, FiX } from "react-icons/fi";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, LabelList } from "recharts";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
@@ -299,31 +299,77 @@ export default function EstimacionesPage() {
     }
   }, [semanasCompactaCatalogo.length]);
 
-  // Descarga la escalera tal como se ve (filtros de finca y año aplicados): una fila por semana de registro y una columna por semana objetivo,
-  // con las cajas estimadas como números. La diagonal (registro de la misma semana) queda con su valor como cualquier otra celda.
-  function handleExportarEscalera() {
-    const encabezado = ["Semana de registro", "Desde", "Hasta", ...escaleraColumnas.map((c) => c.codigo)];
-    const filas = escaleraFilas.map((fila) => {
+  // Descarga la escalera tal como se ve (filtros de finca y año aplicados), con sus colores: encabezados verdes, la semana actual resaltada, la
+  // zona fuera de la ventana de 8 semanas en gris y la de dentro sin dato en verde claro. Una fila por semana de registro y una columna por
+  // semana objetivo; las cajas van como números.
+  async function handleExportarEscalera() {
+    const VERDE_OSCURO = "FF14532D";
+    const VERDE_ACTUAL = "FF15803D";
+    const relleno = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
+    const borde = { bottom: { style: "thin", color: { argb: "FFF1F3F5" } } };
+    const libro = new ExcelJS.Workbook();
+    const hoja = libro.addWorksheet("Escalera", { views: [{ state: "frozen", xSplit: 3, ySplit: 1 }] });
+    hoja.columns = [{ width: 18 }, { width: 12 }, { width: 12 }, ...escaleraColumnas.map(() => ({ width: 11 }))];
+
+    const encabezado = hoja.addRow(["Semana de registro", "Desde", "Hasta", ...escaleraColumnas.map((c) => c.codigo)]);
+    encabezado.eachCell((celda, n) => {
+      const colSemana = escaleraColumnas[n - 4];
+      const esActual = colSemana && semanaActualEscalera && colSemana.uuid === semanaActualEscalera.uuid;
+      celda.fill = relleno(esActual ? VERDE_ACTUAL : VERDE_OSCURO);
+      celda.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      celda.alignment = { horizontal: "center", vertical: "middle" };
+    });
+
+    escaleraFilas.forEach((fila) => {
       const src = fila.sourceSemana;
-      return [
+      const esFilaActual = Boolean(semanaActualEscalera && src && src.uuid === semanaActualEscalera.uuid);
+      const row = hoja.addRow([
         src ? src.codigo : fila.sourceFecha,
         src?.fechaInicio ? String(src.fechaInicio).slice(0, 10) : "",
         src?.fechaFin ? String(src.fechaFin).slice(0, 10) : "",
         ...escaleraColumnas.map((col) => {
           const v = fila.valores?.[col.uuid];
-          return v === undefined || v === null || v === "" ? "" : Number(v);
+          return v === undefined || v === null || v === "" ? null : Number(v);
         }),
-      ];
+      ]);
+      // Primeras tres columnas: semana de registro (verde oscuro, o verde claro en la fila de la semana actual).
+      for (let n = 1; n <= 3; n += 1) {
+        const celda = row.getCell(n);
+        celda.fill = relleno(esFilaActual ? "FFDCF3E6" : VERDE_OSCURO);
+        celda.font = { bold: true, color: { argb: esFilaActual ? "FF14532D" : "FFFFFFFF" } };
+        celda.alignment = { horizontal: "center" };
+      }
+      escaleraColumnas.forEach((col, colIndex) => {
+        const celda = row.getCell(colIndex + 4);
+        const tieneValor = celda.value !== null && celda.value !== undefined && celda.value !== "";
+        const esDiagonal = Boolean(src && col.uuid === src.uuid);
+        const esColActual = Boolean(semanaActualEscalera && col.uuid === semanaActualEscalera.uuid);
+        const diagIdx = src ? escaleraColumnas.findIndex((c) => c.uuid === src.uuid) : -1;
+        const dentro = esDiagonal || (diagIdx !== -1 && colIndex > diagIdx && colIndex <= diagIdx + SEMANAS_DEFAULT);
+        let fondo = "FFFFFFFF";
+        let color = "FF1F2937";
+        let negrita = tieneValor || esDiagonal;
+        if (!dentro) fondo = "FFE9ECEF";
+        else if (!tieneValor) fondo = "FFF1F8F4";
+        if (esFilaActual && esColActual) {
+          fondo = "FFDCF3E6";
+          color = "FF14532D";
+          negrita = true;
+        } else if (esFilaActual) {
+          fondo = "FFE3F2E9";
+        }
+        celda.fill = relleno(fondo);
+        celda.font = { bold: negrita, size: 10, color: { argb: color } };
+        celda.alignment = { horizontal: "center" };
+        celda.border = borde;
+        celda.numFmt = "#,##0";
+      });
     });
-    const hoja = XLSX.utils.aoa_to_sheet([encabezado, ...filas]);
-    hoja["!cols"] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, ...escaleraColumnas.map(() => ({ wch: 11 }))];
-    hoja["!freeze"] = { xSplit: 3, ySplit: 1 };
-    const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, "Escalera");
+
     const finca = fincas.find((f) => f.uuid === filtroEscaleraFincaUuid);
     const nombre = `escalera-estimaciones-${finca ? finca.codigo : "total"}-${filtroEscaleraAnio || escaleraAnioMostrado || "actual"}.xlsx`;
-    const buffer = XLSX.write(libro, { bookType: "xlsx", type: "array" });
-    const url = URL.createObjectURL(new Blob([buffer], { type: "application/octet-stream" }));
+    const buffer = await libro.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = nombre;
