@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { FiTarget, FiSave, FiEye, FiList, FiAlertTriangle, FiBarChart2, FiDownload, FiChevronDown, FiChevronUp, FiMaximize2, FiX } from "react-icons/fi";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, LabelList } from "recharts";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
@@ -297,6 +298,38 @@ export default function EstimacionesPage() {
       setMsgError(err.message);
     }
   }, [semanasCompactaCatalogo.length]);
+
+  // Descarga la escalera tal como se ve (filtros de finca y año aplicados): una fila por semana de registro y una columna por semana objetivo,
+  // con las cajas estimadas como números. La diagonal (registro de la misma semana) queda con su valor como cualquier otra celda.
+  function handleExportarEscalera() {
+    const encabezado = ["Semana de registro", "Desde", "Hasta", ...escaleraColumnas.map((c) => c.codigo)];
+    const filas = escaleraFilas.map((fila) => {
+      const src = fila.sourceSemana;
+      return [
+        src ? src.codigo : fila.sourceFecha,
+        src?.fechaInicio ? String(src.fechaInicio).slice(0, 10) : "",
+        src?.fechaFin ? String(src.fechaFin).slice(0, 10) : "",
+        ...escaleraColumnas.map((col) => {
+          const v = fila.valores?.[col.uuid];
+          return v === undefined || v === null || v === "" ? "" : Number(v);
+        }),
+      ];
+    });
+    const hoja = XLSX.utils.aoa_to_sheet([encabezado, ...filas]);
+    hoja["!cols"] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, ...escaleraColumnas.map(() => ({ wch: 11 }))];
+    hoja["!freeze"] = { xSplit: 3, ySplit: 1 };
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Escalera");
+    const finca = fincas.find((f) => f.uuid === filtroEscaleraFincaUuid);
+    const nombre = `escalera-estimaciones-${finca ? finca.codigo : "total"}-${filtroEscaleraAnio || escaleraAnioMostrado || "actual"}.xlsx`;
+    const buffer = XLSX.write(libro, { bookType: "xlsx", type: "array" });
+    const url = URL.createObjectURL(new Blob([buffer], { type: "application/octet-stream" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nombre;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function handleExportarPivote() {
     setExportandoPivote(true);
@@ -1678,6 +1711,17 @@ export default function EstimacionesPage() {
                     <label className="form-label small fw-medium invisible d-block">.</label>
                     <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={cargarEscalera} disabled={escaleraLoading}>
                       {escaleraLoading ? "Cargando..." : "Actualizar"}
+                    </button>
+                  </div>
+                  <div className="col-auto">
+                    <label className="form-label small fw-medium invisible d-block">.</label>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary btn-sm rounded-3 d-inline-flex align-items-center gap-1"
+                      onClick={handleExportarEscalera}
+                      disabled={escaleraLoading || escaleraColumnas.length === 0}
+                    >
+                      <FiDownload /> Descargar Excel
                     </button>
                   </div>
                 </div>
