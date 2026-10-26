@@ -4,7 +4,7 @@
 // almacén con su saldo del sistema; se digita lo contado y al cerrarlo las diferencias se aplican como ajustes en el kárdex.
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FiCheckSquare, FiPlus } from "react-icons/fi";
+import { FiCheckSquare, FiPlus, FiBookOpen } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
@@ -160,11 +160,21 @@ export default function ConteosPage() {
             </h1>
             <p className="text-secondary mb-0">Toma de inventario físico por almacén.</p>
           </div>
+          <div className="d-flex gap-2">
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm rounded-1 d-inline-flex align-items-center gap-1"
+              onClick={async () => (await import("@/lib/manualConteoPdf")).descargarManualConteo()}
+              title="Descargar el manual de usuario en PDF"
+            >
+              <FiBookOpen /> Manual (PDF)
+            </button>
           {puedeCrear && (
             <button type="button" className="btn btn-success btn-sm rounded-1 d-inline-flex align-items-center gap-1" onClick={() => setNuevo(true)}>
               <FiPlus /> Nuevo conteo
             </button>
           )}
+          </div>
         </div>
 
         <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">

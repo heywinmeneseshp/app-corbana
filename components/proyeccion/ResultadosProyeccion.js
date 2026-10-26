@@ -23,7 +23,8 @@ const fmtD = (n, d) => Number(n ?? 0).toLocaleString("es", { minimumFractionDigi
 
 // Construye las filas del cálculo de una semana. Orden: hectáreas, embolses por ha, embolses, racimos que aporta cada edad
 // (embolse de la semana de origen × tasa de corte), racimos, ratio y cajas.
-function filasCalculo(semana, fincas, filaDe, tasa) {
+// `metrica` recorta el desglose a lo que lleva a esa cifra: Embolses solo hectáreas → embolses; Racimos hasta los racimos; Cajas todo.
+function filasCalculo(semana, fincas, filaDe, tasa, metrica = "cajas") {
   const de = (uuid) => filaDe.get(`${uuid}|${semana}`);
   const suma = (campo) => fincas.reduce((a, f) => a + (de(f.uuid)?.[campo] || 0), 0);
   const ejemplo = fincas.map((f) => de(f.uuid)).find(Boolean);
@@ -68,6 +69,8 @@ function filasCalculo(semana, fincas, filaDe, tasa) {
     },
     { clave: "caj", titulo: `Cajas ${tasa} = racimos × ratio`, celda: (u) => fmt(de(u)?.cajas), total: () => fmt(caj), resalta: true },
   ];
+  if (metrica === "embolses") return filas.filter((f) => ["ha", "ephs", "emb"].includes(f.clave));
+  if (metrica === "racimos") return filas.filter((f) => !["ratio", "caj"].includes(f.clave));
   return filas;
 }
 
@@ -148,7 +151,7 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
             const desplegable = periodo === "semana";
             const abierta = desplegable && abiertas.has(pr.clave);
             // Filas del cálculo de esta semana: cada una trae su valor por finca y el total de las fincas visibles.
-            const detalle = abierta ? filasCalculo(pr.clave, fincas, filaDe, tasa) : [];
+            const detalle = abierta ? filasCalculo(pr.clave, fincas, filaDe, tasa, metrica) : [];
             // Semana desplegada: borde grueso y oscuro arriba de la semana y debajo de su última fila, para separar el bloque.
             const bordeArriba = abierta ? { borderTop: "3px solid #14532d" } : {};
             return (
