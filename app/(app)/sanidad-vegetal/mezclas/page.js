@@ -1134,12 +1134,14 @@ export default function ElaboracionesPage() {
   // también lo exige, ver mezcla.routes.js) — se puede restaurar después
   // desde "Eliminados".
   async function handleDelete(mezcla) {
-    if (!confirm(`¿Eliminar la mezcla "${mezcla.nombre || mezcla.codigo}"? Se puede restaurar después desde "Eliminados".`)) return;
+    if (!confirm(`¿Eliminar la mezcla "${mezcla.nombre || mezcla.codigo}"? Se puede restaurar después desde "Eliminados".`)) return false;
     try {
       await apiFetch(`/inventarios/mezclas/${mezcla.uuid}`, { method: "DELETE" });
       loadMezclas({ insumoUuid: filtros.insumoUuid, ingredienteActivoUuid: filtros.ingredienteActivoUuid });
+      return true;
     } catch (err) {
       setError(err.message);
+      return false;
     }
   }
 
@@ -1167,7 +1169,9 @@ export default function ElaboracionesPage() {
       if (ingredienteActivoUuid) params.set("ingredienteActivoUuid", ingredienteActivoUuid);
       const mezclas = await apiFetch(`/inventarios/mezclas?${params.toString()}`);
       const mezclasItems = mezclas.items || [];
-      setMezclasDisponibles(mezclasItems.filter((m) => m.articuloElaborado?.estado));
+      // También las pendientes de aprobación: su artículo elaborado nace INACTIVO hasta aprobarla, y sin esto la mezcla nueva no
+      // aparecía en la lista (ni su botón «Aprobar»).
+      setMezclasDisponibles(mezclasItems.filter((m) => m.articuloElaborado?.estado || m.versiones?.[0]?.estadoPrueba === "PENDIENTE_APROBACION"));
       setTodasLasMezclas(mezclasItems);
     } catch (err) {
       setError(err.message);
@@ -2304,6 +2308,17 @@ export default function ElaboracionesPage() {
               })()
             )}
             <div className="d-flex justify-content-end gap-2 mt-3">
+              {esAdmin && detalleMezcla && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-link text-danger text-decoration-none me-auto"
+                  onClick={async () => {
+                    if (await handleDelete(detalleMezcla)) setDetalleOpen(false);
+                  }}
+                >
+                  Eliminar mezcla
+                </button>
+              )}
               {/* Solo tiene sentido para mezclas que sí pasaron por la prueba
                   de laboratorio (esDirecta: false) — una receta creada con
                   "Nueva mezcla" (crearDirecta) nunca generó una prueba, no
