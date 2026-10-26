@@ -8,6 +8,7 @@ import { FiCheckSquare, FiPlus } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
+import InventarioTabs from "@/components/inventario/InventarioTabs";
 import ModalShell from "@/components/ModalShell";
 import InfoModulo from "@/components/InfoModulo";
 
@@ -136,6 +137,7 @@ export default function ConteosPage() {
   return (
     <RequirePermission code="menu.inventarios.conteos">
       <div className="p-4 p-md-5">
+        <InventarioTabs />
         <div className="mb-4 d-flex flex-wrap align-items-start justify-content-between gap-3">
           <div>
             <h1 className="fw-bold h3 mb-1 d-flex align-items-center gap-2">

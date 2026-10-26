@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FiArrowLeft, FiChevronLeft, FiChevronRight, FiEye } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { estadoPruebaInfo, ESTADO_PRUEBA_INFO } from "@/lib/mezclaEstados";
 import { parseFechaUTC } from "@/lib/fecha";
 import RequirePermission from "@/components/RequirePermission";
@@ -33,8 +33,8 @@ export default function HistorialMezclasPage() {
     try {
       const [u, elaborados, todos] = await Promise.all([
         apiFetch("/users?limit=100"),
-        apiFetch("/inventarios/articulos?limit=100&tipo=ELABORADO&estado=true"),
-        apiFetch("/inventarios/articulos?limit=100&estado=true"),
+        apiFetchTodos("/inventarios/articulos?limit=100&tipo=ELABORADO&estado=true"),
+        apiFetchTodos("/inventarios/articulos?limit=100&estado=true"),
       ]);
       setUsuarios(u.items || []);
       setArticulosElaborados(elaborados.items || []);

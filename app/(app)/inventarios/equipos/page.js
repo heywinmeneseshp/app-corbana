@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FiPlus, FiEdit2, FiTrash2, FiTool } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
@@ -591,7 +591,7 @@ function RepuestosModal({ equipo, onClose, onChanged }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    apiFetch("/inventarios/articulos?limit=100&estado=true&tipo=REPUESTO")
+    apiFetchTodos("/inventarios/articulos?limit=100&estado=true&tipo=REPUESTO")
       .then((data) => setRepuestos(data.items || []))
       .catch((err) => setError(err.message));
   }, []);

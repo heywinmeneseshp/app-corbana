@@ -185,23 +185,34 @@ const NAV = [
     icon: FiBox,
     permKey: "inventariosMenu",
     pathPrefix: "/inventarios",
+    // Las páginas de equipos y mantenimiento siguen bajo /inventarios/... pero pertenecen a la sección Equipos.
+    excluirPrefijos: ["/inventarios/equipos", "/inventarios/repuestos", "/inventarios/planes-mantenimiento", "/inventarios/programaciones-mantenimiento", "/inventarios/ordenes-mantenimiento"],
     items: [
-      { key: "inventariosDashboard", label: "Dashboard", icon: FiBarChart2, permKey: "inventariosDashboard", href: "/inventarios" },
+      // Resumen, Existencias, Kárdex, Movimientos y Conteo se navegan con los botones de arriba de cada página (InventarioTabs).
+      { key: "inventariosDashboard", label: "Resumen y stock", icon: FiBarChart2, permKey: "inventariosDashboard", href: "/inventarios" },
       { key: "inventariosArticulos", label: "Artículos", icon: FiPackage, permKey: "inventariosArticulos", href: "/inventarios/articulos" },
       { key: "inventariosCategorias", label: "Categorías", icon: FiFolder, permKey: "inventariosCategorias", href: "/inventarios/categorias" },
       { key: "inventariosUnidades", label: "Unidades", icon: FiSettings, permKey: "inventariosUnidades", href: "/inventarios/unidades" },
       { key: "inventariosAlmacenes", label: "Almacenes", icon: FiDatabase, permKey: "inventariosAlmacenes", href: "/inventarios/almacenes" },
       { key: "inventariosMotivos", label: "Motivos", icon: FiClipboard, permKey: "inventariosMotivos", href: "/inventarios/motivos" },
-      { key: "inventariosMovimientos", label: "Movimientos", icon: FiShare2, permKey: "inventariosMovimientos", href: "/inventarios/movimientos" },
-      { key: "inventariosExistencias", label: "Existencias", icon: FiBox, permKey: "inventariosMovimientos", href: "/inventarios/existencias" },
-      { key: "inventariosKardex", label: "Kardex", icon: FiList, permKey: "inventariosMovimientos", href: "/inventarios/kardex" },
-      { key: "inventariosConteos", label: "Conteo", icon: FiCheckSquare, permKey: "inventariosConteos", href: "/inventarios/conteos" },
       { key: "inventariosProformas", label: "Proformas", icon: FiClipboard, permKey: "inventariosProformas", href: "/inventarios/proformas" },
-      { key: "inventariosEquipos", label: "Equipos", icon: GiFarmTractor, permKey: "inventariosEquipos", href: "/inventarios/equipos" },
       { key: "inventariosProveedores", label: "Proveedores", icon: FiTruck, permKey: "inventariosProveedores", href: "/inventarios/proveedores" },
-      { key: "inventariosPlanes", label: "Planes Mantenimiento", icon: FiSettings, permKey: "inventariosPlanes", href: "/inventarios/planes-mantenimiento" },
+    ],
+  },
+  {
+    type: "section",
+    key: "equipos",
+    label: "Equipos",
+    icon: GiFarmTractor,
+    permKey: "equiposMenu",
+    pathPrefix: "/inventarios/equipos",
+    pathPrefixes: ["/inventarios/equipos", "/inventarios/repuestos", "/inventarios/planes-mantenimiento", "/inventarios/programaciones-mantenimiento", "/inventarios/ordenes-mantenimiento"],
+    items: [
+      { key: "inventariosEquipos", label: "Equipos", icon: GiFarmTractor, permKey: "inventariosEquipos", href: "/inventarios/equipos" },
+      { key: "inventariosRepuestos", label: "Piezas y repuestos", icon: FiPackage, permKey: "inventariosEquipos", href: "/inventarios/repuestos" },
+      { key: "inventariosPlanes", label: "Planes de mantenimiento", icon: FiSettings, permKey: "inventariosPlanes", href: "/inventarios/planes-mantenimiento" },
       { key: "inventariosProgramaciones", label: "Programaciones", icon: FiCalendar, permKey: "inventariosProgramaciones", href: "/inventarios/programaciones-mantenimiento" },
-      { key: "inventariosOrdenes", label: "Órdenes Mantenimiento", icon: FiList, permKey: "inventariosOrdenes", href: "/inventarios/ordenes-mantenimiento" },
+      { key: "inventariosOrdenes", label: "Órdenes de mantenimiento", icon: FiList, permKey: "inventariosOrdenes", href: "/inventarios/ordenes-mantenimiento" },
     ],
   },
   {
@@ -252,6 +263,14 @@ function esLinkActivo(pathname, href, hermanosHrefs) {
   );
 }
 
+// Una sección está activa si la ruta empieza por alguno de sus prefijos y no por uno de los excluidos (p. ej. Inventarios no se marca en las
+// páginas de equipos, que viven bajo /inventarios/ pero son de la sección Equipos).
+function seccionActiva(entry, pathname) {
+  const prefijos = entry.pathPrefixes || [entry.pathPrefix, entry.altPathPrefix].filter(Boolean);
+  if (!prefijos.some((p) => pathname.startsWith(p))) return false;
+  return !(entry.excluirPrefijos || []).some((p) => pathname.startsWith(p));
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -260,7 +279,7 @@ export default function Sidebar() {
     const inicial = {};
     for (const entry of NAV) {
       if (entry.type !== "section") continue;
-      inicial[entry.key] = pathname.startsWith(entry.pathPrefix) || (entry.altPathPrefix && pathname.startsWith(entry.altPathPrefix));
+      inicial[entry.key] = seccionActiva(entry, pathname);
     }
     return inicial;
   });
@@ -355,6 +374,11 @@ export default function Sidebar() {
       reportes: hasPermission("menu.reportes"),
 
       inventariosMenu: hasPermission("menu.inventarios"),
+      equiposMenu:
+        hasPermission("menu.inventarios.equipos") ||
+        hasPermission("menu.inventarios.planes") ||
+        hasPermission("menu.inventarios.programaciones") ||
+        hasPermission("menu.inventarios.ordenes"),
       inventariosDashboard: hasPermission("menu.inventarios.dashboard"),
       inventariosArticulos: hasPermission("menu.inventarios.articulos"),
       inventariosCategorias: hasPermission("menu.inventarios.categorias"),
@@ -519,7 +543,7 @@ export default function Sidebar() {
 
           const Icon = entry.icon;
           const abierta = buscando || openSections[entry.key];
-          const activa = pathname.startsWith(entry.pathPrefix) || (entry.altPathPrefix && pathname.startsWith(entry.altPathPrefix));
+          const activa = seccionActiva(entry, pathname);
 
           return (
             <div key={entry.key}>
@@ -544,7 +568,8 @@ export default function Sidebar() {
                 <div className="ps-4 d-flex flex-column gap-1">
                   {entry.items.map((item) => {
                     const ItemIcon = item.icon;
-                    const hermanosHrefs = entry.items.map((i) => i.href);
+                    // Más los prefijos excluidos de la sección: "Resumen y stock" (/inventarios) no se marca estando en /inventarios/equipos.
+                    const hermanosHrefs = [...entry.items.map((i) => i.href), ...(entry.excluirPrefijos || [])];
                     return (
                       <Link key={item.key} href={item.href} className={navLinkClass(esLinkActivo(pathname, item.href, hermanosHrefs))}>
                         <ItemIcon size={16} />

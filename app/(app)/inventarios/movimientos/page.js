@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiRepeat, FiTruck } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import Link from "next/link";
+import { FiDownload, FiPlus, FiRepeat, FiTruck } from "react-icons/fi";
+import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
+import InventarioTabs from "@/components/inventario/InventarioTabs";
 import ModalShell from "@/components/ModalShell";
 import MovimientoLoteModal from "@/components/inventario/MovimientoLoteModal";
 
@@ -44,6 +46,13 @@ function emptyTransferForm() {
   };
 }
 
+// Fecha DATEONLY mostrada tal cual (dd/mm/aaaa): `new Date("2026-10-22")` en Colombia se mostraba como el día anterior.
+function formatoFecha(f) {
+  if (!f) return "—";
+  const [a, m, d] = String(f).slice(0, 10).split("-");
+  return `${d}/${m}/${a}`;
+}
+
 export default function MovimientosPage() {
   const [items, setItems] = useState([]);
   const [almacenes, setAlmacenes] = useState([]);
@@ -61,14 +70,81 @@ export default function MovimientosPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
+  const [total, setTotal] = useState(0);
+  const [exportando, setExportando] = useState(false);
+
+  // Excel con TODOS los movimientos de los filtros actuales (la tabla muestra solo los 100 más recientes).
+  async function exportarExcel() {
+    setExportando(true);
+    try {
+      const qs = new URLSearchParams({ limit: "100" });
+      Object.entries(filtros).forEach(([k, v]) => v && qs.set(k, v));
+      const { items: todos } = await apiFetchTodos(`/inventarios/movimientos?${qs}`);
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Movimientos", { views: [{ state: "frozen", ySplit: 1 }] });
+      ws.columns = [
+        { header: "Fecha", width: 12 },
+        { header: "Documento", width: 16 },
+        { header: "Tipo", width: 22 },
+        { header: "Almacén", width: 18 },
+        { header: "Código", width: 12 },
+        { header: "Artículo", width: 32 },
+        { header: "Cantidad", width: 12 },
+        { header: "Unidad", width: 10 },
+        { header: "Costo unit.", width: 12 },
+        { header: "Costo total", width: 14 },
+        { header: "Proveedor", width: 22 },
+        { header: "Motivo", width: 18 },
+        { header: "Usuario", width: 16 },
+        { header: "Observaciones", width: 30 },
+      ];
+      for (const m of todos) {
+        ws.addRow([
+          formatoFecha(m.fecha),
+          m.documento,
+          labelFor(m.tipo),
+          m.almacen?.nombre || "",
+          m.articulo?.codigo || "",
+          m.articulo?.nombre || "",
+          Number(m.cantidad),
+          m.unidad?.simbolo || "",
+          Number(m.costoUnitario || 0),
+          Number(m.costoTotal || 0),
+          m.proveedor?.nombre || "",
+          m.motivo?.nombre || "",
+          m.usuario?.usuario || "",
+          m.observaciones || "",
+        ]);
+      }
+      ws.getRow(1).eachCell((c) => {
+        c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF14532D" } };
+      });
+      [7, 9, 10].forEach((i) => (ws.getColumn(i).numFmt = "#,##0.00"));
+      const buffer = await wb.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `movimientos-inventario-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExportando(false);
+    }
+  }
+
   async function load() {
     setLoading(true);
     setError("");
     try {
       const qs = new URLSearchParams({ limit: "100" });
       Object.entries(filtros).forEach(([k, v]) => v && qs.set(k, v));
-      const { items: rows } = await apiFetch(`/inventarios/movimientos?${qs}`);
+      const { items: rows, meta } = await apiFetch(`/inventarios/movimientos?${qs}`);
       setItems(rows);
+      setTotal(meta?.total ?? rows.length);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -80,7 +156,7 @@ export default function MovimientosPage() {
     try {
       const [a, p, m, u] = await Promise.all([
         apiFetch("/inventarios/almacenes?limit=100&estado=true"),
-        apiFetch("/inventarios/articulos?limit=100&estado=true"),
+        apiFetchTodos("/inventarios/articulos?limit=100&estado=true"),
         apiFetch("/inventarios/motivos?limit=100&estado=true"),
         apiFetch("/inventarios/unidades?limit=100&estado=true"),
       ]);
@@ -135,12 +211,21 @@ export default function MovimientosPage() {
   return (
     <RequirePermission code="menu.inventarios.movimientos">
       <div className="p-4 p-md-5">
+        <InventarioTabs />
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
             <h1 className="fw-bold h3 mb-1">Movimientos de Inventario</h1>
             <p className="text-secondary mb-0">Entradas, salidas, ajustes, transferencias y elaboraciones. Registro inmutable (kárdex).</p>
           </div>
           <div className="d-flex gap-2">
+            <button
+              type="button"
+              className="btn btn-outline-success btn-sm rounded-3 d-flex align-items-center gap-2"
+              onClick={exportarExcel}
+              disabled={exportando || items.length === 0}
+            >
+              <FiDownload /> {exportando ? "Generando..." : "Excel"}
+            </button>
             {hasPermission("inventario.movimientos.crear") && (
               <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openTransfer}>
                 <FiRepeat /> Transferencia
@@ -278,7 +363,7 @@ export default function MovimientosPage() {
                 {!loading &&
                   items.map((m) => (
                     <tr key={m.uuid}>
-                      <td className="small text-secondary">{new Date(m.fecha).toLocaleDateString()}</td>
+                      <td className="small text-secondary text-nowrap">{formatoFecha(m.fecha)}</td>
                       <td className="fw-medium">
                         {m.documento}
                         {m.proveedor && <div className="small text-secondary fw-normal">{m.proveedor.nombre}</div>}
@@ -287,7 +372,15 @@ export default function MovimientosPage() {
                         <span className={`badge rounded-pill text-bg-${badgeFor(m.tipo)}`}>{labelFor(m.tipo)}</span>
                       </td>
                       <td className="small text-secondary">{m.almacen?.nombre || "—"}</td>
-                      <td className="small text-secondary">{m.articulo?.nombre || "—"}</td>
+                      <td className="small">
+                        {m.articulo?.uuid ? (
+                          <Link href={`/inventarios/kardex?articuloUuid=${m.articulo.uuid}`} className="text-decoration-none" title="Ver kárdex de este artículo">
+                            {m.articulo.nombre}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="small">
                         {Number(m.cantidad).toFixed(2)} {m.unidad?.simbolo || ""}
                       </td>
@@ -301,6 +394,11 @@ export default function MovimientosPage() {
             </table>
           </div>
         </div>
+        {total > items.length && (
+          <p className="small text-secondary mt-2">
+            Mostrando los {items.length} movimientos más recientes de {total}. Usa los filtros para acotar o descarga el Excel con todos.
+          </p>
+        )}
 
         {transferModalOpen && (
           <ModalShell title="Nueva transferencia" onClose={() => setTransferModalOpen(false)}>

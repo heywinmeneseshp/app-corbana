@@ -18,6 +18,7 @@ import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 import ReportesTabs from "@/components/ReportesTabs";
+import EscaleraSaldos from "@/components/reportes/EscaleraSaldos";
 import { COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 
 const FILAS_CONCEPTO = [
@@ -46,6 +47,7 @@ export default function MovimientosSemanaPage() {
   const [verPorcentajes, setVerPorcentajes] = useState(false);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
   const [conceptosExpandidos, setConceptosExpandidos] = useState(new Set());
+  const [vista, setVista] = useState("semana");
 
   useEffect(() => {
     apiFetch("/fincas?limit=100")
@@ -352,6 +354,17 @@ export default function MovimientosSemanaPage() {
           </div>
         </div>
 
+        <div className="btn-group btn-group-sm mb-3" role="group">
+          <button type="button" className={`btn ${vista === "semana" ? "btn-brand" : "btn-outline-secondary"}`} onClick={() => setVista("semana")}>
+            Por semana
+          </button>
+          <button type="button" className={`btn ${vista === "escalera" ? "btn-brand" : "btn-outline-secondary"}`} onClick={() => setVista("escalera")}>
+            Escalera (acumulado)
+          </button>
+        </div>
+
+        {vista === "escalera" && <EscaleraSaldos fincaUuid={fincaUuid} anio={anio} />}
+
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
         {ultimaActualizacion && (
@@ -360,7 +373,7 @@ export default function MovimientosSemanaPage() {
 
         {loading && !data && <p className="text-secondary">Cargando...</p>}
 
-        {data && (
+        {vista === "semana" && data && (
           <>
             <div className="alert alert-info d-flex align-items-center gap-2 py-2 small mb-3">
               <FiInfo /> Mostrando lo movido en la semana <strong>{data.semanaRegistro.codigo}</strong>, para{" "}
@@ -603,7 +616,7 @@ export default function MovimientosSemanaPage() {
           </>
         )}
 
-        {!data && !loading && (
+        {vista === "semana" && !data && !loading && (
           <p className="text-secondary text-center py-5">No hay datos para los filtros seleccionados.</p>
         )}
       </div>

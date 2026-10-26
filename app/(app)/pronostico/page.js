@@ -6,6 +6,7 @@ import { FiActivity, FiDownload, FiRefreshCw, FiChevronDown, FiChevronUp, FiAler
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import ProyeccionAnual from "@/components/proyeccion/ProyeccionAnual";
+import GraficoRatio from "@/components/precalibracion/GraficoRatio";
 import { hasPermission } from "@/lib/auth";
 
 const SEMANAS_OPCIONES = [4, 8, 12, 26, 52];
@@ -53,6 +54,40 @@ function DistribucionEdad({ ageBreakdown }) {
   );
 }
 
+// Resumen de una simulación: error de las cajas y del ratio contra lo que realmente ocurrió, por total y por horizonte.
+function ResumenSimulacion({ data }) {
+  const filas = data.rows.filter((r) => r.cajasReales != null);
+  if (filas.length === 0) {
+    return <div className="alert alert-info py-2 small">Simulación al {data.meta.simulacion.fecha}: todavía no hay datos reales para comparar.</div>;
+  }
+  const porSemana = new Map();
+  for (const r of filas) {
+    const acc = porSemana.get(r.semanaCodigo) || { proy: 0, real: 0, ratioP: 0, ratioR: 0, n: 0 };
+    acc.proy += r.cajas20kg;
+    acc.real += r.cajasReales;
+    if (r.ratioReal != null) {
+      acc.ratioP += r.ratio;
+      acc.ratioR += r.ratioReal;
+      acc.n += 1;
+    }
+    porSemana.set(r.semanaCodigo, acc);
+  }
+  const semanas = [...porSemana.values()];
+  const mape = (semanas.reduce((a, s) => a + Math.abs(s.proy - s.real) / s.real, 0) / semanas.length) * 100;
+  const sesgo = (semanas.reduce((a, s) => a + (s.proy - s.real) / s.real, 0) / semanas.length) * 100;
+  const totalProy = semanas.reduce((a, s) => a + s.proy, 0);
+  const totalReal = semanas.reduce((a, s) => a + s.real, 0);
+  return (
+    <div className="alert alert-info py-2 small">
+      <strong>Simulación al {data.meta.simulacion.fecha}</strong> (semana {data.meta.simulacion.semana}): se pronosticó con lo que se sabía ese día y se
+      comparó con lo real en {semanas.length} semanas. Error medio de las cajas por semana: <strong>{mape.toFixed(1)}%</strong>, sesgo{" "}
+      <strong>{sesgo > 0 ? "+" : ""}{sesgo.toFixed(1)}%</strong> ({sesgo > 0 ? "sobreestima" : "subestima"}). Total proyectado{" "}
+      {totalProy.toLocaleString("es", { maximumFractionDigits: 0 })} cajas contra {totalReal.toLocaleString("es", { maximumFractionDigits: 0 })} reales (
+      {((totalProy / totalReal - 1) * 100).toFixed(1)}%).
+    </div>
+  );
+}
+
 function PronosticoSemanal() {
   const [fincas, setFincas] = useState([]);
   const [fincaUuidsSeleccionadas, setFincaUuidsSeleccionadas] = useState([]);
@@ -63,6 +98,11 @@ function PronosticoSemanal() {
   const [semanasDelAnio, setSemanasDelAnio] = useState([]);
   const [semanaInicioUuid, setSemanaInicioUuid] = useState("");
   const [semanasProyectar, setSemanasProyectar] = useState(8);
+  // Simulación: pronosticar como si hoy fuera una fecha pasada, para compararlo con lo que realmente ocurrió.
+  const [simularDesde, setSimularDesde] = useState("");
+  // Ventana de la gráfica del ratio (semanas antes y después de hoy); se aplica al pulsar Enter o salir del campo.
+  const [ratioPasadas, setRatioPasadas] = useState(26);
+  const [ratioFuturas, setRatioFuturas] = useState(26);
 
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
   const [pctNoCosechadoInput, setPctNoCosechadoInput] = useState("");
@@ -104,7 +144,10 @@ function PronosticoSemanal() {
     if (!todasFincas && fincaUuidsSeleccionadas.length > 0) {
       params.set("fincaUuids", fincaUuidsSeleccionadas.join(","));
     }
-    if (semanaInicioUuid) params.set("semanaInicioUuid", semanaInicioUuid);
+    params.set("ratioPasadas", String(ratioPasadas));
+    params.set("ratioFuturas", String(ratioFuturas));
+    if (simularDesde) params.set("simularDesde", simularDesde);
+    else if (semanaInicioUuid) params.set("semanaInicioUuid", semanaInicioUuid);
     if (pctNoCosechadoAplicado !== null) params.set("pctNoCosechado", String(pctNoCosechadoAplicado));
     return params;
   }
@@ -307,7 +350,29 @@ function PronosticoSemanal() {
             </div>
           </div>
 
-          <div className="mt-3">
+          <div className="mt-3 d-flex flex-wrap align-items-end gap-2">
+            <div>
+              <label className="form-label small fw-medium mb-1">Simular desde (fecha pasada)</label>
+              <input
+                type="date"
+                className="form-control form-control-sm rounded-3"
+                style={{ width: "10rem" }}
+                max={new Date().toISOString().slice(0, 10)}
+                value={simularDesde}
+                onChange={(e) => setSimularDesde(e.target.value)}
+              />
+            </div>
+            {simularDesde && (
+              <button type="button" className="btn btn-link btn-sm text-decoration-none" onClick={() => setSimularDesde("")}>
+                Quitar simulación
+              </button>
+            )}
+            <span className="text-secondary small mb-1">
+              Pronostica como si hoy fuera esa fecha, usando solo lo que se sabía entonces, y lo compara con lo que pasó. Pulsa actualizar para aplicarlo.
+            </span>
+          </div>
+
+          <div className="mt-2">
             <button
               type="button"
               className="btn btn-link btn-sm text-decoration-none px-0 d-flex align-items-center gap-1"
@@ -344,6 +409,49 @@ function PronosticoSemanal() {
           </div>
         </div>
 
+        {data?.meta?.simulacion && <ResumenSimulacion data={data} />}
+
+        {data?.ratioSerie?.serie?.length > 0 && (
+          <div className="mb-3">
+            <GraficoRatio
+              datos={data.ratioSerie.serie}
+              alcance={`${data.ratioSerie.pasadas} semanas pasadas y ${data.ratioSerie.futuras} futuras, vs. promedio de ${data.ratioSerie.aniosHistoricos} años anteriores`}
+              controles={
+                <div className="d-flex align-items-center gap-2 ms-auto me-1 small">
+                  <label className="d-flex align-items-center gap-1 mb-0">
+                    Pasadas
+                    <input
+                      type="number"
+                      className="form-control form-control-sm rounded-3"
+                      style={{ width: "4.5rem" }}
+                      min="0"
+                      max="156"
+                      value={ratioPasadas}
+                      onChange={(e) => setRatioPasadas(Math.max(0, Math.min(156, Number(e.target.value) || 0)))}
+                      onBlur={handleConsultar}
+                      onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+                    />
+                  </label>
+                  <label className="d-flex align-items-center gap-1 mb-0">
+                    Futuras
+                    <input
+                      type="number"
+                      className="form-control form-control-sm rounded-3"
+                      style={{ width: "4.5rem" }}
+                      min="0"
+                      max="53"
+                      value={ratioFuturas}
+                      onChange={(e) => setRatioFuturas(Math.max(0, Math.min(53, Number(e.target.value) || 0)))}
+                      onBlur={handleConsultar}
+                      onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+                    />
+                  </label>
+                </div>
+              }
+            />
+          </div>
+        )}
+
         <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
             <table className="table table-hover mb-0 align-middle">
@@ -356,15 +464,17 @@ function PronosticoSemanal() {
                   <th className="text-end">Ratio</th>
                   <th className="text-end">Aprovechamiento</th>
                   <th className="text-end">Cajas 20k</th>
+                  {data?.meta?.simulacion && <th className="text-end">Cajas reales</th>}
+                  {data?.meta?.simulacion && <th className="text-end">Dif.</th>}
                   <th>Confianza</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={8} className="text-center text-secondary py-4">Cargando...</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 10 : 8} className="text-center text-secondary py-4">Cargando...</td></tr>
                 )}
                 {!loading && (!data || data.rows.length === 0) && (
-                  <tr><td colSpan={8} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 10 : 8} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
                 )}
                 {!loading && data && data.rows.map((row, idx) => {
                   const key = rowKey(row);
@@ -377,7 +487,7 @@ function PronosticoSemanal() {
                     <Fragment key={key}>
                     {esNuevaFinca && (
                       <tr>
-                        <td colSpan={8} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
+                        <td colSpan={data?.meta?.simulacion ? 10 : 8} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
                           {row.fincaCodigo} — {row.fincaNombre}
                         </td>
                       </tr>
@@ -418,6 +528,14 @@ function PronosticoSemanal() {
                       </td>
                       <td className="text-end">{(row.aprovechamiento * 100).toFixed(1)}%</td>
                       <td className="text-end fw-bold">{cajasMostradas.toLocaleString("es", { maximumFractionDigits: 0 })}</td>
+                      {data?.meta?.simulacion && (
+                        <>
+                          <td className="text-end">{row.cajasReales != null ? row.cajasReales.toLocaleString("es", { maximumFractionDigits: 0 }) : "—"}</td>
+                          <td className="text-end small" style={{ color: row.cajasReales ? (Math.abs(cajasMostradas / row.cajasReales - 1) > 0.1 ? "#dc2626" : "#16a34a") : undefined }}>
+                            {row.cajasReales ? `${((cajasMostradas / row.cajasReales - 1) * 100).toFixed(1)}%` : "—"}
+                          </td>
+                        </>
+                      )}
                       <td>
                         <span
                           className="badge rounded-pill"

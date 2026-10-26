@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { FiPlus, FiX, FiCamera, FiTrash2, FiArrowLeft, FiCheckCircle, FiXCircle, FiInfo, FiClock, FiSend, FiMenu, FiSliders } from "react-icons/fi";
-import { apiFetch, apiFetchFormData, apiFetchBlob } from "@/lib/api";
+import { apiFetch, apiFetchFormData, apiFetchBlob, apiFetchTodos } from "@/lib/api";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
 import { estadoPruebaInfo, ESTADOS_PRUEBA_EDITABLES } from "@/lib/mezclaEstados";
 import { construirGrafoUnidades, unidadesAlcanzables, convertirCantidad } from "@/lib/unidadConversion";
@@ -313,7 +313,7 @@ export default function MezclaPruebaDetallePage() {
   async function loadCombos() {
     try {
       const [todos, categorias, uni, conv, alms, params] = await Promise.all([
-        apiFetch("/inventarios/articulos?limit=100&estado=true&tipo=INSUMO"),
+        apiFetchTodos("/inventarios/articulos?limit=100&estado=true&tipo=INSUMO"),
         apiFetch("/inventarios/categorias?limit=100&tipo=ELABORADO&estado=true"),
         apiFetch("/inventarios/unidades?limit=100&estado=true"),
         apiFetch("/inventarios/unidades/conversiones"),

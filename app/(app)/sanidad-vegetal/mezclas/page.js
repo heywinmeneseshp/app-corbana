@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { FiPlus, FiEye, FiX, FiInfo, FiUploadCloud, FiDownload, FiArchive, FiRotateCcw, FiTrash2, FiEdit2, FiSliders, FiFilter, FiChevronRight } from "react-icons/fi";
-import { apiFetch, apiUpload } from "@/lib/api";
+import { apiFetch, apiUpload, apiFetchTodos } from "@/lib/api";
 import { hasAnyPermission, hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
@@ -1180,13 +1180,14 @@ export default function ElaboracionesPage() {
     // Cada lista se pide por separado: si una falla (p. ej. un rol sin permiso para Ingredientes Activos) las demás se cargan igual,
     // en vez de dejar vacíos los desplegables de categoría y unidades.
     const pedir = (ruta) => apiFetch(ruta).then((r) => ({ ok: true, r }), (e) => ({ ok: false, e }));
+    const pedirTodos = (ruta) => apiFetchTodos(ruta).then((r) => ({ ok: true, r }), (e) => ({ ok: false, e }));
     const [alms, categorias, arts, unis, convs, insumos, ingredientesActivos] = await Promise.all([
       pedir("/inventarios/almacenes?limit=100&estado=true"),
       pedir("/inventarios/categorias?limit=100&tipo=ELABORADO&estado=true"),
-      pedir("/inventarios/articulos?limit=100&estado=true"),
+      pedirTodos("/inventarios/articulos?limit=100&estado=true"),
       pedir("/inventarios/unidades?limit=100&estado=true"),
       pedir("/inventarios/unidades/conversiones"),
-      pedir("/inventarios/articulos?limit=100&estado=true&tipo=INSUMO"),
+      pedirTodos("/inventarios/articulos?limit=100&estado=true&tipo=INSUMO"),
       hasAnyPermission(["ingrediente_activo.ver", "inventario.mezclas.ver"]) ? pedir("/ingredientes-activos?limit=100&estado=true") : Promise.resolve({ ok: true, r: { items: [] } }),
     ]);
     const items = (x) => (x.ok ? x.r.items || [] : []);

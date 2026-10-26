@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FiFilter, FiPlus, FiChevronLeft, FiChevronRight, FiTrash2, FiDownload } from "react-icons/fi";
+import { FiFilter, FiPlus, FiChevronLeft, FiChevronRight, FiTrash2, FiDownload, FiEdit2 } from "react-icons/fi";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
+import EditarMovimientoModal from "@/components/racimos/EditarMovimientoModal";
+import { esAdministrador } from "@/lib/laborEstados";
 import { COLOR_HEX } from "@/lib/semanaColor";
 
 function nombreCompleto(u) {
@@ -74,6 +76,9 @@ export default function MovimientosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [nuevoOpen, setNuevoOpen] = useState(false);
+  // Edición de una línea: solo Administrador.
+  const [editando, setEditando] = useState(null);
+  const [esAdmin] = useState(() => esAdministrador());
 
   useEffect(() => {
     async function loadFiltros() {
@@ -498,11 +503,16 @@ export default function MovimientosPage() {
                             : `${esPositivo ? "+" : "-"}${item.cantidad.toLocaleString()}`}
                         </td>
                         <td className="small">{item.creadoPor?.usuario || "Sistema"}</td>
-                        <td className="text-end">
+                        <td className="text-end text-nowrap">
+                          {esAdmin && (
+                            <button type="button" className="btn btn-sm btn-link p-1 text-secondary" onClick={() => setEditando(item)} title="Editar">
+                              <FiEdit2 />
+                            </button>
+                          )}
                           {puedeEliminar && (!item.esHistorico || meta.puedeEliminarHistorico) && (
                             <button
                               type="button"
-                              className="btn btn-sm btn-outline-danger"
+                              className="btn btn-sm btn-link p-1 text-danger"
                               onClick={() => handleDelete(item.uuid)}
                               title="Eliminar"
                             >
@@ -554,6 +564,16 @@ export default function MovimientosPage() {
           </div>
         </div>
       </div>
+      {editando && (
+        <EditarMovimientoModal
+          movimiento={editando}
+          onClose={() => setEditando(null)}
+          onSaved={() => {
+            setEditando(null);
+            loadMovimientos();
+          }}
+        />
+      )}
     </RequirePermission>
   );
 }

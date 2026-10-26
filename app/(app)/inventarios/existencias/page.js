@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { FiChevronLeft, FiChevronRight, FiDownload } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { descargarExistenciasPdf } from "@/lib/existenciasExport";
+import Link from "next/link";
 import RequirePermission from "@/components/RequirePermission";
+import InventarioTabs from "@/components/inventario/InventarioTabs";
 import { construirGrafoUnidades, convertirCantidad, unidadesAlcanzables } from "@/lib/unidadConversion";
 
 export default function ExistenciasPage() {
@@ -102,7 +104,7 @@ export default function ExistenciasPage() {
     try {
       const [a, p, u, c] = await Promise.all([
         apiFetch("/inventarios/almacenes?limit=100&estado=true"),
-        apiFetch("/inventarios/articulos?limit=100&estado=true"),
+        apiFetchTodos("/inventarios/articulos?limit=100&estado=true"),
         apiFetch("/inventarios/unidades?limit=100&estado=true"),
         apiFetch("/inventarios/unidades/conversiones").catch(() => []),
       ]);
@@ -124,6 +126,7 @@ export default function ExistenciasPage() {
   return (
     <RequirePermission code="menu.inventarios.movimientos">
       <div className="p-4 p-md-5">
+        <InventarioTabs />
         <div className="mb-4">
           <h1 className="fw-bold h3 mb-1">Existencias</h1>
           <p className="text-secondary mb-0">{filtros.fecha ? `Saldo por almacén y artículo al ${filtros.fecha.split("-").reverse().join("/")} (reconstruido desde el kárdex).` : "Saldo actual por almacén y artículo (existencia en tiempo real)."}</p>
@@ -236,7 +239,19 @@ export default function ExistenciasPage() {
                       <tr key={clave}>
                         <td className="small text-secondary">{e.almacen?.nombre || "—"}</td>
                         <td className="small text-secondary">{e.articulo?.codigo || "—"}</td>
-                        <td className="fw-medium">{e.articulo?.nombre || "—"}</td>
+                        <td className="fw-medium">
+                          {e.articulo?.uuid ? (
+                            <Link
+                              href={`/inventarios/kardex?articuloUuid=${e.articulo.uuid}${e.almacen?.uuid ? `&almacenUuid=${e.almacen.uuid}` : ""}`}
+                              className="text-decoration-none"
+                              title="Ver kárdex de este artículo"
+                            >
+                              {e.articulo.nombre}
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
                         <td className={`text-end fw-medium ${e.saldo < 0 ? "text-danger" : ""}`}>
                           {convertido === null ? Number(e.saldo).toFixed(2) : Number(convertido.toFixed(4)).toLocaleString("es-CO", { maximumFractionDigits: 4 })}
                         </td>

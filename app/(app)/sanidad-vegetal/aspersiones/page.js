@@ -5,7 +5,7 @@ import { useEffect, useId, useMemo, useState, useRef } from "react";
 import ExcelJS from "exceljs";
 import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiLink, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSend, FiAlertTriangle, FiInfo } from "react-icons/fi";
 import BotonConfiguracion from "@/components/BotonConfiguracion";
-import { apiFetch, apiFetchFormData, apiUpload } from "@/lib/api";
+import { apiFetch, apiFetchFormData, apiUpload, apiFetchTodos } from "@/lib/api";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
@@ -297,7 +297,7 @@ export default function AspersionesPage() {
   }
 
   async function loadCombos() {
-    apiFetch("/inventarios/articulos?limit=100&estado=true&tipo=INSUMO")
+    apiFetchTodos("/inventarios/articulos?limit=100&estado=true&tipo=INSUMO")
       .then((r) => setArticulosInsumo(r.items || []))
       .catch(() => {});
     try {

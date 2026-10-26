@@ -17,7 +17,7 @@ import ModalShell from "@/components/ModalShell";
 // Ratio cajas ÷ racimos cosechados: año actual (azul sólida) vs promedio
 // histórico de la misma semana (verde punteada). Mismo diseño que el
 // gráfico de ratio de Estimaciones de Fincas.
-export default function GraficoRatio({ datos, alcance }) {
+export default function GraficoRatio({ datos, alcance, controles = null }) {
   const [ampliado, setAmpliado] = useState(false);
 
   function renderGrafico(height) {
@@ -30,6 +30,12 @@ export default function GraficoRatio({ datos, alcance }) {
           <Tooltip formatter={(v) => (v == null ? "—" : Number(v).toLocaleString("es", { maximumFractionDigits: 2 }))} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line type="monotone" dataKey="ratioActual" name="Ratio año actual (cajas/racimo)" stroke="#2563eb" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} />
+          {datos?.some((d) => d.ratioPosterior != null) && (
+            <Line type="monotone" dataKey="ratioPosterior" name="Ratio real (posterior a la simulación)" stroke="#2563eb" strokeWidth={2} strokeDasharray="1 3" dot={{ r: 2 }} connectNulls={false} />
+          )}
+          {datos?.some((d) => d.ratioProyectado != null) && (
+            <Line type="monotone" dataKey="ratioProyectado" name="Ratio proyectado" stroke="#7c3aed" strokeWidth={2} strokeDasharray="2 3" dot={{ r: 2 }} connectNulls={false} />
+          )}
           <Line
             type="monotone"
             dataKey="promedio"
@@ -49,6 +55,7 @@ export default function GraficoRatio({ datos, alcance }) {
     <div className="card border-0 shadow-sm rounded-4 p-3 h-100">
       <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
         <h2 className="h6 fw-bold mb-0">Ratio histórico{alcance ? ` — ${alcance}` : ""}</h2>
+        {controles}
         <button
           type="button"
           className="btn btn-sm btn-outline-secondary p-1 border-0"
