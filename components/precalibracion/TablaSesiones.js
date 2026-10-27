@@ -50,7 +50,7 @@ export default function TablaSesiones({ opciones }) {
     <div>
       <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
         <div className="row g-2 align-items-end">
-          <div className="col-6 col-md-3">
+          <div className="col-6 col-md-2">
             <label className="form-label small fw-medium mb-1">Finca</label>
             <select className="form-select form-select-sm rounded-3" value={filtros.fincaId} onChange={cambiar("fincaId")}>
               <option value="">Todas</option>
@@ -89,8 +89,8 @@ export default function TablaSesiones({ opciones }) {
             <input type="date" className="form-control form-control-sm rounded-3" value={filtros.fechaHasta} onChange={cambiar("fechaHasta")} />
           </div>
           {puedeImportar && (
-            <div className="col-12 col-md ms-md-auto d-flex justify-content-md-end">
-              <button type="button" className="btn btn-success btn-sm rounded-1 d-inline-flex align-items-center gap-1" onClick={() => setImportando(true)}>
+            <div className="col-12 col-md-2 d-flex justify-content-md-end">
+              <button type="button" className="btn btn-success btn-sm rounded-1 d-inline-flex align-items-center gap-1 text-nowrap" onClick={() => setImportando(true)}>
                 <FiUpload /> Importar Excel
               </button>
             </div>

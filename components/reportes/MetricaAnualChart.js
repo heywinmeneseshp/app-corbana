@@ -22,7 +22,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import { FiTrendingUp, FiTrendingDown } from "react-icons/fi";
+import { FiTrendingUp, FiTrendingDown, FiDownload } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import ReportesTabs from "@/components/ReportesTabs";
@@ -295,6 +295,47 @@ export default function MetricaAnualChart({
     };
   }, [seriesData, arrayField, metricKey, anioActual, nExcluir]);
 
+  // Excel con lo que muestra el gráfico: mismas semanas (rango del deslizador y semanas excluidas) y mismas series. Con una sola serie
+  // agrega cajas y racimos cuando el punto los trae (Ratio), para poder rehacer el cálculo.
+  async function exportarExcel() {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(titulo.slice(0, 30), { views: [{ state: "frozen", ySplit: 1 }] });
+    let cabecera;
+    let filas;
+    if (modoComparacion) {
+      const datos = filtrarSemanas(chartDataComparacion, rangoSemanas);
+      cabecera = ["Semana", ...seriesList.map((x) => x.label)];
+      filas = datos.map((f) => [f.numeroSemana, ...seriesList.map((x) => (f[x.key] ?? null))]);
+    } else {
+      const datos = filtrarSemanas(puntos, rangoSemanas);
+      const extras = [
+        ["cajas", "Cajas"],
+        ["racimosCortados", "Racimos cosechados"],
+      ].filter(([k]) => k !== metricKey && datos.some((p) => p[k] != null));
+      cabecera = ["Semana", "Código", `${prefix || titulo}${seriesList[0] ? ` — ${seriesList[0].label} ${seriesList[0].anio}` : ""}`, ...extras.map(([, l]) => l)];
+      filas = datos.map((p) => [p.numeroSemana, p.semanaCodigo || "", p[metricKey] ?? null, ...extras.map(([k]) => p[k] ?? null)]);
+    }
+    ws.addRow(cabecera);
+    filas.forEach((f) => ws.addRow(f));
+    ws.getRow(1).eachCell((c) => {
+      c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF14532D" } };
+      c.alignment = { horizontal: "center", wrapText: true };
+    });
+    ws.columns.forEach((col, i) => {
+      col.width = i === 0 ? 10 : 18;
+      if (i >= (modoComparacion ? 1 : 2)) col.numFmt = decimal ? "0.000" : "#,##0";
+    });
+    const buffer = await wb.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${titulo.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Solo Aprovechamiento ajusta el eje Y del punto más bajo al más alto de lo
   // visible (con marcas parejas); el resto (Cajas, Ratio) conserva su eje.
   const ajustarEje = arrayField === "aprovechamientoAnual";
@@ -352,7 +393,18 @@ export default function MetricaAnualChart({
           </p>
         )}
 
-        <CollapsibleCard titulo={titulo} subtitulo={modoComparacion ? "Comparación entre selecciones" : undefined} expandible>
+        <CollapsibleCard
+          titulo={titulo}
+          subtitulo={modoComparacion ? "Comparación entre selecciones" : undefined}
+          expandible
+          acciones={
+            (modoComparacion ? hayDatosComparacion : hayDatosSimple) ? (
+              <button type="button" className="btn btn-sm btn-link p-0 text-success d-flex" onClick={exportarExcel} title="Descargar en Excel lo que muestra el gráfico" aria-label="Descargar Excel">
+                <FiDownload />
+              </button>
+            ) : null
+          }
+        >
         <div className="grafico-alto" style={{ height: modoComparacion ? "460px" : "420px" }}>
           {loading && !data && !seriesData && <p className="text-secondary text-center py-5">Cargando...</p>}
 

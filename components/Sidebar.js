@@ -176,6 +176,7 @@ const NAV = [
       // botón de ReportesTabs dentro de esta misma página — evita duplicar
       // el mismo destino en el sidebar y en la página.
       { key: "racimoMovimientosSemana", label: "Producción", icon: FiBarChart2, permKey: "racimoMovimientosSemana", href: "/reportes/detalle-semanal" },
+      { key: "reportesResumenSemanal", label: "Resumen semanal", icon: FiAlertTriangle, permKey: "reportes", href: "/reportes/resumen-semanal" },
     ],
   },
   {

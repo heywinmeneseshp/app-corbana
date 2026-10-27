@@ -74,27 +74,26 @@ export default function CollapsibleCard({ titulo, subtitulo, defaultAbierto = tr
       <button
         type="button"
         className="btn p-0 border-0 w-100 d-flex align-items-start justify-content-between text-start bg-transparent"
+        style={{ paddingRight: acciones ? "6rem" : "4rem" }}
         onClick={() => setAbierto((v) => !v)}
       >
         <div>
           <h2 className="h6 fw-bold mb-1">{titulo}</h2>
           {subtitulo && <p className="text-secondary small mb-0">{subtitulo}</p>}
         </div>
-        <span className="text-secondary flex-shrink-0 ms-2" style={{ marginTop: "0.1rem" }}>
-          {abierto ? <FiChevronUp /> : <FiChevronDown />}
-        </span>
       </button>
-      {expandible && abierto && (
-        <button
-          type="button"
-          className="btn btn-link btn-sm p-0 text-secondary position-absolute"
-          style={{ top: "1rem", right: "2.6rem" }}
-          onClick={() => setPantallaCompleta(true)}
-          title="Ver en pantalla completa"
-        >
-          <FiMaximize2 />
+      {/* Acciones, pantalla completa y la flecha de plegar en una sola fila, alineadas entre sí. */}
+      <div className="position-absolute d-flex align-items-center gap-3" style={{ top: "1rem", right: "1rem", lineHeight: 1 }}>
+        {abierto && acciones}
+        {abierto && expandible && (
+          <button type="button" className="btn btn-link btn-sm p-0 text-secondary d-flex" onClick={() => setPantallaCompleta(true)} title="Ver en pantalla completa">
+            <FiMaximize2 />
+          </button>
+        )}
+        <button type="button" className="btn btn-link btn-sm p-0 text-secondary d-flex" onClick={() => setAbierto((v) => !v)} title={abierto ? "Plegar" : "Desplegar"}>
+          {abierto ? <FiChevronUp /> : <FiChevronDown />}
         </button>
-      )}
+      </div>
       {abierto && <div className={subtitulo || titulo ? "mt-3" : ""}>{children}</div>}
     </div>
   );
