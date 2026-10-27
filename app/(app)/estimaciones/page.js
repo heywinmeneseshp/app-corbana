@@ -106,6 +106,7 @@ export default function EstimacionesPage() {
   // Ratio (cajas por racimo) editable por numeroSemana en "Sugerido próximas
   // semanas" — { [numeroSemana]: valor }
   const [ratiosEditados, setRatiosEditados] = useState({});
+  const ratiosSucios = useRef(false); // hay ratios cambiados sin guardar
   const [guardandoRatios, setGuardandoRatios] = useState(false);
   // Overrides manuales, celda por celda, de "Sugerido próximas semanas" —
   // { "semanaUuid:edad": valor } — igual que editar una celda de Excel.
@@ -404,15 +405,19 @@ export default function EstimacionesPage() {
 
   // Resumen de racimos (cintas 13-17, patrón de corte, aprovechamiento)
   // de la finca elegida en "Cargar estimaciones".
-  const cargarResumenFinca = useCallback(async () => {
+  // `silencioso`: refresco tras guardar (ratio o %): no oculta el panel con "Cargando..." ni descarta lo que el usuario está
+  // editando; solo actualiza los datos del servidor. Al cambiar de finca sí se reinicia todo.
+  const cargarResumenFinca = useCallback(async ({ silencioso = false } = {}) => {
     if (!filtroFincaUuid) {
       setResumenFinca(null);
       return;
     }
-    setResumenFincaLoading(true);
+    if (!silencioso) setResumenFincaLoading(true);
     try {
       const res = await apiFetch(`/estimaciones/resumen-finca?fincaUuid=${filtroFincaUuid}`);
       setResumenFinca(res);
+      ratiosSucios.current = false;
+      if (silencioso) return;
       setPctEditados(Object.fromEntries((res.estimadoPorCinta || []).map((e) => [e.edad, e.porcentaje])));
       // Los overrides celda-por-celda de "Sugerido próximas semanas" se
       // indexan por semana.uuid — el mismo calendario de semanas es
@@ -465,7 +470,7 @@ export default function EstimacionesPage() {
         method: "POST",
         body: JSON.stringify({ fincaUuid: filtroFincaUuid, porcentajes: Object.keys(porcentajes).length ? porcentajes : null }),
       });
-      await cargarResumenFinca();
+      await cargarResumenFinca({ silencioso: true });
     } catch (err) {
       setMsgError(err.message);
     } finally {
@@ -477,7 +482,8 @@ export default function EstimacionesPage() {
   // ratiosEditados como override de la finca por numeroSemana, para que no
   // se pierdan al recargar el panel.
   async function guardarRatiosCajas() {
-    if (!filtroFincaUuid) return;
+    // Solo guarda si se cambió algún ratio (antes cada vez que el campo perdía el foco se guardaba y recargaba).
+    if (!filtroFincaUuid || !ratiosSucios.current) return;
     setGuardandoRatios(true);
     setMsgError("");
     try {
@@ -490,7 +496,7 @@ export default function EstimacionesPage() {
         method: "POST",
         body: JSON.stringify({ fincaUuid: filtroFincaUuid, ratios: Object.keys(ratios).length ? ratios : null }),
       });
-      await cargarResumenFinca();
+      await cargarResumenFinca({ silencioso: true });
     } catch (err) {
       setMsgError(err.message);
     } finally {
@@ -1445,7 +1451,8 @@ export default function EstimacionesPage() {
                                                   onChange={(ev) => {
                                                     const match = /^-?\d*(\.\d{0,3})?/.exec(ev.target.value);
                                                     const valor = match ? match[0] : ev.target.value;
-                                                    setRatiosEditados((prev) => ({ ...prev, [semana.numeroSemana]: valor }));
+                                                    ratiosSucios.current = true;
+                                                setRatiosEditados((prev) => ({ ...prev, [semana.numeroSemana]: valor }));
                                                   }}
                                                   onBlur={guardarRatiosCajas}
                                                 />
@@ -1574,6 +1581,7 @@ export default function EstimacionesPage() {
                                                 // molestar mientras se sigue escribiendo (ej. "0.").
                                                 const match = /^-?\d*(\.\d{0,3})?/.exec(ev.target.value);
                                                 const valor = match ? match[0] : ev.target.value;
+                                                ratiosSucios.current = true;
                                                 setRatiosEditados((prev) => ({ ...prev, [semana.numeroSemana]: valor }));
                                               }}
                                               onBlur={guardarRatiosCajas}

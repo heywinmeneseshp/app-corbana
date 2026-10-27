@@ -8,6 +8,7 @@ import RequirePermission from "@/components/RequirePermission";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
 import MarcarAsistenciaModal from "@/components/asistencia/MarcarAsistenciaModal";
 import ProbarRostroModal from "@/components/asistencia/ProbarRostroModal";
+import JornadasAsistencia from "@/components/asistencia/JornadasAsistencia";
 
 const FILTROS_VACIOS = { fincaUuid: "", colaboradorUuid: "", tipo: "", desde: "", hasta: "" };
 
@@ -29,6 +30,7 @@ export default function AsistenciaPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [modal, setModal] = useState(null); // "marcar" | "probar"
+  const [tab, setTab] = useState("marcaciones"); // "marcaciones" | "jornadas"
 
   useEffect(() => {
     apiFetch("/fincas?limit=100").then(({ items }) => setFincas(items)).catch(() => {});
@@ -99,162 +101,183 @@ export default function AsistenciaPage() {
           </div>
         </div>
 
-        <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
-          <div className="row g-2 align-items-end">
-            <div className="col-6 col-md-2">
-              <label className="form-label small fw-medium">Finca</label>
-              <select className="form-select form-select-sm rounded-3" value={filtros.fincaUuid} onChange={(e) => cambiar("fincaUuid", e.target.value)}>
-                <option value="">Todas</option>
-                {fincas.map((f) => (
-                  <option key={f.uuid} value={f.uuid}>
-                    {f.nombre}
-                  </option>
-                ))}
-              </select>
+        <ul className="nav nav-tabs mb-3">
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 ${tab === "marcaciones" ? "active" : ""}`} onClick={() => setTab("marcaciones")}>
+              Marcaciones
+            </button>
+          </li>
+          <li className="nav-item">
+            <button type="button" className={`nav-link btn-sm py-1 ${tab === "jornadas" ? "active" : ""}`} onClick={() => setTab("jornadas")}>
+              Jornadas
+            </button>
+          </li>
+        </ul>
+
+        {tab === "jornadas" ? (
+          <JornadasAsistencia fincas={fincas} colaboradores={colaboradores} />
+        ) : (
+          <>
+          <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
+            <div className="row g-2 align-items-end">
+              <div className="col-6 col-md-2">
+                <label className="form-label small fw-medium">Finca</label>
+                <select className="form-select form-select-sm rounded-3" value={filtros.fincaUuid} onChange={(e) => cambiar("fincaUuid", e.target.value)}>
+                  <option value="">Todas</option>
+                  {fincas.map((f) => (
+                    <option key={f.uuid} value={f.uuid}>
+                      {f.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-6 col-md-3">
+                <label className="form-label small fw-medium">Colaborador</label>
+                <input
+                  list="colaboradores-asistencia"
+                  className="form-control form-control-sm rounded-3"
+                  placeholder="Todos (nombre, apellido o identificación)"
+                  value={textoColaborador}
+                  onChange={(e) => {
+                    setTextoColaborador(e.target.value);
+                    cambiar("colaboradorUuid", colaboradores.find((c) => etiquetaColaborador(c) === e.target.value)?.uuid || "");
+                  }}
+                />
+                <datalist id="colaboradores-asistencia">
+                  {colaboradores.map((c) => (
+                    <option key={c.uuid} value={etiquetaColaborador(c)} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="col-6 col-md-2">
+                <label className="form-label small fw-medium">Tipo</label>
+                <select className="form-select form-select-sm rounded-3" value={filtros.tipo} onChange={(e) => cambiar("tipo", e.target.value)}>
+                  <option value="">Todos</option>
+                  <option value="ENTRADA">Entrada</option>
+                  <option value="SALIDA">Salida</option>
+                </select>
+              </div>
+              <div className="col-6 col-md-2">
+                <label className="form-label small fw-medium">Desde</label>
+                <input type="date" className="form-control form-control-sm rounded-3" value={filtros.desde} onChange={(e) => cambiar("desde", e.target.value)} />
+              </div>
+              <div className="col-6 col-md-2">
+                <label className="form-label small fw-medium">Hasta</label>
+                <input type="date" className="form-control form-control-sm rounded-3" value={filtros.hasta} onChange={(e) => cambiar("hasta", e.target.value)} />
+              </div>
+              <div className="col-6 col-md-1 d-grid">
+                <button type="button" className="btn btn-brand btn-sm rounded-3" onClick={aplicar}>
+                  Aplicar
+                </button>
+              </div>
             </div>
-            <div className="col-6 col-md-3">
-              <label className="form-label small fw-medium">Colaborador</label>
-              <input
-                list="colaboradores-asistencia"
-                className="form-control form-control-sm rounded-3"
-                placeholder="Todos (nombre, apellido o identificación)"
-                value={textoColaborador}
-                onChange={(e) => {
-                  setTextoColaborador(e.target.value);
-                  cambiar("colaboradorUuid", colaboradores.find((c) => etiquetaColaborador(c) === e.target.value)?.uuid || "");
-                }}
-              />
-              <datalist id="colaboradores-asistencia">
-                {colaboradores.map((c) => (
-                  <option key={c.uuid} value={etiquetaColaborador(c)} />
-                ))}
-              </datalist>
-            </div>
-            <div className="col-6 col-md-2">
-              <label className="form-label small fw-medium">Tipo</label>
-              <select className="form-select form-select-sm rounded-3" value={filtros.tipo} onChange={(e) => cambiar("tipo", e.target.value)}>
-                <option value="">Todos</option>
-                <option value="ENTRADA">Entrada</option>
-                <option value="SALIDA">Salida</option>
-              </select>
-            </div>
-            <div className="col-6 col-md-2">
-              <label className="form-label small fw-medium">Desde</label>
-              <input type="date" className="form-control form-control-sm rounded-3" value={filtros.desde} onChange={(e) => cambiar("desde", e.target.value)} />
-            </div>
-            <div className="col-6 col-md-2">
-              <label className="form-label small fw-medium">Hasta</label>
-              <input type="date" className="form-control form-control-sm rounded-3" value={filtros.hasta} onChange={(e) => cambiar("hasta", e.target.value)} />
-            </div>
-            <div className="col-6 col-md-1 d-grid">
-              <button type="button" className="btn btn-brand btn-sm rounded-3" onClick={aplicar}>
-                Aplicar
-              </button>
-            </div>
+            {Object.values(aplicados).some(Boolean) && (
+              <div className="mt-2">
+                <button type="button" className="btn btn-sm btn-link p-0" onClick={limpiar}>
+                  Quitar filtros
+                </button>
+              </div>
+            )}
           </div>
-          {Object.values(aplicados).some(Boolean) && (
-            <div className="mt-2">
-              <button type="button" className="btn btn-sm btn-link p-0" onClick={limpiar}>
-                Quitar filtros
+
+          {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+          {cargando ? (
+            <p className="text-secondary">Cargando...</p>
+          ) : items.length === 0 ? (
+            <p className="text-secondary">No hay marcaciones para estos filtros.</p>
+          ) : (
+            <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+              <div className="table-responsive">
+                <table className="table table-hover mb-0 align-middle" style={{ fontSize: "0.78rem" }}>
+                  <thead className="table-light">
+                    <tr>
+                      <th className="fw-medium text-start">Colaborador</th>
+                      <th className="fw-medium text-center">Cargo</th>
+                      <th className="fw-medium text-center">Finca</th>
+                      <th className="fw-medium text-center">Tipo</th>
+                      <th className="fw-medium text-center">Fecha y hora</th>
+                      <th className="fw-medium text-center text-nowrap">
+                        Parecido{" "}
+                        <InfoTooltip
+                          fijo
+                          titulo="Qué significa este número"
+                          texto={
+                            <>
+                              <div className="fw-semibold text-dark mb-1">Distancia entre rostros</div>
+                              <p className="mb-2">
+                                Compara el rostro que marcó con el rostro registrado del colaborador. <strong>Mientras más bajo, más parecido</strong>; no es
+                                un porcentaje.
+                              </p>
+                              <ul className="mb-2 ps-3">
+                                <li>Hasta 0.40: coincidencia muy buena.</li>
+                                <li>0.40 a 0.50: coincide, con menos margen (poca luz o la cara de lado).</li>
+                                <li>Más de 0.50: no se acepta y la marcación no se registra.</li>
+                              </ul>
+                              <p className="mb-0">Además, la persona reconocida debe parecerse claramente más que la segunda más parecida; si no, se rechaza.</p>
+                            </>
+                          }
+                        />
+                      </th>
+                      <th className="fw-medium text-center">Ubicación</th>
+                      <th className="fw-medium text-center">Marcó</th>
+                      {hasPermission("asistencia.eliminar") && <th className="fw-medium text-center">Acciones</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((m) => (
+                      <tr key={m.uuid}>
+                        <td className="fw-medium">{m.colaborador?.nombre || "—"}</td>
+                        <td className="text-center text-secondary">{m.colaborador?.cargo || "—"}</td>
+                        <td className="text-center text-secondary">{m.finca?.nombre || "—"}</td>
+                        <td className="text-center">
+                          <span className="badge rounded-pill" style={m.tipo === "ENTRADA" ? { backgroundColor: "#d1fae5", color: "#047857" } : { backgroundColor: "#fef3c7", color: "#b45309" }}>
+                            {m.tipo === "ENTRADA" ? "Entrada" : "Salida"}
+                          </span>
+                        </td>
+                        <td className="text-center text-nowrap">{formatoFechaHora(m.fechaHora)}</td>
+                        <td className="text-center text-secondary" title="Distancia facial: menor es más parecido">
+                          {m.distancia != null ? m.distancia.toFixed(2) : "—"}
+                        </td>
+                        <td className="text-center">
+                          {m.lat != null && m.lng != null ? (
+                            <a href={`https://www.google.com/maps?q=${m.lat},${m.lng}`} target="_blank" rel="noreferrer">
+                              Ver mapa
+                            </a>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="text-center text-secondary">{m.marcadoPor || "—"}</td>
+                        {hasPermission("asistencia.eliminar") && (
+                          <td className="text-center">
+                            <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex" style={{ color: "#dc2626" }} title="Eliminar" onClick={() => eliminar(m)}>
+                              <FiTrash2 />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {meta && meta.totalPages > 1 && (
+            <div className="d-flex justify-content-center align-items-center gap-3 mt-3 small">
+              <button type="button" className="btn btn-sm btn-outline-secondary" disabled={pagina <= 1} onClick={() => setPagina((p) => p - 1)}>
+                Anterior
+              </button>
+              <span>
+                Página {meta.page} de {meta.totalPages}
+              </span>
+              <button type="button" className="btn btn-sm btn-outline-secondary" disabled={pagina >= meta.totalPages} onClick={() => setPagina((p) => p + 1)}>
+                Siguiente
               </button>
             </div>
           )}
-        </div>
-
-        {error && <div className="alert alert-danger py-2 small">{error}</div>}
-
-        {cargando ? (
-          <p className="text-secondary">Cargando...</p>
-        ) : items.length === 0 ? (
-          <p className="text-secondary">No hay marcaciones para estos filtros.</p>
-        ) : (
-          <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
-            <div className="table-responsive">
-              <table className="table table-hover mb-0 align-middle" style={{ fontSize: "0.78rem" }}>
-                <thead className="table-light">
-                  <tr>
-                    <th className="fw-medium text-start">Colaborador</th>
-                    <th className="fw-medium text-center">Finca</th>
-                    <th className="fw-medium text-center">Tipo</th>
-                    <th className="fw-medium text-center">Fecha y hora</th>
-                    <th className="fw-medium text-center text-nowrap">
-                      Parecido{" "}
-                      <InfoTooltip
-                        fijo
-                        titulo="Qué significa este número"
-                        texto={
-                          <>
-                            <div className="fw-semibold text-dark mb-1">Distancia entre rostros</div>
-                            <p className="mb-2">
-                              Compara el rostro que marcó con el rostro registrado del colaborador. <strong>Mientras más bajo, más parecido</strong>; no es
-                              un porcentaje.
-                            </p>
-                            <ul className="mb-2 ps-3">
-                              <li>Hasta 0.40: coincidencia muy buena.</li>
-                              <li>0.40 a 0.50: coincide, con menos margen (poca luz o la cara de lado).</li>
-                              <li>Más de 0.50: no se acepta y la marcación no se registra.</li>
-                            </ul>
-                            <p className="mb-0">Además, la persona reconocida debe parecerse claramente más que la segunda más parecida; si no, se rechaza.</p>
-                          </>
-                        }
-                      />
-                    </th>
-                    <th className="fw-medium text-center">Ubicación</th>
-                    <th className="fw-medium text-center">Marcó</th>
-                    {hasPermission("asistencia.eliminar") && <th className="fw-medium text-center">Acciones</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((m) => (
-                    <tr key={m.uuid}>
-                      <td className="fw-medium">{m.colaborador?.nombre || "—"}</td>
-                      <td className="text-center text-secondary">{m.finca?.nombre || "—"}</td>
-                      <td className="text-center">
-                        <span className="badge rounded-pill" style={m.tipo === "ENTRADA" ? { backgroundColor: "#d1fae5", color: "#047857" } : { backgroundColor: "#fef3c7", color: "#b45309" }}>
-                          {m.tipo === "ENTRADA" ? "Entrada" : "Salida"}
-                        </span>
-                      </td>
-                      <td className="text-center text-nowrap">{formatoFechaHora(m.fechaHora)}</td>
-                      <td className="text-center text-secondary" title="Distancia facial: menor es más parecido">
-                        {m.distancia != null ? m.distancia.toFixed(2) : "—"}
-                      </td>
-                      <td className="text-center">
-                        {m.lat != null && m.lng != null ? (
-                          <a href={`https://www.google.com/maps?q=${m.lat},${m.lng}`} target="_blank" rel="noreferrer">
-                            Ver mapa
-                          </a>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="text-center text-secondary">{m.marcadoPor || "—"}</td>
-                      {hasPermission("asistencia.eliminar") && (
-                        <td className="text-center">
-                          <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex" style={{ color: "#dc2626" }} title="Eliminar" onClick={() => eliminar(m)}>
-                            <FiTrash2 />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {meta && meta.totalPages > 1 && (
-          <div className="d-flex justify-content-center align-items-center gap-3 mt-3 small">
-            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={pagina <= 1} onClick={() => setPagina((p) => p - 1)}>
-              Anterior
-            </button>
-            <span>
-              Página {meta.page} de {meta.totalPages}
-            </span>
-            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={pagina >= meta.totalPages} onClick={() => setPagina((p) => p + 1)}>
-              Siguiente
-            </button>
-          </div>
+          </>
         )}
 
         {modal === "marcar" && <MarcarAsistenciaModal onClose={() => setModal(null)} onCambio={cargar} />}

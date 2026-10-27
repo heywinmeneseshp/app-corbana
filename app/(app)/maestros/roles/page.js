@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiKey, FiSave, FiX, FiEye, FiInfo } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import ModalShell from "@/components/ModalShell";
-import PermisosGroupedPicker from "@/components/PermisosGroupedPicker";
+import PermisosMatriz, { recalcularSecciones } from "@/components/roles/PermisosMatriz";
 import RequirePermission from "@/components/RequirePermission";
 import { hasPermission, startPreviewRol } from "@/lib/auth";
 
@@ -198,7 +198,7 @@ export default function RolesPage() {
         />
       )}
 
-      {permisosModal && <PermisosModal rol={permisosModal} onClose={() => setPermisosModal(null)} />}
+      {permisosModal && <PermisosModal rol={permisosModal} onClose={() => setPermisosModal(null)} onVerComo={handleVerComo} />}
 
       {infoOpen && <InfoModal onClose={() => setInfoOpen(false)} />}
     </div>
@@ -226,7 +226,7 @@ function InfoModal({ onClose }) {
         </li>
         <li className="d-flex align-items-start gap-2">
           <FiKey className="flex-shrink-0 mt-1" style={{ color: "#16a34a" }} />
-          <span><strong>Permisos</strong>: elige qué menús, pantallas y acciones puede usar este rol.</span>
+          <span><strong>Permisos</strong>: una tabla por sección del menú. En cada pantalla marcas <strong>Acceso</strong> (que aparezca en el menú) y qué puede hacer: Ver, Crear, Editar, Eliminar y acciones especiales (⚠ = delicadas, piden confirmar). Puedes copiar los permisos de otro rol y se guardan todos de una vez.</span>
         </li>
         <li className="d-flex align-items-start gap-2">
           <FiEye className="flex-shrink-0 mt-1 text-secondary" />
@@ -303,96 +303,131 @@ function RoleModal({ rol, onClose, onSaved }) {
 }
 
 // ─── Modal: asignar permisos a un rol ───
-function PermisosModal({ rol, onClose }) {
-  const [allItems, setAllItems] = useState([]); // [{uuid, label, sublabel}]
-  const [selected, setSelected] = useState([]);
-  const [originalUuids, setOriginalUuids] = useState(new Set());
+// Matriz por pantalla (components/roles/PermisosMatriz.js) armada con el catálogo de la API; se guarda todo de una vez.
+function PermisosModal({ rol, onClose, onVerComo }) {
+  const esAdmin = rol.nombre === "Administrador";
+  const [catalogo, setCatalogo] = useState(null);
+  const [seleccion, setSeleccion] = useState(new Set());
+  const [original, setOriginal] = useState(new Set());
+  const [otrosRoles, setOtrosRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [guardado, setGuardado] = useState(false);
 
-  async function load() {
-    setLoading(true);
-    setError("");
+  useEffect(() => {
+    let activo = true;
+    Promise.all([apiFetch("/permisos/catalogo"), apiFetch(`/roles/${rol.uuid}/permisos`), apiFetch("/roles?limit=100").catch(() => ({ items: [] }))])
+      .then(([cat, mios, roles]) => {
+        if (!activo) return;
+        const codigos = new Set(mios.map((x) => x.codigo));
+        setCatalogo(cat);
+        setSeleccion(codigos);
+        setOriginal(codigos);
+        setOtrosRoles((roles.items || []).filter((r) => r.uuid !== rol.uuid && r.nombre !== "Administrador"));
+      })
+      .catch((err) => activo && setError(err.message))
+      .finally(() => activo && setLoading(false));
+    return () => {
+      activo = false;
+    };
+  }, [rol.uuid]);
+
+  const cambios = [...new Set([...seleccion, ...original])].filter((c) => seleccion.has(c) !== original.has(c)).length;
+
+  const cambiar = (n) => {
+    setSeleccion(n);
+    setGuardado(false);
+  };
+
+  async function copiarDe(uuid) {
+    const otro = otrosRoles.find((r) => r.uuid === uuid);
+    if (!otro || !window.confirm(`¿Reemplazar los permisos marcados por los del rol «${otro.nombre}»? Puedes revisarlos antes de guardar.`)) return;
     try {
-      // El backend limita /permisos a 100 por página (ya hay más de 100
-      // permisos entre los granulares y los nuevos de menú/submenú) — hay
-      // que traer todas las páginas, no solo la primera.
-      const cargarTodosLosPermisos = async () => {
-        const primera = await apiFetch(`/permisos?limit=100&page=1`);
-        const todos = [...primera.items];
-        const totalPages = primera.meta?.totalPages || 1;
-        for (let page = 2; page <= totalPages; page++) {
-          const siguiente = await apiFetch(`/permisos?limit=100&page=${page}`);
-          todos.push(...siguiente.items);
-        }
-        return todos;
-      };
-
-      const [todosLosPermisos, misPermisos] = await Promise.all([
-        cargarTodosLosPermisos(),
-        apiFetch(`/roles/${rol.uuid}/permisos`),
-      ]);
-      setAllItems(todosLosPermisos.map((p) => ({ uuid: p.uuid, label: p.nombre, sublabel: p.codigo })));
-      const misItems = misPermisos.map((p) => ({ uuid: p.uuid, label: p.nombre, sublabel: p.codigo }));
-      setSelected(misItems);
-      setOriginalUuids(new Set(misItems.map((p) => p.uuid)));
+      const suyos = await apiFetch(`/roles/${uuid}/permisos`);
+      cambiar(recalcularSecciones(catalogo.secciones, new Set(suyos.map((x) => x.codigo))));
     } catch (err) {
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
   }
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleGuardar = async () => {
+  async function guardar() {
     setError("");
     setSaving(true);
-    const selectedUuids = new Set(selected.map((s) => s.uuid));
-    const aAgregar = [...selectedUuids].filter((uuid) => !originalUuids.has(uuid));
-    const aQuitar = [...originalUuids].filter((uuid) => !selectedUuids.has(uuid));
-
     try {
-      await Promise.all([
-        ...aAgregar.map((permisoUuid) =>
-          apiFetch(`/roles/${rol.uuid}/permisos`, { method: "POST", body: JSON.stringify({ permisoUuid }) }),
-        ),
-        ...aQuitar.map((permisoUuid) => apiFetch(`/roles/${rol.uuid}/permisos/${permisoUuid}`, { method: "DELETE" })),
-      ]);
-      onClose();
+      const permisoUuids = [...seleccion].map((c) => catalogo.permisos[c]?.uuid).filter(Boolean);
+      await apiFetch(`/roles/${rol.uuid}/permisos`, { method: "PUT", body: JSON.stringify({ permisoUuids }) });
+      setOriginal(new Set(seleccion));
+      setGuardado(true);
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
+  }
+
+  const cerrar = () => {
+    if (cambios > 0 && !window.confirm(`Tienes ${cambios} cambio(s) sin guardar. ¿Cerrar sin guardar?`)) return;
+    onClose();
   };
 
   return (
-    <ModalShell title={`Permisos de ${rol.nombre}`} onClose={onClose} size="xl">
+    <ModalShell title={`Permisos de ${rol.nombre}`} onClose={cerrar} size="xl">
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-      {loading ? (
+      {esAdmin ? (
+        <div className="alert alert-success small mb-0">
+          El rol <strong>Administrador</strong> tiene siempre todos los permisos, incluidos los que se creen en el futuro. No se editan.
+        </div>
+      ) : loading ? (
         <p className="text-center text-secondary small py-4 mb-0">Cargando permisos...</p>
-      ) : (
-        <PermisosGroupedPicker items={allItems} selected={selected} onChange={setSelected} />
-      )}
+      ) : catalogo ? (
+        <>
+          <div className="d-flex flex-wrap align-items-center gap-2 mb-3 small">
+            <span className="text-secondary">
+              <strong>Acceso</strong> muestra la pantalla en el menú; las columnas dicen qué puede hacer dentro. Marcar una acción marca sola el acceso y «Ver».
+            </span>
+            {otrosRoles.length > 0 && (
+              <select className="form-select form-select-sm rounded-3 ms-auto" style={{ maxWidth: "15rem" }} value="" onChange={(e) => copiarDe(e.target.value)}>
+                <option value="">Copiar permisos de otro rol...</option>
+                {otrosRoles.map((r) => (
+                  <option key={r.uuid} value={r.uuid}>
+                    {r.nombre}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <PermisosMatriz catalogo={catalogo} seleccion={seleccion} original={original} onChange={cambiar} />
+        </>
+      ) : null}
 
-      <div className="d-flex gap-2 mt-3">
-        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
-          <FiX /> Cancelar
+      <div className="d-flex flex-wrap gap-2 mt-3 align-items-center">
+        {guardado && cambios === 0 && <span className="small text-success me-auto">Permisos guardados.</span>}
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 ms-auto d-flex align-items-center gap-1" onClick={cerrar}>
+          <FiX /> {esAdmin ? "Cerrar" : "Cancelar"}
         </button>
-        <button
-          type="button"
-          disabled={saving || loading}
-          className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
-          onClick={handleGuardar}
-        >
-          <FiSave /> {saving ? "Guardando..." : "Guardar"}
-        </button>
+        {!esAdmin && (
+          <>
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-1"
+              disabled={cambios > 0 || loading}
+              title={cambios > 0 ? "Guarda primero los cambios" : "Ver el sistema como lo vería este rol"}
+              onClick={() => onVerComo(rol)}
+            >
+              <FiEye /> Ver como este rol
+            </button>
+            <button
+              type="button"
+              disabled={saving || loading || cambios === 0}
+              className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1"
+              onClick={guardar}
+            >
+              <FiSave /> {saving ? "Guardando..." : cambios ? `Guardar ${cambios} cambio${cambios === 1 ? "" : "s"}` : "Guardar"}
+            </button>
+          </>
+        )}
       </div>
     </ModalShell>
   );

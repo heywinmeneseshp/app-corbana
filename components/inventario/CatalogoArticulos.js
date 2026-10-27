@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { FiPlus, FiEdit2, FiTrash2, FiDownload, FiArchive, FiRotateCcw, FiX, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
-import { hasPermission } from "@/lib/auth";
+import { hasAnyPermission, hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
@@ -17,6 +17,7 @@ const MODOS = {
   articulos: {
     base: "/inventarios/articulos",
     permiso: "menu.inventarios.articulos",
+    accion: ["inventario.articulos"],
     titulo: "Artículos de Inventario",
     descripcion: "Insumos, repuestos y artículos elaborados que maneja el inventario.",
     singular: "artículo",
@@ -26,6 +27,8 @@ const MODOS = {
   repuestos: {
     base: "/inventarios/repuestos",
     permiso: "menu.inventarios.equipos",
+    // Los repuestos se crean/editan con el permiso de Artículos o con el de Equipos.
+    accion: ["inventario.articulos", "inventario.equipos"],
     titulo: "Piezas y repuestos",
     descripcion: "Piezas y repuestos de equipos. Quedan en la categoría «Piezas y repuestos» y también aparecen en Artículos.",
     singular: "repuesto",
@@ -55,6 +58,7 @@ function emptyForm() {
 
 export default function CatalogoArticulos({ modo = "articulos" }) {
   const cfg = MODOS[modo];
+  const puede = (accion) => hasAnyPermission(cfg.accion.map((p) => `${p}.${accion}`));
   const [items, setItems] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [unidades, setUnidades] = useState([]);
@@ -327,7 +331,7 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
                 <FiDownload /> {exportando ? "Exportando..." : "Exportar"}
               </button>
             )}
-            {!verEliminados && hasPermission("inventario.articulos.crear") && (
+            {!verEliminados && puede("crear") && (
               <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
                 <FiPlus /> Nuevo {cfg.singular}
               </button>
@@ -441,7 +445,7 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
                       <td className="small">{Number(p.precioVenta || 0).toFixed(2)}</td>
                       <td>
                         <div className="d-flex justify-content-end gap-1 flex-nowrap">
-                          {hasPermission("inventario.articulos.editar") && (
+                          {puede("editar") && (
                             <button
                               type="button"
                               className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
