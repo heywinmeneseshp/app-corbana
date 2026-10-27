@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { FiTrash2 } from "react-icons/fi";
+import { FiCamera, FiTrash2, FiUserCheck } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
+import InfoTooltip from "@/components/reportes/InfoTooltip";
+import MarcarAsistenciaModal from "@/components/asistencia/MarcarAsistenciaModal";
+import ProbarRostroModal from "@/components/asistencia/ProbarRostroModal";
 
 const FILTROS_VACIOS = { fincaUuid: "", colaboradorUuid: "", tipo: "", desde: "", hasta: "" };
 
@@ -14,7 +17,7 @@ const formatoFechaHora = (iso) =>
 const etiquetaColaborador = (c) => `${c.nombre} ${c.apellido || ""}${c.documento ? ` · ${c.documento}` : ""}`.replace(/\s+·/, " ·").trim();
 
 // Asistencia: marcaciones de entrada/salida de los colaboradores, verificadas por reconocimiento facial desde la app de
-// campo (no se guardan fotos). Misma estética de filtros y tabla que el resto de módulos.
+// campo o desde aquí con la webcam (no se guardan fotos). Misma estética de filtros y tabla que el resto de módulos.
 export default function AsistenciaPage() {
   const [filtros, setFiltros] = useState(FILTROS_VACIOS);
   const [aplicados, setAplicados] = useState(FILTROS_VACIOS);
@@ -25,6 +28,7 @@ export default function AsistenciaPage() {
   const [textoColaborador, setTextoColaborador] = useState("");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
+  const [modal, setModal] = useState(null); // "marcar" | "probar"
 
   useEffect(() => {
     apiFetch("/fincas?limit=100").then(({ items }) => setFincas(items)).catch(() => {});
@@ -76,11 +80,23 @@ export default function AsistenciaPage() {
   return (
     <RequirePermission code="menu.asistencia">
       <div className="p-3 p-md-4">
-        <div className="mb-4">
-          <h1 className="fw-bold h4 mb-1">Asistencia</h1>
-          <p className="text-secondary mb-0">
-            Entradas y salidas verificadas por reconocimiento facial. Las marcaciones se hacen desde la app de campo.
-          </p>
+        <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
+          <div>
+            <h1 className="fw-bold h4 mb-1">Asistencia</h1>
+            <p className="text-secondary mb-0">Entradas y salidas verificadas por reconocimiento facial, desde la app de campo o desde aquí con la cámara.</p>
+          </div>
+          <div className="d-flex gap-2">
+            {hasPermission("asistencia.marcar_cuadrilla") && (
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setModal("probar")}>
+                <FiUserCheck /> Probar rostro
+              </button>
+            )}
+            {(hasPermission("asistencia.marcar") || hasPermission("asistencia.marcar_cuadrilla")) && (
+              <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setModal("marcar")}>
+                <FiCamera /> Marcar asistencia
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
@@ -161,7 +177,28 @@ export default function AsistenciaPage() {
                     <th className="fw-medium text-center">Finca</th>
                     <th className="fw-medium text-center">Tipo</th>
                     <th className="fw-medium text-center">Fecha y hora</th>
-                    <th className="fw-medium text-center">Parecido</th>
+                    <th className="fw-medium text-center text-nowrap">
+                      Parecido{" "}
+                      <InfoTooltip
+                        fijo
+                        titulo="Qué significa este número"
+                        texto={
+                          <>
+                            <div className="fw-semibold text-dark mb-1">Distancia entre rostros</div>
+                            <p className="mb-2">
+                              Compara el rostro que marcó con el rostro registrado del colaborador. <strong>Mientras más bajo, más parecido</strong>; no es
+                              un porcentaje.
+                            </p>
+                            <ul className="mb-2 ps-3">
+                              <li>Hasta 0.40: coincidencia muy buena.</li>
+                              <li>0.40 a 0.50: coincide, con menos margen (poca luz o la cara de lado).</li>
+                              <li>Más de 0.50: no se acepta y la marcación no se registra.</li>
+                            </ul>
+                            <p className="mb-0">Además, la persona reconocida debe parecerse claramente más que la segunda más parecida; si no, se rechaza.</p>
+                          </>
+                        }
+                      />
+                    </th>
                     <th className="fw-medium text-center">Ubicación</th>
                     <th className="fw-medium text-center">Marcó</th>
                     {hasPermission("asistencia.eliminar") && <th className="fw-medium text-center">Acciones</th>}
@@ -219,6 +256,9 @@ export default function AsistenciaPage() {
             </button>
           </div>
         )}
+
+        {modal === "marcar" && <MarcarAsistenciaModal onClose={() => setModal(null)} onCambio={cargar} />}
+        {modal === "probar" && <ProbarRostroModal onClose={() => setModal(null)} />}
       </div>
     </RequirePermission>
   );
