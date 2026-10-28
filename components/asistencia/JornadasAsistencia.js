@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { FiChevronDown, FiChevronRight, FiDownload } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
+import { EtiquetaLugar, SelectorUbicacion, aParametros } from "./ubicaciones";
 
 const ZONA = "America/Bogota";
 const hoyBogota = () => new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
@@ -33,6 +34,7 @@ function Tramos({ tramos }) {
           <div key={i} className="d-flex align-items-center gap-2 flex-wrap">
             <span className="rounded-circle flex-shrink-0" style={{ width: 9, height: 9, backgroundColor: t.estado === "COMPLETA" ? "#16a34a" : "#f59e0b" }} />
             <span className="fw-semibold">{t.finca.nombre}</span>
+            {t.finca.tipo && t.finca.tipo !== "FINCA" && <EtiquetaLugar tipo={t.finca.tipo} />}
             <span className="text-secondary">
               {hora(t.entrada)} – {hora(t.salida)}
             </span>
@@ -46,7 +48,7 @@ function Tramos({ tramos }) {
         ) : (
           <div key={i} className="d-flex align-items-center gap-2 text-secondary ps-1" style={{ fontStyle: "italic" }}>
             <span style={{ width: 9, textAlign: "center" }}>↓</span>
-            {t.mismaFinca ? <span>Fuera de la finca</span> : <span>Tránsito {t.desde.nombre} → {t.hasta.nombre}</span>}
+            {t.mismaFinca ? <span>Salió y volvió a {t.desde.nombre}</span> : <span>Tránsito {t.desde.nombre} → {t.hasta.nombre}</span>}
             <span className="fw-medium" style={{ color: t.mismaFinca ? undefined : "#7c3aed" }}>
               · {duracion(t.minutos)}
             </span>
@@ -57,9 +59,9 @@ function Tramos({ tramos }) {
   );
 }
 
-// Jornadas: por colaborador y día, cuánto estuvo en cada finca (ENTRADA → SALIDA) y cuánto tardó entre una finca y otra.
-export default function JornadasAsistencia({ fincas, colaboradores }) {
-  const vacios = () => ({ fincaUuid: "", colaboradorUuid: "", desde: restarDias(hoyBogota(), 6), hasta: hoyBogota() });
+// Jornadas: por colaborador y día, cuánto estuvo en cada lugar (finca u oficina: ENTRADA → SALIDA) y cuánto tardó entre uno y otro.
+export default function JornadasAsistencia({ fincas, lugares = [], colaboradores, veTodo = true }) {
+  const vacios = () => ({ ubicacion: "", colaboradorUuid: "", desde: restarDias(hoyBogota(), 6), hasta: hoyBogota() });
   const [filtros, setFiltros] = useState(vacios);
   const [aplicados, setAplicados] = useState(filtros);
   const [textoColaborador, setTextoColaborador] = useState("");
@@ -72,7 +74,8 @@ export default function JornadasAsistencia({ fincas, colaboradores }) {
 
   const qsDe = useCallback((f, page, limit) => {
     const qs = new URLSearchParams({ page: String(page), limit: String(limit) });
-    for (const [k, v] of Object.entries(f)) if (v) qs.set(k, v);
+    const { ubicacion, ...resto } = f;
+    for (const [k, v] of Object.entries({ ...resto, ...aParametros(ubicacion) })) if (v) qs.set(k, v);
     return qs;
   }, []);
 
@@ -170,34 +173,29 @@ export default function JornadasAsistencia({ fincas, colaboradores }) {
       <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
         <div className="row g-2 align-items-end">
           <div className="col-6 col-md-2">
-            <label className="form-label small fw-medium">Finca</label>
-            <select className="form-select form-select-sm rounded-3" value={filtros.fincaUuid} onChange={(e) => cambiar("fincaUuid", e.target.value)}>
-              <option value="">Todas</option>
-              {fincas.map((f) => (
-                <option key={f.uuid} value={f.uuid}>
-                  {f.nombre}
-                </option>
-              ))}
-            </select>
+            <label className="form-label small fw-medium">Ubicación</label>
+            <SelectorUbicacion fincas={fincas} lugares={lugares} value={filtros.ubicacion} onChange={(v) => cambiar("ubicacion", v)} />
           </div>
-          <div className="col-6 col-md-3">
-            <label className="form-label small fw-medium">Colaborador</label>
-            <input
-              list="colaboradores-jornadas"
-              className="form-control form-control-sm rounded-3"
-              placeholder="Todos (nombre, apellido o identificación)"
-              value={textoColaborador}
-              onChange={(e) => {
-                setTextoColaborador(e.target.value);
-                cambiar("colaboradorUuid", colaboradores.find((c) => etiquetaColaborador(c) === e.target.value)?.uuid || "");
-              }}
-            />
-            <datalist id="colaboradores-jornadas">
-              {colaboradores.map((c) => (
-                <option key={c.uuid} value={etiquetaColaborador(c)} />
-              ))}
-            </datalist>
-          </div>
+          {veTodo && (
+            <div className="col-6 col-md-3">
+              <label className="form-label small fw-medium">Colaborador</label>
+              <input
+                list="colaboradores-jornadas"
+                className="form-control form-control-sm rounded-3"
+                placeholder="Todos (nombre, apellido o identificación)"
+                value={textoColaborador}
+                onChange={(e) => {
+                  setTextoColaborador(e.target.value);
+                  cambiar("colaboradorUuid", colaboradores.find((c) => etiquetaColaborador(c) === e.target.value)?.uuid || "");
+                }}
+              />
+              <datalist id="colaboradores-jornadas">
+                {colaboradores.map((c) => (
+                  <option key={c.uuid} value={etiquetaColaborador(c)} />
+                ))}
+              </datalist>
+            </div>
+          )}
           <div className="col-6 col-md-2">
             <label className="form-label small fw-medium">Desde</label>
             <input type="date" className="form-control form-control-sm rounded-3" value={filtros.desde} onChange={(e) => cambiar("desde", e.target.value)} />
@@ -237,7 +235,7 @@ export default function JornadasAsistencia({ fincas, colaboradores }) {
                   <th className="fw-medium text-center">Fecha</th>
                   <th className="fw-medium text-center">Entrada</th>
                   <th className="fw-medium text-center">Salida</th>
-                  <th className="fw-medium text-center">Tiempo en fincas</th>
+                  <th className="fw-medium text-center">Tiempo en lugares</th>
                   <th className="fw-medium text-center">Tránsito</th>
                   <th className="fw-medium text-center">Lugares</th>
                 </tr>
@@ -278,7 +276,7 @@ export default function JornadasAsistencia({ fincas, colaboradores }) {
                           <td />
                           <td colSpan={8} className="bg-light">
                             <Tramos tramos={j.tramos} />
-                            {j.minutosFuera > 0 && <div className="small text-secondary mt-1">Fuera de la finca (salió y volvió): {duracion(j.minutosFuera)}</div>}
+                            {j.minutosFuera > 0 && <div className="small text-secondary mt-1">Fuera del lugar (salió y volvió): {duracion(j.minutosFuera)}</div>}
                           </td>
                         </tr>
                       )}

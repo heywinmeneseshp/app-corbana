@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FiArrowDown, FiArrowUp, FiChevronDown, FiChevronRight, FiDownload, FiPlus, FiTrash2 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
+import { hasPermission } from "@/lib/auth";
+import ModalShell from "@/components/ModalShell";
 
 // Miles con punto y decimales con coma (1.234.567,5). Se usa "de-DE" porque "es" no agrupa los números de 4 cifras (1234).
 const fmt = (n, d = 0) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d }));
@@ -17,6 +19,7 @@ const MODOS = [
   { id: "CONTENEDORES", label: "Contenedores por semana" },
   { id: "PORCENTAJE", label: "% de los kilos" },
   { id: "RESTO", label: "Resto (lo que sobra)" },
+  { id: "FINCA", label: "Toda la fruta de fincas" },
 ];
 // Cajas por contenedor: palets completos (cajas por palet × palets) más minipalets (cajas por minipalet × cantidad).
 const cajasContenedor = (p) => Number(p.cajasPorPalet || 0) * Number(p.cantidadPalets || 0) + Number(p.cajasPorMinipalet || 0) * Number(p.cantidadMinipalets || 0);
@@ -32,10 +35,24 @@ const aplicaEnSemana = (p, numeroSemana) => {
   return ((d % cada) + cada) % cada === 0;
 };
 
-function repartirKilos(kg, lista, numeroSemana) {
+// FINCA (primero): el producto llena solo los contenedores completos que alcanza con la fruta de sus fincas (`kgPorFinca`); lo que
+// sobra de esas fincas entra al reparto general con las demás. Nunca toma fruta de otras fincas.
+function repartirKilos(kg, lista, numeroSemana, kgPorFinca = {}) {
   let restante = kg;
   const cajas = {};
   let faltante = false;
+  for (const p of lista.filter((x) => x.modo === "FINCA")) {
+    const kgFincas = (p.fincaUuids || []).reduce((a, u) => a + (kgPorFinca[u] || 0), 0);
+    if (!(p.pesoNeto > 0)) {
+      cajas[p.uuid] = null;
+      continue;
+    }
+    const exactas = Math.min(kgFincas, restante) / p.pesoNeto;
+    const porCont = Number(p.cajasPorContenedor || 0);
+    const n = porCont > 0 ? Math.floor(exactas / porCont + 1e-9) * porCont : exactas;
+    cajas[p.uuid] = n;
+    restante -= n * p.pesoNeto;
+  }
   const asignar = (p, pedido) => {
     const real = Math.max(0, Math.min(restante, pedido));
     if (pedido - real > 0.0001) faltante = true;
@@ -55,6 +72,116 @@ function repartirKilos(kg, lista, numeroSemana) {
   return { cajas, sinAsignar: Math.max(0, restante), faltante };
 }
 
+// Casillas desplegables para elegir las fincas de un producto FINCA. `ocupadas`: fincas que ya están en otro producto FINCA.
+function SelectorFincas({ fincas, valor, ocupadas, onChange, disabled }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const fuera = (e) => ref.current && !ref.current.contains(e.target) && setAbierto(false);
+    document.addEventListener("mousedown", fuera);
+    return () => document.removeEventListener("mousedown", fuera);
+  }, [abierto]);
+  const nombres = fincas.filter((f) => valor.includes(f.fincaUuid)).map((f) => f.fincaNombre);
+  return (
+    <div className="position-relative" ref={ref}>
+      <button type="button" className="form-select form-select-sm text-start text-truncate" style={{ minWidth: 160 }} disabled={disabled} onClick={() => setAbierto((v) => !v)} title={nombres.join(", ")}>
+        {nombres.length ? nombres.join(", ") : <span className="text-secondary">Elige las fincas...</span>}
+      </button>
+      {abierto && (
+        <div className="card shadow position-absolute p-2 mt-1" style={{ zIndex: 30, minWidth: 220, maxHeight: 260, overflowY: "auto" }}>
+          {fincas.map((f) => {
+            const enOtro = ocupadas.has(f.fincaUuid);
+            return (
+              <label key={f.fincaUuid} className={`d-flex align-items-center gap-2 small py-1 ${enOtro ? "text-secondary" : ""}`} title={enOtro ? "Ya está en otro producto" : undefined}>
+                <input
+                  type="checkbox"
+                  className="form-check-input m-0"
+                  disabled={enOtro}
+                  checked={valor.includes(f.fincaUuid)}
+                  onChange={(e) => onChange(e.target.checked ? [...valor, f.fincaUuid] : valor.filter((u) => u !== f.fincaUuid))}
+                />
+                {f.fincaNombre}
+                {enOtro && <span className="ms-auto" style={{ fontSize: "0.7rem" }}>en otro producto</span>}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Crear un producto nuevo desde el reparto (p. ej. «Fruta orgánica»); se guarda en Maestros → Productos.
+function NuevoProductoModal({ onClose, onCreado }) {
+  const [f, setF] = useState({ nombre: "", codigo: "", pesoNeto: "", cajasPorPalet: "", cantidadPalets: "" });
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const campo = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const num = (v) => (v === "" ? null : Number(String(v).replace(",", ".")));
+
+  async function guardar(e) {
+    e.preventDefault();
+    if (!(num(f.pesoNeto) > 0)) return setError("Escribe el peso neto de la caja en kg.");
+    setGuardando(true);
+    setError("");
+    try {
+      const creado = await apiFetch("/productos", {
+        method: "POST",
+        body: JSON.stringify({
+          nombre: f.nombre.trim(),
+          codigo: f.codigo.trim() || null,
+          pesoNeto: num(f.pesoNeto),
+          cajasPorPalet: num(f.cajasPorPalet),
+          cantidadPalets: num(f.cantidadPalets),
+        }),
+      });
+      onCreado(creado);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Nuevo producto" onClose={onClose} height="auto">
+      <form onSubmit={guardar} className="row g-2">
+        <div className="col-12">
+          <label className="form-label small fw-medium">Nombre</label>
+          <input className="form-control form-control-sm rounded-3" required minLength={2} maxLength={150} placeholder="Ej. Fruta orgánica" value={f.nombre} onChange={(e) => campo("nombre", e.target.value)} />
+        </div>
+        <div className="col-6">
+          <label className="form-label small fw-medium">Código (opcional)</label>
+          <input className="form-control form-control-sm rounded-3" maxLength={20} value={f.codigo} onChange={(e) => campo("codigo", e.target.value)} />
+        </div>
+        <div className="col-6">
+          <label className="form-label small fw-medium">Peso neto por caja (kg)</label>
+          <input type="number" min="0" step="0.001" className="form-control form-control-sm rounded-3" required value={f.pesoNeto} onChange={(e) => campo("pesoNeto", e.target.value)} />
+        </div>
+        <div className="col-6">
+          <label className="form-label small fw-medium">Cajas por palet</label>
+          <input type="number" min="0" step="1" className="form-control form-control-sm rounded-3" value={f.cajasPorPalet} onChange={(e) => campo("cajasPorPalet", e.target.value)} />
+        </div>
+        <div className="col-6">
+          <label className="form-label small fw-medium">Palets por contenedor</label>
+          <input type="number" min="0" step="1" className="form-control form-control-sm rounded-3" value={f.cantidadPalets} onChange={(e) => campo("cantidadPalets", e.target.value)} />
+        </div>
+        <div className="col-12 small text-secondary">Cajas por palet × palets = cajas por contenedor (se pueden cambiar luego en Maestros → Productos).</div>
+        {error && <div className="col-12 alert alert-danger py-2 small mb-0">{error}</div>}
+        <div className="col-12 d-flex justify-content-end gap-2 mt-2">
+          <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
+            Cancelar
+          </button>
+          <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={guardando}>
+            {guardando ? "Guardando..." : "Crear producto"}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
 // Reparto de las cajas proyectadas por producto. El total de cajas de cada semana (suma de las fincas visibles) se convierte a kilos con
 // el peso de la caja de referencia (tasa de conversión, hoy 18.6) y se reparte entre productos: contenedores fijos por semana, % de
 // los kilos y un producto que se queda con el resto. Cada producto convierte sus kilos en cajas con su peso neto. Una sola mezcla para todas las fincas.
@@ -67,6 +194,11 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
   const [error, setError] = useState("");
   const [periodo, setPeriodo] = useState("semana"); // semana | mes
   const [abierto, setAbierto] = useState(true); // panel de productos desplegado o colapsado
+  const [fincasNuevo, setFincasNuevo] = useState([]); // fincas del producto que se va a agregar en modo FINCA
+  const [nuevoProducto, setNuevoProducto] = useState(false);
+  const fincasLista = resultado.aprovechamiento || [];
+  const fincasOcupadas = (excepto) => new Set(productos.filter((x) => x.modo === "FINCA" && x.uuid !== excepto).flatMap((x) => x.fincaUuids || []));
+  const nombreFinca = useMemo(() => new Map((resultado.aprovechamiento || []).map((f) => [f.fincaUuid, f.fincaNombre])), [resultado]);
 
   useEffect(() => {
     apiFetch("/productos?limit=100")
@@ -77,11 +209,18 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
   const etiqueta = (p) => (p.codigo ? `${p.nombre} (${p.codigo})` : p.nombre);
   const porEtiqueta = useMemo(() => new Map(catalogo.map((p) => [etiqueta(p), p])), [catalogo]);
   const disponibles = catalogo.filter((p) => !productos.some((x) => x.uuid === p.uuid) && (modo !== "CONTENEDORES" || cajasContenedor(p) > 0));
-  const hayResto = productos.some((p) => p.modo === "RESTO");
-  const hayContenedores = productos.some((p) => p.modo === "CONTENEDORES");
-  const sumaPct = Math.round(productos.filter((p) => p.modo === "PORCENTAJE").reduce((a, p) => a + Number(p.porcentaje || 0), 0) * 100) / 100;
-  // Válido: con «resto» basta que los % no pasen de 100; sin «resto» todo debe ser por % y sumar 100.
-  const valido = productos.length > 0 && (hayResto ? sumaPct <= 100.01 : !hayContenedores && Math.abs(sumaPct - 100) < 0.01);
+  // Mezcla general = todo menos los productos FINCA (esos solo toman la fruta de sus fincas).
+  const generales = productos.filter((p) => p.modo !== "FINCA");
+  const hayResto = generales.some((p) => p.modo === "RESTO");
+  const hayContenedores = generales.some((p) => p.modo === "CONTENEDORES");
+  // Con fincas dedicadas los % (sobre el total) no pueden sumar 100: hace falta un «resto» que se quede con lo que queda.
+  const hayFinca = productos.some((p) => p.modo === "FINCA");
+  const sumaPct = Math.round(generales.filter((p) => p.modo === "PORCENTAJE").reduce((a, p) => a + Number(p.porcentaje || 0), 0) * 100) / 100;
+  // Válido: con «resto» basta que los % no pasen de 100; sin «resto» todo debe ser por % y sumar 100. Solo productos FINCA también vale.
+  const valido =
+    productos.length > 0 &&
+    productos.filter((p) => p.modo === "FINCA").every((p) => (p.fincaUuids || []).length > 0) &&
+    (generales.length === 0 || (hayResto ? sumaPct <= 100.01 : !hayContenedores && !hayFinca && Math.abs(sumaPct - 100) < 0.01));
 
   function agregar() {
     setError("");
@@ -91,6 +230,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
     if (modo === "RESTO" && hayResto) return setError("Solo un producto puede quedarse con el resto.");
     if (modo === "PORCENTAJE" && !(num > 0 && num <= 100)) return setError("Escribe un porcentaje entre 0 y 100.");
     if (modo === "CONTENEDORES" && !(num > 0)) return setError("Escribe cuántos contenedores por semana.");
+    if (modo === "FINCA" && fincasNuevo.length === 0) return setError("Elige las fincas cuya fruta va a este producto.");
     onChange([
       ...productos,
       {
@@ -106,10 +246,12 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
         contenedores: modo === "CONTENEDORES" ? num : null,
         cadaSemanas: 1,
         desdeSemana: 1,
+        fincaUuids: modo === "FINCA" ? fincasNuevo : [],
       },
     ]);
     setTexto("");
     setValor("");
+    setFincasNuevo([]);
   }
 
   // Orden de las columnas de la tabla: se mueve el producto una posición arriba (-1) o abajo (+1).
@@ -125,7 +267,12 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
   const cambiarModo = (p, nuevo) => {
     if (nuevo === "RESTO" && productos.some((x) => x.modo === "RESTO" && x.uuid !== p.uuid)) return setError("Solo un producto puede quedarse con el resto.");
     setError("");
-    cambiar(p.uuid, { modo: nuevo, porcentaje: nuevo === "PORCENTAJE" ? p.porcentaje || "" : null, contenedores: nuevo === "CONTENEDORES" ? p.contenedores || "" : null });
+    cambiar(p.uuid, {
+      modo: nuevo,
+      porcentaje: nuevo === "PORCENTAJE" ? p.porcentaje || "" : null,
+      contenedores: nuevo === "CONTENEDORES" ? p.contenedores || "" : null,
+      fincaUuids: nuevo === "FINCA" ? (p.fincaUuids || []).filter((u) => !fincasOcupadas(p.uuid).has(u)) : [],
+    });
   };
 
   // Cajas 18.6 de cada semana, sumando solo las fincas visibles.
@@ -133,8 +280,9 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
     const m = new Map();
     for (const f of resultado.filas) {
       if (ocultas.has(f.fincaUuid)) continue;
-      const t = m.get(f.semanaCodigo) || { semanaCodigo: f.semanaCodigo, numeroSemana: f.numeroSemana, fechaInicio: f.fechaInicio, real: f.real, cajas: 0 };
+      const t = m.get(f.semanaCodigo) || { semanaCodigo: f.semanaCodigo, numeroSemana: f.numeroSemana, fechaInicio: f.fechaInicio, real: f.real, cajas: 0, porFinca: {} };
       t.cajas += f.cajas;
+      t.porFinca[f.fincaUuid] = (t.porFinca[f.fincaUuid] || 0) + f.cajas;
       m.set(f.semanaCodigo, t);
     }
     return [...m.values()];
@@ -142,8 +290,9 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
 
   const filasSemana = semanas.map((s) => {
     const kg = s.cajas * tasa;
-    const rep = repartirKilos(kg, productos, s.numeroSemana);
-    return { ...s, titulo: s.semanaCodigo, kg, faltante: rep.faltante, productos: rep.cajas };
+    const kgPorFinca = Object.fromEntries(Object.entries(s.porFinca).map(([u, c]) => [u, c * tasa]));
+    const rep = repartirKilos(kg, productos, s.numeroSemana, kgPorFinca);
+    return { ...s, titulo: s.semanaCodigo, kg, faltante: rep.faltante, sinAsignar: rep.sinAsignar, productos: rep.cajas };
   });
   // Totales por mes: cada semana suma al mes donde está la mayoría de sus días.
   const filasMes = (() => {
@@ -219,7 +368,16 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
   const asignado18 = (mapa) => kgAsignados(mapa) / tasa;
   const semanasFaltantes = filas.filter((f) => f.faltante).length;
   const periodoNombre = (per) => (per === "mes" ? "Mes" : "Semana");
-  const detalleModo = (p) => (p.modo === "CONTENEDORES" ? `${fmt(p.contenedores, 2)} cont.${p.cadaSemanas > 1 ? ` cada ${p.cadaSemanas} sem. desde S${p.desdeSemana}` : "/sem."}` : p.modo === "RESTO" ? "resto" : `${fmt(p.porcentaje, 2)} %`);
+  const detalleModo = (p) =>
+    p.modo === "CONTENEDORES"
+      ? `${fmt(p.contenedores, 2)} cont.${p.cadaSemanas > 1 ? ` cada ${p.cadaSemanas} sem. desde S${p.desdeSemana}` : "/sem."}`
+      : p.modo === "RESTO"
+        ? "resto"
+        : p.modo === "FINCA"
+          ? `fincas: ${(p.fincaUuids || []).map((u) => nombreFinca.get(u) || "?").join(", ")}`
+          : `${fmt(p.porcentaje, 2)} %`;
+  // Kilos que no quedaron en ningún producto (p. ej. solo hay productos FINCA y sobran fincas).
+  const kgSinAsignar = filasSemana.reduce((a, f) => a + (f.sinAsignar || 0), 0);
 
   // Descarga el informe en Excel con el mismo estilo de la pantalla: encabezados verdes, datos centrados, filas de total por mes,
   // semestre y año resaltadas, hoja semanal y hoja mensual.
@@ -318,13 +476,19 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
           </button>
           <div className="d-flex gap-2">
             {sumaPct > 0 && <span className="badge text-bg-light border fw-normal">% asignado: {fmt(sumaPct, 2)} %</span>}
-            <span className={`badge ${valido ? "text-bg-success" : "text-bg-danger"} fw-normal`}>{valido ? "Reparto válido" : hayContenedores && !hayResto ? "Falta un producto «resto»" : "Los % deben sumar 100"}</span>
+            <span className={`badge ${valido ? "text-bg-success" : "text-bg-danger"} fw-normal`}>{valido
+                ? "Reparto válido"
+                : productos.some((p) => p.modo === "FINCA" && !(p.fincaUuids || []).length)
+                  ? "Falta elegir fincas"
+                  : (hayContenedores || hayFinca) && !hayResto
+                    ? "Falta un producto «resto»"
+                    : "Los % deben sumar 100"}</span>
           </div>
         </div>
         {abierto && (
           <>
         <p className="small text-secondary mb-2">
-          Total de cajas de cada semana × {fmt(tasa, 1)} kg = kilos. Se asignan primero los <strong>contenedores por semana</strong> (palets completos más minipalets
+          Total de cajas de cada semana × {fmt(tasa, 1)} kg = kilos. Primero, cada producto de <strong>toda la fruta de fincas</strong> llena los contenedores completos que alcanza con la fruta de sus fincas (lo que sobra pasa a la mezcla general). Luego se asignan los <strong>contenedores por semana</strong> (palets completos más minipalets
           del producto), luego los <strong>% de los kilos</strong>, y el producto <strong>resto</strong> se queda con lo que sobra. El orden de las filas de este panel es el orden de las columnas de la tabla (usa las flechas para cambiarlo). Se guarda con
           «Guardar y calcular».
         </p>
@@ -337,7 +501,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                 <th className="text-end">Cajas / contenedor</th>
                 <th style={{ width: 210 }}>Tipo</th>
                 <th style={{ width: 190 }} title="Solo para contenedores: cada cuántas semanas se asignan">Frecuencia</th>
-                <th style={{ width: 120 }}>Valor</th>
+                <th style={{ width: 190 }}>Valor</th>
                 <th style={{ width: 96 }} className="text-end" title="Orden en que aparecen las columnas de la tabla">
                   Orden
                 </th>
@@ -356,7 +520,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                   <td className="fw-medium">{etiqueta(p)}</td>
                   <td className="text-end">{fmt(p.pesoNeto, 3)}</td>
                   <td className="text-end">
-                    {p.modo === "CONTENEDORES" ? (
+                    {p.modo === "CONTENEDORES" || p.modo === "FINCA" ? (
                       <input
                         type="number"
                         min="1"
@@ -376,7 +540,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                     ) : (
                       "—"
                     )}
-                    {p.modo === "CONTENEDORES" && p.cajasContenedor && p.cajasCatalogo > 0 && <div className="text-secondary" style={{ fontSize: "0.7rem" }}>catálogo: {fmt(p.cajasCatalogo)}</div>}
+                    {(p.modo === "CONTENEDORES" || p.modo === "FINCA") && p.cajasContenedor && p.cajasCatalogo > 0 && <div className="text-secondary" style={{ fontSize: "0.7rem" }}>catálogo: {fmt(p.cajasCatalogo)}</div>}
                   </td>
                   <td>
                     <select className="form-select form-select-sm" disabled={!puedeEditar} value={p.modo} onChange={(e) => cambiarModo(p, e.target.value)}>
@@ -408,6 +572,9 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                     {p.modo === "PORCENTAJE" && <input type="number" min="0" max="100" step="0.01" className="form-control form-control-sm" disabled={!puedeEditar} value={p.porcentaje ?? ""} onChange={(e) => cambiar(p.uuid, { porcentaje: e.target.value === "" ? "" : Number(e.target.value) })} />}
                     {p.modo === "CONTENEDORES" && <input type="number" min="0" step="0.5" className="form-control form-control-sm" disabled={!puedeEditar} value={p.contenedores ?? ""} onChange={(e) => cambiar(p.uuid, { contenedores: e.target.value === "" ? "" : Number(e.target.value) })} />}
                     {p.modo === "RESTO" && <span className="text-secondary">lo que sobra</span>}
+                    {p.modo === "FINCA" && (
+                      <SelectorFincas fincas={fincasLista} valor={p.fincaUuids || []} ocupadas={fincasOcupadas(p.uuid)} disabled={!puedeEditar} onChange={(v) => cambiar(p.uuid, { fincaUuids: v })} />
+                    )}
                   </td>
                   <td className="text-end text-nowrap">
                     {puedeEditar && (
@@ -452,7 +619,13 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                 ))}
               </select>
             </div>
-            {modo !== "RESTO" && (
+            {modo === "FINCA" && (
+              <div style={{ width: 220 }}>
+                <label className="form-label small mb-1">Fincas</label>
+                <SelectorFincas fincas={fincasLista} valor={fincasNuevo} ocupadas={fincasOcupadas(null)} onChange={setFincasNuevo} />
+              </div>
+            )}
+            {modo !== "RESTO" && modo !== "FINCA" && (
               <div style={{ width: 110 }}>
                 <label className="form-label small mb-1">{modo === "CONTENEDORES" ? "Contenedores" : "% de kilos"}</label>
                 <input type="number" min="0" step={modo === "CONTENEDORES" ? "0.5" : "0.01"} className="form-control form-control-sm" value={valor} onChange={(e) => setValor(e.target.value)} />
@@ -461,9 +634,29 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
             <button type="button" className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" onClick={agregar}>
               <FiPlus /> Agregar
             </button>
+            {hasPermission("producto.crear") && (
+              <button type="button" className="btn btn-sm btn-link text-decoration-none" onClick={() => setNuevoProducto(true)} title="Crear un producto nuevo (se guarda en Maestros → Productos)">
+                + Nuevo producto
+              </button>
+            )}
           </div>
         )}
         {error && <div className="alert alert-danger py-2 small mt-2 mb-0">{error}</div>}
+        {kgSinAsignar > 1 && (
+          <div className="alert alert-warning py-2 small mt-2 mb-0">
+            Quedan {fmt(kgSinAsignar)} kg ({fmt(kgSinAsignar / tasa)} cajas {fmt(tasa, 1)}) sin producto en el año: agrega un producto «resto» para la fruta de las demás fincas y lo que sobra de las dedicadas.
+          </div>
+        )}
+        {nuevoProducto && (
+          <NuevoProductoModal
+            onClose={() => setNuevoProducto(false)}
+            onCreado={(prod) => {
+              setNuevoProducto(false);
+              setCatalogo((c) => [...c, prod]);
+              setTexto(etiqueta(prod));
+            }}
+          />
+        )}
           </>
         )}
       </div>

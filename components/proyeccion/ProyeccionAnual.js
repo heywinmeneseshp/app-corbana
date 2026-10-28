@@ -127,7 +127,7 @@ export default function ProyeccionAnual() {
     try {
       await actualizarEscenario(uuid, { nombre: draft.nombre, descripcion: draft.descripcion, params: draft.params });
       await guardarAreas(uuid, draft.areas.map((a) => ({ fincaUuid: a.fincaUuid, semanaUuid: a.semanaUuid, hectareas: a.hectareas, rampaPct: a.hectareas > 0 ? a.rampaPct ?? null : null, rampaSemanas: a.hectareas > 0 ? a.rampaSemanas ?? null : null, nota: a.nota || undefined })));
-      await guardarProductos(uuid, (draft.productos || []).map((x) => ({ productoUuid: x.uuid, modo: x.modo || "PORCENTAJE", porcentaje: x.modo === "PORCENTAJE" || !x.modo ? Number(x.porcentaje) : null, contenedores: x.modo === "CONTENEDORES" ? Number(x.contenedores) : null, cajasContenedor: x.modo === "CONTENEDORES" ? x.cajasContenedor ?? null : null, cadaSemanas: x.modo === "CONTENEDORES" ? x.cadaSemanas || 1 : 1, desdeSemana: x.modo === "CONTENEDORES" ? x.desdeSemana || 1 : 1 })));
+      await guardarProductos(uuid, (draft.productos || []).map((x) => ({ productoUuid: x.uuid, modo: x.modo || "PORCENTAJE", porcentaje: x.modo === "PORCENTAJE" || !x.modo ? Number(x.porcentaje) : null, contenedores: x.modo === "CONTENEDORES" ? Number(x.contenedores) : null, cajasContenedor: x.modo === "CONTENEDORES" || x.modo === "FINCA" ? x.cajasContenedor ?? null : null, cadaSemanas: x.modo === "CONTENEDORES" ? x.cadaSemanas || 1 : 1, desdeSemana: x.modo === "CONTENEDORES" ? x.desdeSemana || 1 : 1, ...(x.modo === "FINCA" ? { fincaUuids: x.fincaUuids || [] } : {}) })));
       await cargarLista(uuid);
       await cargarEscenario(uuid);
       await calcular(uuid);

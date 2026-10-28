@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { FiPlus, FiEdit2, FiTrash2, FiStar, FiUser, FiUserPlus, FiUserX } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
-import { hasPermission } from "@/lib/auth";
+import { getCurrentUser, hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import EnrolarRostroModal from "@/components/asistencia/EnrolarRostroModal";
+import SolicitudesRostroModal from "@/components/asistencia/SolicitudesRostroModal";
 
 function emptyForm() {
   return { userUuid: "", nombre: "", apellido: "", documento: "", telefono: "", email: "", cargo: "", fincaUuid: "", estado: true, labores: [] };
@@ -93,6 +94,10 @@ export default function ColaboradoresPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [rostroDe, setRostroDe] = useState(null); // colaborador cuyo rostro se está enrolando
+  const [verSolicitudes, setVerSolicitudes] = useState(false);
+  // Con fincas asignadas (y sin ser Administrador) solo se crean colaboradores en esas fincas: la finca es obligatoria.
+  const usuarioActual = getCurrentUser();
+  const fincaObligatoria = !(usuarioActual?.roles || []).includes("Administrador") && (usuarioActual?.fincaIds || []).length > 0;
   const [users, setUsers] = useState([]);
   const [usuarioDe, setUsuarioDe] = useState(null); // colaborador al que se le crea o vincula un usuario
   const [usuarioForm, setUsuarioForm] = useState({ modo: "crear", usuario: "", password: "", email: "", userUuid: "" });
@@ -252,11 +257,18 @@ export default function ColaboradoresPage() {
               pre-reparto de colaboradores según sus habilidades cuando se programa una labor.
             </p>
           </div>
-          {hasPermission("colaborador.crear") && (
-            <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
-              <FiPlus /> Nuevo colaborador
-            </button>
-          )}
+          <div className="d-flex gap-2">
+            {hasPermission("asistencia.aprobar_rostro") && (
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setVerSolicitudes(true)}>
+                Solicitudes de rostro
+              </button>
+            )}
+            {hasPermission("colaborador.crear") && (
+              <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={openCreate}>
+                <FiPlus /> Nuevo colaborador
+              </button>
+            )}
+          </div>
         </div>
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
@@ -459,10 +471,11 @@ export default function ColaboradoresPage() {
                   <label className="form-label small fw-medium">Finca predeterminada</label>
                   <select
                     className="form-select rounded-3"
+                    required={fincaObligatoria}
                     value={form.fincaUuid}
                     onChange={(e) => setForm((f) => ({ ...f, fincaUuid: e.target.value }))}
                   >
-                    <option value="">Sin asignar</option>
+                    <option value="">{fincaObligatoria ? "Elige una de tus fincas" : "Sin asignar"}</option>
                     {fincas.map((f) => (
                       <option key={f.uuid} value={f.uuid}>
                         {f.nombre}
@@ -566,6 +579,7 @@ export default function ColaboradoresPage() {
         )}
 
         {rostroDe && <EnrolarRostroModal colaborador={rostroDe} onClose={() => setRostroDe(null)} onCambio={load} />}
+        {verSolicitudes && <SolicitudesRostroModal onClose={() => setVerSolicitudes(false)} onCambio={load} />}
       </div>
     </RequirePermission>
   );

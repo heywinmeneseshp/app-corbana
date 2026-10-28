@@ -6,12 +6,15 @@ import ModalShell from "@/components/ModalShell";
 import { apiFetch } from "@/lib/api";
 import { descriptorDeElemento } from "@/lib/faceDescriptor";
 import { useCamaraRostro, VistaCamara } from "./useCamaraRostro";
+import { SelectorUbicacion, aParametros } from "./ubicaciones";
 
+// Último sitio elegido: "f:<uuid>" o "l:<uuid>" (las versiones anteriores guardaban solo el uuid de la finca).
 const FINCA_KEY = "asistencia.fincaSeleccionada";
 
 const leerFinca = () => {
   try {
-    return localStorage.getItem(FINCA_KEY) || "";
+    const v = localStorage.getItem(FINCA_KEY) || "";
+    return v && !v.includes(":") ? `f:${v}` : v;
   } catch {
     return "";
   }
@@ -22,7 +25,8 @@ const leerFinca = () => {
 export default function MarcarAsistenciaModal({ onClose, onCambio }) {
   const { videoRef, listo, errorCamara } = useCamaraRostro();
   const [fincas, setFincas] = useState([]);
-  const [fincaUuid, setFincaUuid] = useState("");
+  const [lugares, setLugares] = useState([]);
+  const [sitio, setSitio] = useState(""); // finca u oficina donde se marca
   const [tipo, setTipo] = useState("ENTRADA");
   const [procesando, setProcesando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
@@ -32,11 +36,13 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
 
   useEffect(() => {
     apiFetch("/asistencia/rostros-estado")
-      .then(({ fincas: lista = [] }) => {
+      .then(({ fincas: lista = [], lugares: otros = [] }) => {
         setFincas(lista);
+        setLugares(otros);
+        const opciones = [...lista.map((f) => `f:${f.uuid}`), ...otros.map((l) => `l:${l.uuid}`)];
         const guardada = leerFinca();
-        if (guardada && lista.some((f) => f.uuid === guardada)) setFincaUuid(guardada);
-        else if (lista.length === 1) setFincaUuid(lista[0].uuid);
+        if (guardada && opciones.includes(guardada)) setSitio(guardada);
+        else if (opciones.length === 1) setSitio(opciones[0]);
       })
       .catch((err) => setMensaje({ texto: err.message, ok: false }));
 
@@ -58,7 +64,7 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
   const agregarReciente = (texto, ok) => setRecientes((r) => [{ id: `${Date.now()}`, texto, ok }, ...r].slice(0, 8));
 
   async function marcar() {
-    if (!fincaUuid || !videoRef.current) return;
+    if (!sitio || !videoRef.current) return;
     setMensaje(null);
     setProcesando(true);
     try {
@@ -70,7 +76,7 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
           marcaciones: [
             {
               uuid,
-              fincaUuid,
+              ...aParametros(sitio),
               tipo,
               fechaHora: new Date().toISOString(),
               lat: ubicacion.current?.lat ?? null,
@@ -81,7 +87,7 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
         }),
       });
       try {
-        localStorage.setItem(FINCA_KEY, fincaUuid);
+        localStorage.setItem(FINCA_KEY, sitio);
       } catch {
         /* sin almacenamiento local: solo no se recuerda la finca */
       }
@@ -122,15 +128,8 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
 
       <div className="row g-2 mb-3">
         <div className="col-7">
-          <label className="form-label small fw-medium">Finca</label>
-          <select className="form-select form-select-sm rounded-3" value={fincaUuid} onChange={(e) => setFincaUuid(e.target.value)}>
-            <option value="">Selecciona la finca</option>
-            {fincas.map((f) => (
-              <option key={f.uuid} value={f.uuid}>
-                {f.nombre}
-              </option>
-            ))}
-          </select>
+          <label className="form-label small fw-medium">Dónde</label>
+          <SelectorUbicacion fincas={fincas} lugares={lugares} value={sitio} onChange={setSitio} vacio="Selecciona finca u oficina" />
         </div>
         <div className="col-5">
           <label className="form-label small fw-medium">Tipo</label>
@@ -154,11 +153,11 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
         <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
           Cerrar
         </button>
-        <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" disabled={!listo || !fincaUuid || procesando} onClick={marcar}>
+        <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" disabled={!listo || !sitio || procesando} onClick={marcar}>
           <FiCamera /> {procesando ? "Verificando..." : `Marcar ${etiqueta.toLowerCase()}`}
         </button>
       </div>
-      {!fincaUuid && fincas.length > 0 && <p className="small text-secondary text-end mb-0 mt-2">Elige la finca para empezar.</p>}
+      {!sitio && fincas.length + lugares.length > 0 && <p className="small text-secondary text-end mb-0 mt-2">Elige dónde se marca para empezar.</p>}
 
       {recientes.length > 0 && (
         <div className="border-top mt-3 pt-2">
