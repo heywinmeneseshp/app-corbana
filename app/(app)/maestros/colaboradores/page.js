@@ -346,8 +346,8 @@ export default function ColaboradoresPage() {
                       </td>
                       <td>
                         <div className="d-flex justify-content-end gap-2 flex-nowrap">
-                          {hasPermission("colaborador.editar") && (
-                            <button type="button" className="btn btn-sm btn-outline-success" title="Registrar rostro (asistencia)" onClick={() => setRostroDe(c)}>
+                          {(hasPermission("colaborador.editar") || hasPermission("colaborador.crear")) && (
+                            <button type="button" className="btn btn-sm btn-outline-success" title="Registrar o reforzar rostro (asistencia)" onClick={() => setRostroDe(c)}>
                               <FiUser />
                             </button>
                           )}
