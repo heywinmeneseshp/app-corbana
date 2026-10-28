@@ -67,7 +67,7 @@ export default function MapaUbicacionModal({ punto, onClose }) {
   const conPerimetro = perimetro && perimetro.length > 2;
 
   return (
-    <ModalShell title={titulo} onClose={onClose} width="80vw" height="80vh" minHeight="80vh">
+    <ModalShell title={titulo} onClose={onClose} width="90vw" height="90vh" minHeight="90vh">
       <div>
         <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 small mb-2">
           <span className="text-secondary">
@@ -92,8 +92,8 @@ export default function MapaUbicacionModal({ punto, onClose }) {
             </a>
           </span>
         </div>
-        {/* 80 % de la pantalla menos el título y la barra de datos */}
-        <div className="rounded-3 overflow-hidden border" style={{ height: "calc(80vh - 9.5rem)", minHeight: 300 }}>
+        {/* 90 % de la pantalla menos el título y la barra de datos */}
+        <div className="rounded-3 overflow-hidden border" style={{ height: "calc(90vh - 9.5rem)", minHeight: 300 }}>
           <MapContainer center={[lat, lng]} zoom={17} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
             <TileLayer url={SATELITE.url} attribution={SATELITE.attribution} maxZoom={19} />
             {conPerimetro && <Polygon positions={perimetro} pathOptions={{ color: "#facc15", weight: 3, fillOpacity: 0.08 }} />}
