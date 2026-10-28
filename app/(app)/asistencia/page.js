@@ -139,7 +139,7 @@ export default function AsistenciaPage() {
           </div>
         </div>
 
-        {puedeMarcar && <MiRegistro fincas={fincas} />}
+        {puedeMarcar && <MiRegistro fincas={fincas} lugares={lugares} />}
 
         <ul className="nav nav-tabs mb-3">
           <li className="nav-item">

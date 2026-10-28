@@ -8,9 +8,11 @@ import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import EnrolarRostroModal from "@/components/asistencia/EnrolarRostroModal";
 import SolicitudesRostroModal from "@/components/asistencia/SolicitudesRostroModal";
+import { EtiquetaLugar, SelectorUbicacion, aParametros, valorDe } from "@/components/asistencia/ubicaciones";
 
 function emptyForm() {
-  return { userUuid: "", nombre: "", apellido: "", documento: "", telefono: "", email: "", cargo: "", fincaUuid: "", estado: true, labores: [] };
+  // `ubicacion`: lugar predeterminado, "f:<uuid>" (finca) o "l:<uuid>" (oficina u otro lugar).
+  return { userUuid: "", nombre: "", apellido: "", documento: "", telefono: "", email: "", cargo: "", ubicacion: "", estado: true, labores: [] };
 }
 
 // Fila del picker "labor + calificación": se agrega una labor a la vez con
@@ -93,6 +95,7 @@ export default function ColaboradoresPage() {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [lugares, setLugares] = useState([]);
   const [rostroDe, setRostroDe] = useState(null); // colaborador cuyo rostro se está enrolando
   const [verSolicitudes, setVerSolicitudes] = useState(false);
   // Con fincas asignadas (y sin ser Administrador) solo se crean colaboradores en esas fincas: la finca es obligatoria.
@@ -120,6 +123,7 @@ export default function ColaboradoresPage() {
   useEffect(() => {
     load();
     apiFetch("/fincas?limit=100").then(({ items }) => setFincas(items)).catch(() => {});
+    apiFetch("/asistencia/lugares?activos=true").then(setLugares).catch(() => {});
     apiFetch("/labores?limit=100").then(({ items }) => setLabores(items)).catch(() => {});
     if (hasPermission("menu.maestros.usuarios")) apiFetch("/users?limit=100").then(({ items }) => setUsers(items)).catch(() => {});
   }, []);
@@ -140,7 +144,7 @@ export default function ColaboradoresPage() {
       telefono: colaborador.telefono || "",
       email: colaborador.email || "",
       cargo: colaborador.cargo || "",
-      fincaUuid: colaborador.finca?.uuid || "",
+      ubicacion: valorDe({ fincaUuid: colaborador.finca?.uuid, lugarUuid: colaborador.lugar?.uuid }),
       estado: colaborador.estado,
       labores: (colaborador.labores || []).map((l) => ({
         laborUuid: l.labor.uuid,
@@ -165,7 +169,9 @@ export default function ColaboradoresPage() {
         email: form.email || null,
         cargo: form.cargo || null,
         ...(!editing && form.userUuid ? { userUuid: form.userUuid } : {}),
-        fincaUuid: form.fincaUuid || null,
+        fincaUuid: null,
+        lugarUuid: null,
+        ...aParametros(form.ubicacion),
         estado: form.estado,
         labores: form.labores.map((l) => ({ laborUuid: l.laborUuid, calificacion: l.calificacion })),
       };
@@ -282,7 +288,7 @@ export default function ColaboradoresPage() {
                   <th>Identificación</th>
                   <th>Cargo</th>
                   <th>Teléfono</th>
-                  <th>Finca predeterminada</th>
+                  <th>Lugar predeterminado</th>
                   <th>Labores</th>
                   <th>Usuario</th>
                   <th>Estado</th>
@@ -312,7 +318,10 @@ export default function ColaboradoresPage() {
                       <td className="small text-secondary">{c.documento || "—"}</td>
                       <td className="small text-secondary">{c.cargo || "—"}</td>
                       <td className="small text-secondary">{c.telefono || "—"}</td>
-                      <td className="small text-secondary">{c.finca?.nombre || "—"}</td>
+                      <td className="small text-secondary">
+                        {c.finca?.nombre || c.lugar?.nombre || "—"}
+                        {c.lugar && <EtiquetaLugar tipo={c.lugar.tipo} />}
+                      </td>
                       <td>
                         <div className="d-flex flex-wrap gap-1">
                           {(c.labores || []).length === 0 && <span className="text-secondary small">—</span>}
@@ -468,21 +477,17 @@ export default function ColaboradoresPage() {
                   />
                 </div>
                 <div className="col-6">
-                  <label className="form-label small fw-medium">Finca predeterminada</label>
-                  <select
+                  <label className="form-label small fw-medium">Lugar predeterminado</label>
+                  <SelectorUbicacion
+                    fincas={fincas}
+                    lugares={fincaObligatoria ? [] : lugares}
+                    value={form.ubicacion}
+                    onChange={(v) => setForm((f) => ({ ...f, ubicacion: v }))}
+                    vacio={fincaObligatoria ? "Elige una de tus fincas" : "Sin asignar"}
                     className="form-select rounded-3"
                     required={fincaObligatoria}
-                    value={form.fincaUuid}
-                    onChange={(e) => setForm((f) => ({ ...f, fincaUuid: e.target.value }))}
-                  >
-                    <option value="">{fincaObligatoria ? "Elige una de tus fincas" : "Sin asignar"}</option>
-                    {fincas.map((f) => (
-                      <option key={f.uuid} value={f.uuid}>
-                        {f.nombre}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="form-text">Solo es la finca habitual: el colaborador puede marcar asistencia en cualquier otra.</div>
+                  />
+                  <div className="form-text">Finca u oficina habitual: el colaborador puede marcar asistencia en cualquier otro lugar.</div>
                 </div>
               </div>
 

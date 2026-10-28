@@ -24,9 +24,9 @@ export const valorDe = ({ fincaUuid, lugarUuid }) => (lugarUuid ? `l:${lugarUuid
 // Nombre de la ubicación de una marcación (finca o lugar).
 export const nombreUbicacion = (m) => m.finca?.nombre || m.lugar?.nombre || "—";
 
-export function SelectorUbicacion({ fincas, lugares, value, onChange, vacio = "Todas", className = "form-select form-select-sm rounded-3", disabled }) {
+export function SelectorUbicacion({ fincas, lugares, value, onChange, vacio = "Todas", className = "form-select form-select-sm rounded-3", disabled, required }) {
   return (
-    <select className={className} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+    <select className={className} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} required={required}>
       <option value="">{vacio}</option>
       {fincas.length > 0 && (
         <optgroup label="Fincas">

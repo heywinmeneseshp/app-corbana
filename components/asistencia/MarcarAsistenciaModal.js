@@ -69,29 +69,36 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
     setProcesando(true);
     try {
       const { descriptor } = await descriptorDeElemento(videoRef.current);
-      const uuid = crypto.randomUUID();
-      const { resultados = [] } = await apiFetch("/asistencia/marcaciones", {
-        method: "POST",
-        body: JSON.stringify({
-          marcaciones: [
-            {
-              uuid,
-              ...aParametros(sitio),
-              tipo,
-              fechaHora: new Date().toISOString(),
-              lat: ubicacion.current?.lat ?? null,
-              lng: ubicacion.current?.lng ?? null,
-              descriptor,
-            },
-          ],
-        }),
-      });
+      const marcacion = {
+        uuid: crypto.randomUUID(),
+        ...aParametros(sitio),
+        tipo,
+        fechaHora: new Date().toISOString(),
+        lat: ubicacion.current?.lat ?? null,
+        lng: ubicacion.current?.lng ?? null,
+        descriptor,
+      };
+      const enviar = async (m) => {
+        const { resultados = [] } = await apiFetch("/asistencia/marcaciones", { method: "POST", body: JSON.stringify({ marcaciones: [m] }) });
+        return resultados.find((x) => x.uuid === m.uuid) || resultados[0];
+      };
+      let r = await enviar(marcacion);
       try {
         localStorage.setItem(FINCA_KEY, sitio);
       } catch {
         /* sin almacenamiento local: solo no se recuerda la finca */
       }
-      const r = resultados.find((x) => x.uuid === uuid) || resultados[0];
+      // Salida sin entrada previa: no se registra a menos que la persona confirme.
+      if (r?.estado === "SIN_ENTRADA_PREVIA") {
+        const nombre = r.colaborador?.nombre ?? "Esta persona";
+        if (window.confirm(`${nombre} no tiene una entrada registrada hoy. ¿Estás seguro de que quieres registrar la salida?`)) {
+          r = await enviar({ ...marcacion, confirmarSinEntrada: true });
+        } else {
+          setMensaje({ texto: `Salida de ${nombre} no registrada: primero marca la entrada.`, ok: false });
+          agregarReciente(`Salida · ${nombre} · cancelada (sin entrada)`, false);
+          return;
+        }
+      }
       if (r?.estado === "CREADA" && r.colaborador) {
         setMensaje({ texto: `${etiqueta} registrada: ${r.colaborador.nombre}`, ok: true });
         agregarReciente(`${etiqueta} · ${r.colaborador.nombre}`, true);

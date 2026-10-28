@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { FiChevronDown, FiChevronRight, FiDownload } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { EtiquetaLugar, SelectorUbicacion, aParametros } from "./ubicaciones";
+import MapaUbicacionModal from "./MapaUbicacionModal";
 
 const ZONA = "America/Bogota";
 const hoyBogota = () => new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
@@ -26,7 +27,29 @@ const ESTADO = {
   EN_CURSO: { texto: "En curso", estilo: { backgroundColor: "#dbeafe", color: "#1d4ed8" } },
 };
 
-function Tramos({ tramos }) {
+// Hora de una marcación: si tiene GPS es un botón que abre el mapa con el punto donde se marcó.
+function HoraMapa({ iso, gps, titulo, detalle, ubicacion, onMapa }) {
+  if (!iso) return "—";
+  if (!gps) return <span title="Sin ubicación GPS">{hora(iso)}</span>;
+  return (
+    <button
+      type="button"
+      className="btn btn-link btn-sm p-0 align-baseline text-decoration-none"
+      style={{ fontSize: "inherit" }}
+      title="Ver en el mapa"
+      onClick={(e) => {
+        e.stopPropagation();
+        // Finca: el mapa dibuja su perímetro (KML) y su punto guardado; oficina u otro lugar: su punto guardado.
+        const esFinca = ubicacion?.tipo === "FINCA";
+        onMapa({ ...gps, titulo, detalle, fincaUuid: esFinca ? ubicacion.uuid : null, lugarUuid: ubicacion && !esFinca ? ubicacion.uuid : null });
+      }}
+    >
+      {hora(iso)}
+    </button>
+  );
+}
+
+function Tramos({ tramos, colaborador, onMapa }) {
   return (
     <div className="d-flex flex-column gap-1 py-1">
       {tramos.map((t, i) =>
@@ -36,7 +59,8 @@ function Tramos({ tramos }) {
             <span className="fw-semibold">{t.finca.nombre}</span>
             {t.finca.tipo && t.finca.tipo !== "FINCA" && <EtiquetaLugar tipo={t.finca.tipo} />}
             <span className="text-secondary">
-              {hora(t.entrada)} – {hora(t.salida)}
+              <HoraMapa iso={t.entrada} gps={t.entradaGps} ubicacion={t.finca} titulo={`Entrada · ${t.finca.nombre}`} detalle={`${colaborador} · ${hora(t.entrada)}`} onMapa={onMapa} /> –{" "}
+              <HoraMapa iso={t.salida} gps={t.salidaGps} ubicacion={t.finca} titulo={`Salida · ${t.finca.nombre}`} detalle={`${colaborador} · ${hora(t.salida)}`} onMapa={onMapa} />
             </span>
             {t.minutos !== null && <span className="fw-medium">· {duracion(t.minutos)}</span>}
             {ESTADO[t.estado] && (
@@ -68,6 +92,7 @@ export default function JornadasAsistencia({ fincas, lugares = [], colaboradores
   const [pagina, setPagina] = useState(1);
   const [datos, setDatos] = useState({ items: [], meta: null });
   const [abiertas, setAbiertas] = useState(() => new Set());
+  const [mapa, setMapa] = useState(null); // punto GPS que se muestra en el mapa
   const [cargando, setCargando] = useState(true);
   const [exportando, setExportando] = useState(false);
   const [error, setError] = useState("");
@@ -263,8 +288,12 @@ export default function JornadasAsistencia({ fincas, lugares = [], colaboradores
                         </td>
                         <td className="text-center text-secondary">{j.colaborador.cargo || "—"}</td>
                         <td className="text-center text-nowrap">{fechaCorta(j.fecha)}</td>
-                        <td className="text-center text-nowrap">{hora(j.primeraEntrada)}</td>
-                        <td className="text-center text-nowrap">{hora(j.ultimaSalida)}</td>
+                        <td className="text-center text-nowrap">
+                          <HoraMapa iso={j.primeraEntrada} gps={j.primeraEntradaGps} ubicacion={j.primeraEntradaLugar} titulo={`Entrada · ${j.primeraEntradaLugar?.nombre || ""}`} detalle={`${j.colaborador.nombre} · ${fechaCorta(j.fecha)} ${hora(j.primeraEntrada)}`} onMapa={setMapa} />
+                        </td>
+                        <td className="text-center text-nowrap">
+                          <HoraMapa iso={j.ultimaSalida} gps={j.ultimaSalidaGps} ubicacion={j.ultimaSalidaLugar} titulo={`Salida · ${j.ultimaSalidaLugar?.nombre || ""}`} detalle={`${j.colaborador.nombre} · ${fechaCorta(j.fecha)} ${hora(j.ultimaSalida)}`} onMapa={setMapa} />
+                        </td>
                         <td className="text-center text-nowrap fw-semibold">{duracion(j.minutosEnFincas)}</td>
                         <td className="text-center text-nowrap" style={{ color: j.minutosTransito ? "#7c3aed" : undefined }}>
                           {j.minutosTransito ? duracion(j.minutosTransito) : "—"}
@@ -275,7 +304,7 @@ export default function JornadasAsistencia({ fincas, lugares = [], colaboradores
                         <tr>
                           <td />
                           <td colSpan={8} className="bg-light">
-                            <Tramos tramos={j.tramos} />
+                            <Tramos tramos={j.tramos} colaborador={j.colaborador.nombre} onMapa={setMapa} />
                             {j.minutosFuera > 0 && <div className="small text-secondary mt-1">Fuera del lugar (salió y volvió): {duracion(j.minutosFuera)}</div>}
                           </td>
                         </tr>
@@ -302,6 +331,7 @@ export default function JornadasAsistencia({ fincas, lugares = [], colaboradores
           </button>
         </div>
       )}
+      {mapa && <MapaUbicacionModal punto={mapa} onClose={() => setMapa(null)} />}
     </>
   );
 }

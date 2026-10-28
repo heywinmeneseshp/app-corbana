@@ -5,12 +5,13 @@ import { FiCheckCircle, FiClock, FiUser } from "react-icons/fi";
 import ModalShell from "@/components/ModalShell";
 import { apiFetch } from "@/lib/api";
 import EnrolarRostroModal from "./EnrolarRostroModal";
+import { SelectorUbicacion, aParametros, valorDe } from "./ubicaciones";
 
 // «Mi registro»: la ficha de colaborador del usuario de la sesión y su rostro (autoservicio). Crear la ficha propia, registrar el
 // rostro una vez, reforzarlo y pedir un nuevo registro (que aprueba otro usuario con permiso).
-export default function MiRegistro({ fincas }) {
+export default function MiRegistro({ fincas, lugares = [] }) {
   const [ficha, setFicha] = useState(undefined); // undefined = cargando, null = sin ficha
-  const [crear, setCrear] = useState(false);
+  const [formulario, setFormulario] = useState(false); // crear o editar la ficha
   const [enrolar, setEnrolar] = useState(false);
   const [error, setError] = useState("");
 
@@ -41,7 +42,7 @@ export default function MiRegistro({ fincas }) {
             <div className="small text-secondary">
               {`${ficha.nombre} ${ficha.apellido || ""}`.trim()}
               {ficha.documento ? ` · ${ficha.documento}` : ""}
-              {ficha.finca ? ` · ${ficha.finca.nombre}` : ""} ·{" "}
+              {ficha.finca || ficha.lugar ? ` · ${(ficha.finca || ficha.lugar).nombre}` : ""} ·{" "}
               {ficha.rostroEnrolado ? (
                 <span style={{ color: "#047857" }}>
                   <FiCheckCircle className="me-1" />
@@ -64,22 +65,29 @@ export default function MiRegistro({ fincas }) {
           {error && <div className="small text-danger">{error}</div>}
         </div>
         {ficha ? (
-          <button type="button" className="btn btn-outline-success btn-sm rounded-3" onClick={() => setEnrolar(true)}>
-            {ficha.rostroEnrolado ? "Reforzar o volver a registrar" : "Registrar mi rostro"}
-          </button>
+          <div className="d-flex gap-2">
+            <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setFormulario(true)}>
+              Editar mi ficha
+            </button>
+            <button type="button" className="btn btn-outline-success btn-sm rounded-3" onClick={() => setEnrolar(true)}>
+              {ficha.rostroEnrolado ? "Reforzar o volver a registrar" : "Registrar mi rostro"}
+            </button>
+          </div>
         ) : (
-          <button type="button" className="btn btn-brand btn-sm rounded-3" onClick={() => setCrear(true)}>
+          <button type="button" className="btn btn-brand btn-sm rounded-3" onClick={() => setFormulario(true)}>
             Crear mi ficha
           </button>
         )}
       </div>
 
-      {crear && (
-        <CrearMiFichaModal
+      {formulario && (
+        <FichaModal
+          ficha={ficha}
           fincas={fincas}
-          onClose={() => setCrear(false)}
-          onCreada={(f) => {
-            setCrear(false);
+          lugares={lugares}
+          onClose={() => setFormulario(false)}
+          onGuardada={(f) => {
+            setFormulario(false);
             setFicha(f);
           }}
         />
@@ -95,19 +103,33 @@ export default function MiRegistro({ fincas }) {
   );
 }
 
-function CrearMiFichaModal({ fincas, onClose, onCreada }) {
-  const [f, setF] = useState({ nombre: "", apellido: "", documento: "", telefono: "", cargo: "", fincaUuid: "" });
+// Crear (todos los datos) o editar la ficha propia: al editar, nombre, apellido e identificación quedan protegidos (los cambia quien
+// tenga «Editar colaboradores»); se pueden cambiar teléfono, cargo y el lugar predeterminado (finca u oficina).
+function FichaModal({ ficha, fincas, lugares, onClose, onGuardada }) {
+  const editando = Boolean(ficha);
+  const [f, setF] = useState({
+    nombre: ficha?.nombre || "",
+    apellido: ficha?.apellido || "",
+    documento: ficha?.documento || "",
+    telefono: ficha?.telefono || "",
+    cargo: ficha?.cargo || "",
+    ubicacion: valorDe({ fincaUuid: ficha?.finca?.uuid, lugarUuid: ficha?.lugar?.uuid }),
+  });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const campo = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const limpio = (v) => (v || "").trim() || null;
 
   async function guardar(e) {
     e.preventDefault();
     setGuardando(true);
     setError("");
     try {
-      const body = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.trim ? v.trim() || null : v]));
-      onCreada(await apiFetch("/colaboradores/mio", { method: "POST", body: JSON.stringify(body) }));
+      const lugar = { fincaUuid: null, lugarUuid: null, ...aParametros(f.ubicacion) };
+      const body = editando
+        ? { telefono: limpio(f.telefono), cargo: limpio(f.cargo), ...lugar }
+        : { nombre: limpio(f.nombre), apellido: limpio(f.apellido), documento: f.documento.trim(), telefono: limpio(f.telefono), cargo: limpio(f.cargo), ...lugar };
+      onGuardada(await apiFetch("/colaboradores/mio", { method: editando ? "PUT" : "POST", body: JSON.stringify(body) }));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -116,20 +138,24 @@ function CrearMiFichaModal({ fincas, onClose, onCreada }) {
   }
 
   return (
-    <ModalShell title="Crear mi ficha de colaborador" onClose={onClose} height="auto">
+    <ModalShell title={editando ? "Editar mi ficha" : "Crear mi ficha de colaborador"} onClose={onClose} height="auto">
       <form onSubmit={guardar} className="row g-2">
-        <div className="col-12 small text-secondary">Queda vinculada a tu usuario. Si dejas el nombre vacío se usa el de tu usuario.</div>
+        <div className="col-12 small text-secondary">
+          {editando
+            ? "Nombre, apellido e identificación solo los cambia quien administra los colaboradores."
+            : "Queda vinculada a tu usuario. Si dejas el nombre vacío se usa el de tu usuario."}
+        </div>
         <div className="col-6">
           <label className="form-label small fw-medium">Nombre</label>
-          <input className="form-control form-control-sm rounded-3" maxLength={150} value={f.nombre} onChange={(e) => campo("nombre", e.target.value)} />
+          <input className="form-control form-control-sm rounded-3" maxLength={150} disabled={editando} value={f.nombre} onChange={(e) => campo("nombre", e.target.value)} />
         </div>
         <div className="col-6">
           <label className="form-label small fw-medium">Apellido</label>
-          <input className="form-control form-control-sm rounded-3" maxLength={150} value={f.apellido} onChange={(e) => campo("apellido", e.target.value)} />
+          <input className="form-control form-control-sm rounded-3" maxLength={150} disabled={editando} value={f.apellido} onChange={(e) => campo("apellido", e.target.value)} />
         </div>
         <div className="col-6">
           <label className="form-label small fw-medium">Identificación</label>
-          <input className="form-control form-control-sm rounded-3" required minLength={3} maxLength={30} value={f.documento} onChange={(e) => campo("documento", e.target.value)} />
+          <input className="form-control form-control-sm rounded-3" required={!editando} minLength={3} maxLength={30} disabled={editando} value={f.documento} onChange={(e) => campo("documento", e.target.value)} />
         </div>
         <div className="col-6">
           <label className="form-label small fw-medium">Teléfono</label>
@@ -140,15 +166,9 @@ function CrearMiFichaModal({ fincas, onClose, onCreada }) {
           <input className="form-control form-control-sm rounded-3" maxLength={100} value={f.cargo} onChange={(e) => campo("cargo", e.target.value)} />
         </div>
         <div className="col-6">
-          <label className="form-label small fw-medium">Finca predeterminada (opcional)</label>
-          <select className="form-select form-select-sm rounded-3" value={f.fincaUuid} onChange={(e) => campo("fincaUuid", e.target.value)}>
-            <option value="">Ninguna</option>
-            {fincas.map((x) => (
-              <option key={x.uuid} value={x.uuid}>
-                {x.nombre}
-              </option>
-            ))}
-          </select>
+          <label className="form-label small fw-medium">Lugar predeterminado (opcional)</label>
+          <SelectorUbicacion fincas={fincas} lugares={lugares.filter((l) => l.estado !== false)} value={f.ubicacion} onChange={(v) => campo("ubicacion", v)} vacio="Ninguno" />
+          <div className="form-text">Finca u oficina habitual; puedes marcar en cualquier otro lugar.</div>
         </div>
         {error && <div className="col-12 alert alert-danger py-2 small mb-0">{error}</div>}
         <div className="col-12 d-flex justify-content-end gap-2 mt-2">
@@ -156,7 +176,7 @@ function CrearMiFichaModal({ fincas, onClose, onCreada }) {
             Cancelar
           </button>
           <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={guardando}>
-            {guardando ? "Guardando..." : "Crear mi ficha"}
+            {guardando ? "Guardando..." : editando ? "Guardar cambios" : "Crear mi ficha"}
           </button>
         </div>
       </form>
