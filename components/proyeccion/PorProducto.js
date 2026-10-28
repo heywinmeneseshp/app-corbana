@@ -15,6 +15,13 @@ const encabezado = { background: "#166534", color: "#fff" };
 const primeraCol = "#e8f6ee";
 const pie = "#d1ecdc";
 
+// Escenario de cajas que se reparte: el mismo rango de la proyección (conservador = p25, normal, optimista = p75).
+const ESCENARIOS = [
+  { id: "conservador", label: "Conservador", campo: "cajasBajo" },
+  { id: "normal", label: "Normal", campo: "cajas" },
+  { id: "optimista", label: "Optimista", campo: "cajasAlto" },
+];
+
 const MODOS = [
   { id: "CONTENEDORES", label: "Contenedores por semana" },
   { id: "PORCENTAJE", label: "% de los kilos" },
@@ -193,6 +200,9 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
   const [valor, setValor] = useState("");
   const [error, setError] = useState("");
   const [periodo, setPeriodo] = useState("semana"); // semana | mes
+  const [escenario, setEscenario] = useState("normal"); // conservador | normal | optimista
+  const campoCajas = ESCENARIOS.find((e) => e.id === escenario).campo;
+  const nombreEscenarioCajas = ESCENARIOS.find((e) => e.id === escenario).label;
   const [abierto, setAbierto] = useState(true); // panel de productos desplegado o colapsado
   const [fincasNuevo, setFincasNuevo] = useState([]); // fincas del producto que se va a agregar en modo FINCA
   const [nuevoProducto, setNuevoProducto] = useState(false);
@@ -275,18 +285,19 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
     });
   };
 
-  // Cajas 18.6 de cada semana, sumando solo las fincas visibles.
+  // Cajas 18.6 de cada semana del escenario elegido (en semanas reales los tres valen lo mismo), sumando solo las fincas visibles.
   const semanas = useMemo(() => {
     const m = new Map();
     for (const f of resultado.filas) {
       if (ocultas.has(f.fincaUuid)) continue;
+      const cajasFila = Number(f[campoCajas] ?? f.cajas) || 0;
       const t = m.get(f.semanaCodigo) || { semanaCodigo: f.semanaCodigo, numeroSemana: f.numeroSemana, fechaInicio: f.fechaInicio, real: f.real, cajas: 0, porFinca: {} };
-      t.cajas += f.cajas;
-      t.porFinca[f.fincaUuid] = (t.porFinca[f.fincaUuid] || 0) + f.cajas;
+      t.cajas += cajasFila;
+      t.porFinca[f.fincaUuid] = (t.porFinca[f.fincaUuid] || 0) + cajasFila;
       m.set(f.semanaCodigo, t);
     }
     return [...m.values()];
-  }, [resultado, ocultas]);
+  }, [resultado, ocultas, campoCajas]);
 
   const filasSemana = semanas.map((s) => {
     const kg = s.cajas * tasa;
@@ -397,7 +408,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
       const ws = wb.addWorksheet(nombre, { views: [{ state: "frozen", xSplit: 1, ySplit: 4 }] });
       const ncol = cabeceras.length;
       ws.mergeCells(1, 1, 1, ncol);
-      ws.getCell(1, 1).value = `Proyección ${resultado.meta.anio}${nombreEscenario ? ` · ${nombreEscenario}` : ""} · Cajas por producto`;
+      ws.getCell(1, 1).value = `Proyección ${resultado.meta.anio}${nombreEscenario ? ` · ${nombreEscenario}` : ""} · Cajas por producto · Escenario ${nombreEscenarioCajas}`;
       ws.getCell(1, 1).font = { bold: true, size: 14, color: { argb: verde } };
       ws.getCell(1, 1).alignment = { horizontal: "center" };
       ws.mergeCells(2, 1, 2, ncol);
@@ -461,7 +472,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
     const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `proyeccion-${resultado.meta.anio}-${(nombreEscenario || "escenario").replace(/[^a-zA-Z0-9-_]+/g, "_")}-por-producto.xlsx`;
+    a.download = `proyeccion-${resultado.meta.anio}-${(nombreEscenario || "escenario").replace(/[^a-zA-Z0-9-_]+/g, "_")}-por-producto-${escenario}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -681,6 +692,22 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                 {label}
               </button>
             ))}
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <span className="small text-secondary">Escenario</span>
+            <div className="d-inline-flex gap-1 p-1" style={{ background: "#e6eee8", borderRadius: 8 }} title="Conservador = p25 y optimista = p75 del rango de la proyección">
+              {ESCENARIOS.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  className="btn btn-sm border-0"
+                  style={{ borderRadius: 6, fontSize: "0.78rem", padding: "2px 10px", background: escenario === e.id ? "#fff" : "transparent", color: escenario === e.id ? "#166534" : "#4b6354", fontWeight: escenario === e.id ? 700 : 500, boxShadow: escenario === e.id ? "0 1px 2px rgba(20,83,45,0.18)" : "none" }}
+                  onClick={() => setEscenario(e.id)}
+                >
+                  {e.label}
+                </button>
+              ))}
+            </div>
           </div>
           <button type="button" className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" onClick={descargarExcel}>
             <FiDownload /> Descargar Excel

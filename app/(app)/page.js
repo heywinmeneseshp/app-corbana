@@ -300,7 +300,7 @@ export default function InicioPage() {
                 const filas = allFincas.map((f) => {
                   const activa = fincaDataMap.get(f.id);
                   const checked = fincasParam === "" || selectedSet.has(f.id);
-                  return { ...f, cajas: activa?.cajas ?? 0, recusados: activa?.recusados ?? 0, procesados: activa?.procesados ?? 0, ratio: activa?.ratio, esExterna: !!f.esExterna, checked };
+                  return { ...f, cajas: activa?.cajas ?? 0, repicados: activa?.repicados ?? 0, recusados: activa?.recusados ?? 0, procesados: activa?.procesados ?? 0, ratio: activa?.ratio, esExterna: !!f.esExterna, checked };
                 });
                 return (
                   <div>
@@ -322,6 +322,7 @@ export default function InicioPage() {
                       <span style={{ width: "3rem" }}>Código</span>
                       <span style={{ flex: 1, minWidth: "9rem" }}>Finca</span>
                       <span className="text-end" style={{ width: "6rem" }}>Cajas</span>
+                      <span className="text-end" style={{ width: "6rem" }}>Repic.</span>
                       <span className="text-end" style={{ width: "6rem" }}>Recus.</span>
                       <span className="text-end" style={{ width: "6rem" }}>Proc.</span>
                       <span className="text-end" style={{ width: "5rem" }}>Ratio</span>
@@ -359,6 +360,7 @@ export default function InicioPage() {
                             )}
                           </span>
                           <span className="fw-medium text-end" style={{ width: "6rem" }}>{f.cajas > 0 ? f.cajas.toLocaleString("es") : "—"}</span>
+                          <span className="fw-medium text-end" style={{ width: "6rem", color: f.repicados > 0 ? "#dc2626" : undefined }}>{f.repicados > 0 ? f.repicados.toLocaleString("es") : "—"}</span>
                           <span className="fw-medium text-end" style={{ width: "6rem", color: f.recusados > 0 ? "#ea580c" : undefined }}>{f.recusados > 0 ? f.recusados.toLocaleString("es") : "—"}</span>
                           <span className="fw-medium text-end" style={{ width: "6rem", color: f.procesados > 0 ? "#2563eb" : undefined }}>{f.procesados > 0 ? f.procesados.toLocaleString("es") : "—"}</span>
                           <span className="fw-bold text-end" style={{ width: "5rem", color: ratioColor }}>{f.esExterna ? "—" : (f.ratio ?? "—")}</span>
