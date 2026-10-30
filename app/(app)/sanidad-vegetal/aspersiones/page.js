@@ -1328,11 +1328,21 @@ export default function AspersionesPage() {
   })();
   // Renglón POR_LITRO_AGUA (ej. ACONDICIONADOR = 0.3 g/L): tasa (en la
   // unidad de la fila) × litros de agua reales, con el redondeo de siempre.
+  // El ACONDICIONADOR va SIEMPRE en gramos por litro (aunque la fila esté en Kg): la tasa se toma en g y se lleva a la unidad de la fila.
   function porLitroResueltaNativa(componente) {
     if (componente.tipoDosis !== "POR_LITRO_AGUA") return null;
     const tasa = Number(componente.tasa);
     if (!(tasa > 0) || aguaRealLitros == null) return null;
-    const valor = tasa * aguaRealLitros;
+    let valor = tasa * aguaRealLitros;
+    if (componente === componenteRegulador) {
+      const gramo = unidadesPeso.find((u) => u.nombre === "Gramo");
+      const uFila = componente.unidad?.uuid;
+      if (gramo && uFila && uFila !== gramo.uuid) {
+        const enFila = convertirCantidad(grafoUnidades, gramo.uuid, uFila, valor);
+        if (enFila == null) return null;
+        valor = enFila;
+      }
+    }
     return valor > 0 ? redondearEnUnidadPropia(componente, valor) : valor;
   }
   const reguladorRealNativa =

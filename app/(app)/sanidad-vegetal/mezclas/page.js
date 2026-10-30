@@ -333,7 +333,8 @@ function aplicarReglasAcondicionador(rows, articulos, unidades) {
     porcentajeReferencia: "",
     tasaUnidadUuid: "",
   });
-  let resultado = rows.map((r) => (esAcond(r) && r.tipoDosis !== "POR_LITRO_AGUA" ? enGramos(r) : r));
+  // También si la fila quedó en otra unidad (p. ej. Kg): la tasa es SIEMPRE g/L, así que la fila se pasa a gramos.
+  let resultado = rows.map((r) => (esAcond(r) && (r.tipoDosis !== "POR_LITRO_AGUA" || (gramo && r.unidadUuid !== gramo.uuid)) ? enGramos(r) : r));
   const hayAgua = resultado.some((r) => esAguaArticulo(r.articuloUuid, articulos));
   if (hayAgua && !resultado.some(esAcond)) {
     resultado = [...resultado, enGramos({ ...emptyInsumoRow(), articuloUuid: acondicionador.uuid })];
@@ -982,7 +983,8 @@ export default function ElaboracionesPage() {
                   r.referenciaArticuloUuid = idx >= 0 ? base[idx]?.articuloUuid || "" : "";
                 }
               });
-              return base;
+              // Recetas guardadas con el ACONDICIONADOR en otra unidad (Kg) quedan en g/L al editarlas.
+              return aplicarReglasAcondicionador(base, articulos, unidades);
             })()
           : [emptyInsumoRow()],
       );
@@ -996,7 +998,7 @@ export default function ElaboracionesPage() {
   function updateEditarInsumoRow(key, patch) {
     setEditarInsumoRows((rows) => {
       const siguientes = rows.map((r) => (r.key === key ? { ...r, ...patch } : r));
-      return "articuloUuid" in patch ? aplicarReglasAcondicionador(siguientes, articulos, unidades) : siguientes;
+      return "articuloUuid" in patch || "unidadUuid" in patch ? aplicarReglasAcondicionador(siguientes, articulos, unidades) : siguientes;
     });
   }
 
@@ -1277,7 +1279,7 @@ export default function ElaboracionesPage() {
   function updateInsumoRow(key, patch) {
     setInsumoRows((rows) => {
       const siguientes = rows.map((r) => (r.key === key ? { ...r, ...patch } : r));
-      return "articuloUuid" in patch ? aplicarReglasAcondicionador(siguientes, articulos, unidades) : siguientes;
+      return "articuloUuid" in patch || "unidadUuid" in patch ? aplicarReglasAcondicionador(siguientes, articulos, unidades) : siguientes;
     });
   }
 
