@@ -12,7 +12,8 @@ import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import StockInsuficienteModal from "@/components/StockInsuficienteModal";
 import DetalleAspersionModal from "@/components/aspersion/DetalleAspersionModal";
-import TagPicker from "@/components/TagPicker";
+import PilotoAsistentes from "@/components/aspersion/PilotoAsistentes";
+import ConfigDestinatariosModal from "@/components/aspersion/ConfigDestinatariosModal";
 import { generarAvisoAspersionPdfBlob, verAvisoAspersionPdf } from "@/lib/aspersionExport";
 import { ubicarSemana, formatRangoSemana } from "@/lib/laborCalendarBuilder";
 import { descargarExcelProgramador, descargarExcelCalendario, generarExcelCalendarioBlob } from "@/lib/aspersionesExcelExport";
@@ -54,11 +55,22 @@ const TIPO_LABEL = { SIGATOKA_NEGRA: "Sigatoka Negra", DEFOLIADOR: "Defoliador",
 // para que se lean bien tanto en el ícono chico de la tabla como en la
 // leyenda — los pastel originales (#1e40af/#166534) quedaban apagados a
 // tamaño 11-14px.
+// Flujo de la programación: Programada → Revisada → Enviada → Ejecutada (o Cancelada). Revisada y Enviada son pasos de una
+// PROGRAMADA: revisada (sin enviar) y con el aviso enviado. Ya revisada no se edita ni se elimina.
 const ESTADO_INFO = {
   PROGRAMADA: { label: "Programada", bg: "#dbeafe", color: "#2563eb", Icono: FiClock },
+  REVISADA: { label: "Revisada", bg: "#ede9fe", color: "#7c3aed", Icono: FiCheckCircle },
+  ENVIADA: { label: "Enviada", bg: "#cffafe", color: "#0e7490", Icono: FiSend },
   EJECUTADA: { label: "Ejecutada", bg: "#dcfce7", color: "#16a34a", Icono: FiCheckCircle },
   CANCELADA: { label: "Cancelada", bg: "#f3f4f6", color: "#dc2626", Icono: FiXCircle },
 };
+
+function estadoFlujo(a) {
+  if (a.estado !== "PROGRAMADA") return a.estado;
+  if (a.correoEnviadoEn) return "ENVIADA";
+  if (a.revisadoPor || a.revisadoPorId) return "REVISADA";
+  return "PROGRAMADA";
+}
 
 
 function nombreUsuarioActual() {
@@ -1641,8 +1653,13 @@ export default function AspersionesPage() {
   }
 
   // Marca la aspersión como revisada por el usuario (su firma va en el aviso), o quita la revisión.
+  // Marca la aspersión como revisada por el usuario (su firma va en el aviso), o quita la revisión. No envía correos.
   async function handleRevisar(fila, quitar = false) {
-    if (quitar && !confirm("¿Quitar la revisión de esta aspersión? Su firma deja de salir en el aviso.")) return;
+    if (
+      quitar &&
+      !confirm("¿Quitar la revisión? La aspersión vuelve a Programada para poder editarla; después hay que revisarla y enviar el aviso de nuevo.")
+    )
+      return;
     setRevisandoUuid(fila.uuid);
     try {
       const actualizada = await apiFetch(`/aspersiones/${fila.uuid}/revisar`, { method: quitar ? "DELETE" : "POST" });
@@ -1718,6 +1735,9 @@ export default function AspersionesPage() {
       cicloCon: "",
       candidatas: [],
       piloto: "",
+      // Con dron: piloto del listado de colaboradores (cargo «Piloto de Dron») y asistentes.
+      pilotoColaboradorUuid: "",
+      asistentesUuids: [],
       hectareasAplicadas: String(Number(aspersion.hectareas)),
       // Galones de la programación (cantidad a preparar llevada a galones),
       // editables si en la aplicación real fueron otros.
@@ -1730,8 +1750,9 @@ export default function AspersionesPage() {
   async function confirmarEjecutar(e) {
     e.preventDefault();
     const m = ejecutarModal;
-    if (!m.piloto.trim()) {
-      setEjecutarModal({ ...m, error: "Escribe el nombre del piloto." });
+    const conDron = m.aspersion.medio === "DRON";
+    if (conDron ? !m.pilotoColaboradorUuid : !m.piloto.trim()) {
+      setEjecutarModal({ ...m, error: conDron ? "Elige el piloto del dron." : "Escribe el nombre del piloto." });
       return;
     }
     const aplicadas = Number(m.hectareasAplicadas);
@@ -1741,6 +1762,7 @@ export default function AspersionesPage() {
     }
     const comprobante = {
       piloto: m.piloto.trim(),
+      ...(conDron ? { pilotoColaboradorUuid: m.pilotoColaboradorUuid, asistentesUuids: m.asistentesUuids } : {}),
       hectareasAplicadas: aplicadas,
       ...(m.galonesTotales !== "" ? { galonesTotales: Number(m.galonesTotales) } : {}),
       ...(m.observaciones.trim() ? { observaciones: m.observaciones.trim() } : {}),
@@ -1826,22 +1848,32 @@ export default function AspersionesPage() {
     setEnviandoCorreoUuid(aspersion.uuid);
     try {
       const sugeridos = await apiFetch(`/aspersiones/${aspersion.uuid}/destinatarios-sugeridos`);
-      if (!sugeridos.destinatarios?.length) {
+      const detalle = await apiFetch(`/aspersiones/${aspersion.uuid}`);
+      // Los correos de la pista también reciben el aviso (su propio PDF), así
+      // que alcanzan para enviar aunque la finca no tenga destinatarios.
+      const hayPista = Boolean(detalle.pista?.uuid && (detalle.pista.correos || []).length);
+      const conFinca = Boolean(sugeridos.destinatarios?.length);
+      if (!conFinca && !hayPista) {
         alert(
-          "No hay destinatarios configurados para la finca de esta aspersión — configúralos con el botón de engranaje, arriba, antes de enviar.",
+          "No hay destinatarios configurados para la finca de esta aspersión ni correos en su pista — configúralos con el botón de engranaje, arriba, antes de enviar.",
         );
         return;
       }
-      const detalle = await apiFetch(`/aspersiones/${aspersion.uuid}`);
       const administradorFincaCargo = await resolverCargoAdministrador(detalle);
       const { blob, nombre } = generarAvisoAspersionPdfBlob({ ...detalle, administradorFincaCargo });
       const formData = new FormData();
       formData.append("pdf", blob, nombre);
       const conPista = adjuntarAvisoPista(formData, { ...detalle, administradorFincaCargo });
-      formData.append("destinatarios", sugeridos.destinatarios.join(", "));
+      formData.append("destinatarios", (sugeridos.destinatarios || []).join(", "));
       const actualizada = await apiFetchFormData(`/aspersiones/${aspersion.uuid}/correo`, formData);
       actualizarFila(actualizada);
-      alert(conPista ? `Aviso enviado a la finca y a la pista ${detalle.pista.nombre}.` : "Aviso enviado por correo correctamente.");
+      alert(
+        conPista && conFinca
+          ? `Aviso enviado a la finca y a la pista ${detalle.pista.nombre}.`
+          : conPista
+            ? `Aviso enviado a los correos de la pista ${detalle.pista.nombre}.`
+            : "Aviso enviado por correo correctamente.",
+      );
       return actualizada;
     } catch (err) {
       setError(err.message);
@@ -1864,14 +1896,21 @@ export default function AspersionesPage() {
   // aplican — ya se ejecutaron, no hay nada nuevo que avisar.
   async function handleEnviarSemana() {
     if (!semanaActiva) return;
-    const pendientes = calendarioItems.filter((a) => a.estado !== "EJECUTADA" && !a.correoEnviadoEn);
+    // Solo las programadas sin aviso enviado (la cancelación ya se avisa sola al cancelar), y de ellas solo las revisadas.
+    const sinEnviar = calendarioItems.filter((a) => a.estado === "PROGRAMADA" && !a.correoEnviadoEn);
+    const pendientes = sinEnviar.filter((a) => a.revisadoPor || a.revisadoPorId);
+    const sinRevisar = sinEnviar.length - pendientes.length;
     if (pendientes.length === 0) {
-      alert("No hay programaciones pendientes de aviso en esta semana.");
+      alert(
+        sinRevisar
+          ? `Hay ${sinRevisar} programación(es) sin revisar en esta semana: márcalas como revisadas antes de enviar el aviso.`
+          : "No hay programaciones pendientes de aviso en esta semana.",
+      );
       return;
     }
     if (
       !confirm(
-        `Se enviará el aviso de ${pendientes.length} programación(es) pendiente(s) de la semana ${semanaActiva.codigo}, además del resumen semanal en Excel. ¿Continuar?`,
+        `Se enviará el aviso de ${pendientes.length} programación(es) revisada(s) de la semana ${semanaActiva.codigo}, además del resumen semanal en Excel.${sinRevisar ? ` ${sinRevisar} sin revisar no se enviarán.` : ""} ¿Continuar?`,
       )
     ) {
       return;
@@ -1887,14 +1926,17 @@ export default function AspersionesPage() {
           const administradorFincaCargo = await resolverCargoAdministrador(detalle);
           const { blob, nombre } = generarAvisoAspersionPdfBlob({ ...detalle, administradorFincaCargo });
           const sugeridos = await apiFetch(`/aspersiones/${a.uuid}/destinatarios-sugeridos`).catch(() => ({ destinatarios: [] }));
-          if (!sugeridos.destinatarios?.length) {
+          // Los correos de la pista también reciben el aviso: alcanzan si la
+          // finca no tiene destinatarios configurados.
+          const hayPista = Boolean(detalle.pista?.uuid && (detalle.pista.correos || []).length);
+          if (!sugeridos.destinatarios?.length && !hayPista) {
             errores.push(`${a.numero} (${a.finca?.nombre || ""}): sin destinatarios configurados para esa finca`);
             continue;
           }
           const formData = new FormData();
           formData.append("pdf", blob, nombre);
           adjuntarAvisoPista(formData, { ...detalle, administradorFincaCargo });
-          formData.append("destinatarios", sugeridos.destinatarios.join(", "));
+          formData.append("destinatarios", (sugeridos.destinatarios || []).join(", "));
           await apiFetchFormData(`/aspersiones/${a.uuid}/correo`, formData);
           enviados++;
         } catch (err) {
@@ -1933,7 +1975,7 @@ export default function AspersionesPage() {
           </p>
         </div>
 
-        {modalDestinatarios && <ModalConfigDestinatarios onClose={() => setModalDestinatarios(false)} />}
+        {modalDestinatarios && <ConfigDestinatariosModal onClose={() => setModalDestinatarios(false)} />}
 
         {(enviandoSemana || enviandoCorreoUuid || procesandoTexto) && (
           <OverlayEnviando
@@ -2038,7 +2080,9 @@ export default function AspersionesPage() {
                     onChange={(e) => setFiltros((f) => ({ ...f, estado: e.target.value }))}
                   >
                     <option value="">Todos</option>
-                    <option value="PROGRAMADA">Programada</option>
+                    <option value="PROGRAMADA">Programada (pendientes)</option>
+                    <option value="REVISADA">Revisada</option>
+                    <option value="ENVIADA">Enviada</option>
                     <option value="EJECUTADA">Ejecutada</option>
                     <option value="CANCELADA">Cancelada</option>
                   </select>
@@ -2120,7 +2164,8 @@ export default function AspersionesPage() {
                 )}
                 {!loading &&
                   items.map((a) => {
-                    const info = ESTADO_INFO[a.estado] || ESTADO_INFO.PROGRAMADA;
+                    const info = ESTADO_INFO[estadoFlujo(a)] || ESTADO_INFO.PROGRAMADA;
+                    const revisada = Boolean(a.revisadoPor || a.revisadoPorId);
                     return (
                       <tr key={a.uuid} style={{ cursor: "pointer" }} title="Ver el detalle de la aspersión" onClick={() => abrirDetalle(a)}>
                         <td className="fw-medium text-nowrap">{a.semana?.codigo || "—"}</td>
@@ -2172,11 +2217,13 @@ export default function AspersionesPage() {
                                 className="btn btn-sm btn-link p-1 d-inline-flex"
                                 style={{ color: a.correoEnviadoEn ? "#16a34a" : undefined }}
                                 title={
-                                  a.correoEnviadoEn
-                                    ? `Aviso enviado el ${new Date(a.correoEnviadoEn).toLocaleString("es-CO")} — enviar de nuevo`
-                                    : "Enviar aviso por correo"
+                                  a.estado === "PROGRAMADA" && !revisada
+                                    ? "Primero márcala como revisada (clic en la fila) para enviar el aviso"
+                                    : a.correoEnviadoEn
+                                      ? `Aviso enviado el ${new Date(a.correoEnviadoEn).toLocaleString("es-CO")} — enviar de nuevo`
+                                      : "Enviar aviso por correo"
                                 }
-                                disabled={enviandoCorreoUuid === a.uuid}
+                                disabled={enviandoCorreoUuid === a.uuid || (a.estado === "PROGRAMADA" && !revisada)}
                                 onClick={() => handleEnviarCorreo(a)}
                               >
                                 <FiMail size={15} className={a.correoEnviadoEn ? "" : "text-secondary"} />
@@ -2193,7 +2240,7 @@ export default function AspersionesPage() {
                                 <FiLink size={15} />
                               </button>
                             )}
-                            {a.estado === "PROGRAMADA" && hasPermission("sanidad_vegetal.aspersiones.editar") && (
+                            {a.estado === "PROGRAMADA" && !revisada && hasPermission("sanidad_vegetal.aspersiones.editar") && (
                               <button
                                 type="button"
                                 className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
@@ -2203,7 +2250,7 @@ export default function AspersionesPage() {
                                 <FiEdit2 size={15} />
                               </button>
                             )}
-                            {a.estado === "PROGRAMADA" && hasPermission("sanidad_vegetal.aspersiones.ejecutar") && (
+                            {a.estado === "PROGRAMADA" && a.correoEnviadoEn && hasPermission("sanidad_vegetal.aspersiones.ejecutar") && (
                               <button
                                 type="button"
                                 className="btn btn-sm btn-link p-1 d-inline-flex"
@@ -2224,7 +2271,7 @@ export default function AspersionesPage() {
                                 <FiX size={15} />
                               </button>
                             )}
-                            {a.estado === "PROGRAMADA" && !a.correoEnviadoEn && hasPermission("sanidad_vegetal.aspersiones.eliminar") && (
+                            {a.estado === "PROGRAMADA" && !revisada && !a.correoEnviadoEn && hasPermission("sanidad_vegetal.aspersiones.eliminar") && (
                               <button
                                 type="button"
                                 className="btn btn-sm btn-link p-1 d-inline-flex"
@@ -2426,7 +2473,7 @@ export default function AspersionesPage() {
                                           // El calendario muestra el insumo principal; si la mezcla no tiene uno marcado, el nombre de la mezcla.
                                           const nombreMezcla = it.insumoPrincipalNombre || it.mezcla?.nombre || it.mezcla?.codigo || "—";
                                           const cancelada = it.estado === "CANCELADA";
-                                          const info = ESTADO_INFO[it.estado] || ESTADO_INFO.PROGRAMADA;
+                                          const info = ESTADO_INFO[estadoFlujo(it)] || ESTADO_INFO.PROGRAMADA;
                                           return (
                                             <div
                                               key={it.uuid}
@@ -3961,16 +4008,10 @@ export default function AspersionesPage() {
               {ejecutarModal.error && <div className="alert alert-danger py-2 small">{ejecutarModal.error}</div>}
               <div className="row g-2 mb-2">
                 <div className="col-12">
-                  <label className="form-label small fw-medium mb-1">
-                    Piloto del {ejecutarModal.aspersion.medio === "DRON" ? "dron" : "avión"} *
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control form-control-sm rounded-3"
-                    value={ejecutarModal.piloto}
-                    maxLength={150}
-                    autoFocus
-                    onChange={(e) => setEjecutarModal((m) => ({ ...m, piloto: e.target.value }))}
+                  <PilotoAsistentes
+                    medio={ejecutarModal.aspersion.medio}
+                    valor={ejecutarModal}
+                    onChange={(patch) => setEjecutarModal((m) => ({ ...m, ...patch }))}
                   />
                 </div>
                 <div className="col-6">
@@ -4209,226 +4250,6 @@ export default function AspersionesPage() {
 
       </div>
     </RequirePermission>
-  );
-}
-
-function nombreCompletoUsuario(u) {
-  return `${u.nombre} ${u.apellido}`.trim();
-}
-
-// Configura quién recibe el correo de Programación de Aspersiones (aviso al
-// enviar y notificación al cancelar) además del destinatario puntual que se
-// escoge al momento de enviar el aviso — mismo patrón que "Destinatarios de
-// las alertas por correo" (sanidad-vegetal/alertas/page.js), con la
-// diferencia de que acá los roles sí se filtran por finca (ver nota abajo).
-function ModalConfigDestinatarios({ onClose }) {
-  const [roles, setRoles] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
-  const [correosTexto, setCorreosTexto] = useState("");
-  const [rolesSel, setRolesSel] = useState([]);
-  const [usuariosSel, setUsuariosSel] = useState([]);
-  const [correosResumenTexto, setCorreosResumenTexto] = useState("");
-  const [rolesResumenSel, setRolesResumenSel] = useState([]);
-  const [usuariosResumenSel, setUsuariosResumenSel] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [guardando, setGuardando] = useState(false);
-  const [guardado, setGuardado] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    Promise.all([
-      apiFetch("/roles?limit=100").catch(() => ({ items: [] })),
-      apiFetch("/users?limit=100").catch(() => ({ items: [] })),
-      apiFetch("/aspersiones/destinatarios"),
-      apiFetch("/aspersiones/resumen-semanal/destinatarios"),
-    ])
-      .then(([rolesRes, usuariosRes, destRes, resumenRes]) => {
-        const rolesItems = rolesRes.items || [];
-        const usuariosItems = usuariosRes.items || [];
-        setRoles(rolesItems);
-        setUsuarios(usuariosItems);
-        setCorreosTexto((destRes.correos || []).join(", "));
-        setRolesSel(
-          rolesItems
-            .filter((r) => (destRes.rolesUuids || []).includes(r.uuid))
-            .map((r) => ({ uuid: r.uuid, label: r.nombre })),
-        );
-        setUsuariosSel(
-          usuariosItems
-            .filter((u) => (destRes.usuariosUuids || []).includes(u.uuid))
-            .map((u) => ({ uuid: u.uuid, label: nombreCompletoUsuario(u), sublabel: u.email })),
-        );
-        setCorreosResumenTexto((resumenRes.correos || []).join(", "));
-        setRolesResumenSel(
-          rolesItems
-            .filter((r) => (resumenRes.rolesUuids || []).includes(r.uuid))
-            .map((r) => ({ uuid: r.uuid, label: r.nombre })),
-        );
-        setUsuariosResumenSel(
-          usuariosItems
-            .filter((u) => (resumenRes.usuariosUuids || []).includes(u.uuid))
-            .map((u) => ({ uuid: u.uuid, label: nombreCompletoUsuario(u), sublabel: u.email })),
-        );
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  async function handleGuardar(e) {
-    e.preventDefault();
-    setGuardando(true);
-    setError("");
-    setGuardado(false);
-    try {
-      const correos = correosTexto
-        .split(",")
-        .map((c) => c.trim())
-        .filter(Boolean);
-      const correosResumen = correosResumenTexto
-        .split(",")
-        .map((c) => c.trim())
-        .filter(Boolean);
-      await Promise.all([
-        apiFetch("/aspersiones/destinatarios", {
-          method: "PUT",
-          body: JSON.stringify({
-            correos,
-            rolesUuids: rolesSel.map((r) => r.uuid),
-            usuariosUuids: usuariosSel.map((u) => u.uuid),
-          }),
-        }),
-        apiFetch("/aspersiones/resumen-semanal/destinatarios", {
-          method: "PUT",
-          body: JSON.stringify({
-            correos: correosResumen,
-            rolesUuids: rolesResumenSel.map((r) => r.uuid),
-            usuariosUuids: usuariosResumenSel.map((u) => u.uuid),
-          }),
-        }),
-      ]);
-      setGuardado(true);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGuardando(false);
-    }
-  }
-
-  return (
-    <ModalShell title="Destinatarios del correo de aspersiones" onClose={onClose} size="lg">
-      <p className="small text-secondary mb-3">
-        Estos destinatarios se agregan en copia cada vez que se envía el aviso de una aspersión, y reciben
-        automáticamente la notificación cuando una aspersión se cancela.
-      </p>
-      <p className="small text-secondary mb-3">
-        <strong>Los roles se filtran por finca:</strong> solo reciben el correo los usuarios de ese rol que tengan
-        habilitada la finca de la programación (o que no tengan ninguna finca asignada, es decir que ven todas). Los
-        correos sueltos y los usuarios puntuales siempre reciben, sin importar la finca.
-      </p>
-
-      {loading ? (
-        <p className="text-secondary small mb-0">Cargando...</p>
-      ) : (
-        <form onSubmit={handleGuardar}>
-          {error && <div className="alert alert-danger py-2 small">{error}</div>}
-
-          <label className="form-label small fw-medium">Correos sueltos</label>
-          <input
-            type="text"
-            className="form-control"
-            placeholder="correo1@ejemplo.com, correo2@ejemplo.com"
-            value={correosTexto}
-            onChange={(e) => {
-              setCorreosTexto(e.target.value);
-              setGuardado(false);
-            }}
-          />
-          <p className="form-text small text-secondary mb-0">Uno o varios correos separados por coma.</p>
-
-          <div className="mt-3">
-            <label className="form-label small fw-medium">Roles (filtrados por finca)</label>
-            <TagPicker
-              items={roles.map((r) => ({ uuid: r.uuid, label: r.nombre }))}
-              selected={rolesSel}
-              onChange={(nuevos) => {
-                setRolesSel(nuevos);
-                setGuardado(false);
-              }}
-              placeholder="Buscar rol para agregar..."
-            />
-          </div>
-
-          <div className="mt-3">
-            <label className="form-label small fw-medium">Usuarios en copia</label>
-            <TagPicker
-              items={usuarios.map((u) => ({ uuid: u.uuid, label: nombreCompletoUsuario(u), sublabel: u.email }))}
-              selected={usuariosSel}
-              onChange={(nuevos) => {
-                setUsuariosSel(nuevos);
-                setGuardado(false);
-              }}
-              placeholder="Buscar usuario para agregar..."
-            />
-          </div>
-
-          <hr className="my-4" />
-
-          <h3 className="h6 fw-bold mb-2">Resumen semanal (Excel)</h3>
-          <p className="small text-secondary mb-3">
-            Quién recibe, al usar el botón <strong>&ldquo;Enviar semana&rdquo;</strong> del Calendario, el Excel con
-            toda la programación de la semana — sin filtrar por finca, es un solo archivo con todas las fincas.
-          </p>
-
-          <label className="form-label small fw-medium">Correos sueltos</label>
-          <input
-            type="text"
-            className="form-control"
-            placeholder="correo1@ejemplo.com, correo2@ejemplo.com"
-            value={correosResumenTexto}
-            onChange={(e) => {
-              setCorreosResumenTexto(e.target.value);
-              setGuardado(false);
-            }}
-          />
-
-          <div className="mt-3">
-            <label className="form-label small fw-medium">Roles</label>
-            <TagPicker
-              items={roles.map((r) => ({ uuid: r.uuid, label: r.nombre }))}
-              selected={rolesResumenSel}
-              onChange={(nuevos) => {
-                setRolesResumenSel(nuevos);
-                setGuardado(false);
-              }}
-              placeholder="Buscar rol para agregar..."
-            />
-          </div>
-
-          <div className="mt-3">
-            <label className="form-label small fw-medium">Usuarios</label>
-            <TagPicker
-              items={usuarios.map((u) => ({ uuid: u.uuid, label: nombreCompletoUsuario(u), sublabel: u.email }))}
-              selected={usuariosResumenSel}
-              onChange={(nuevos) => {
-                setUsuariosResumenSel(nuevos);
-                setGuardado(false);
-              }}
-              placeholder="Buscar usuario para agregar..."
-            />
-          </div>
-
-          <div className="d-flex gap-2 mt-4">
-            <button type="submit" className="btn btn-brand btn-sm rounded-3 flex-grow-1" disabled={guardando}>
-              {guardando ? "Guardando..." : "Guardar"}
-            </button>
-            <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={onClose}>
-              Cerrar
-            </button>
-          </div>
-          {guardado && <p className="small text-success mb-0 mt-2">Guardado.</p>}
-        </form>
-      )}
-    </ModalShell>
   );
 }
 

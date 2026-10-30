@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { startImpersonation, getCurrentUser } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import ModalShell from "@/components/ModalShell";
+import CargoSelect from "@/components/CargoSelect";
 import TagPicker from "@/components/TagPicker";
 import RequirePermission from "@/components/RequirePermission";
 
@@ -573,13 +574,7 @@ function UsuarioModal({ usuario, onClose, onSaved }) {
         </div>
         <div className="mb-2">
           <label className="form-label small fw-medium">Cargo</label>
-          <input
-            type="text"
-            className="form-control rounded-3"
-            placeholder="Ej: Ingeniero Agrónomo"
-            value={cargo}
-            onChange={(e) => setCargo(e.target.value)}
-          />
+          <CargoSelect value={cargo} onChange={setCargo} />
           <p className="form-text small text-secondary mb-0">
             Se usa para las firmas de documentos (ej. visitas de Sanidad Vegetal), en vez del rol del sistema.
           </p>

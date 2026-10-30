@@ -2,12 +2,14 @@
 
 import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
-import { FiEye, FiDownload, FiEdit2, FiTrash2, FiSearch, FiFileText } from "react-icons/fi";
+import { FiEye, FiDownload, FiEdit2, FiRotateCcw, FiSearch, FiFileText, FiXCircle } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import DetalleComprobanteModal from "@/components/aspersion/DetalleComprobanteModal";
+import PilotoAsistentes from "@/components/aspersion/PilotoAsistentes";
+import RecorridoKml from "@/components/aspersion/RecorridoKml";
 import { descargarComprobanteAspersionPdf, verComprobanteAspersionPdf } from "@/lib/comprobanteAspersionExport";
 
 const MEDIO_LABEL = { AVION: "Avión", DRON: "Dron" };
@@ -22,13 +24,15 @@ function fmtFecha(v) {
 const num = (v) => (v === null || v === undefined || v === "" ? "—" : Number(v).toLocaleString("es-CO", { maximumFractionDigits: 2 }));
 
 function EstadoBadge({ estado }) {
-  const emitido = estado === "EMITIDO";
+  const estilos = {
+    EMITIDO: { fondo: "#d1fae5", color: "#047857", texto: "Emitido" },
+    BORRADOR: { fondo: "#fef3c7", color: "#b45309", texto: "Borrador" },
+    ANULADO: { fondo: "#fee2e2", color: "#b91c1c", texto: "Anulado" },
+  };
+  const e = estilos[estado] || estilos.BORRADOR;
   return (
-    <span
-      className="badge rounded-pill small"
-      style={{ backgroundColor: emitido ? "#d1fae5" : "#fef3c7", color: emitido ? "#047857" : "#b45309" }}
-    >
-      {emitido ? "Emitido" : "Borrador"}
+    <span className="badge rounded-pill small" style={{ backgroundColor: e.fondo, color: e.color }}>
+      {e.texto}
     </span>
   );
 }
@@ -47,14 +51,18 @@ export default function ComprobantesAspersionPage() {
   const [aplicados, setAplicados] = useState({ search: "", estado: "", fincaUuid: "" });
 
   const [edicion, setEdicion] = useState(null);
+  // Anulación: { comprobante, motivo, error }.
+  const [anulacion, setAnulacion] = useState(null);
   // Detalle al hacer clic en la fila: { comprobante, cargando }.
   const [detalleModal, setDetalleModal] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const [anulando, setAnulando] = useState(false);
   const [procesandoUuid, setProcesandoUuid] = useState("");
 
   const puedeEditar = hasPermission("sanidad_vegetal.comprobantes_aspersion.editar");
   const puedeEmitir = hasPermission("sanidad_vegetal.comprobantes_aspersion.emitir");
-  const puedeEliminar = hasPermission("sanidad_vegetal.comprobantes_aspersion.eliminar");
+  // Anular reemplazó al borrado; el mismo permiso permite regenerar el borrador.
+  const puedeAnular = hasPermission("sanidad_vegetal.comprobantes_aspersion.anular");
 
   async function load(f = aplicados, p = page) {
     setLoading(true);
@@ -138,6 +146,9 @@ export default function ComprobantesAspersionPage() {
       comprobante: c,
       volverADetalle,
       piloto: c.piloto || "",
+      // Con dron: piloto del listado de colaboradores y asistentes.
+      pilotoColaboradorUuid: c.pilotoColaborador?.uuid || "",
+      asistentesUuids: (c.participantes || []).filter((p) => p.rol === "ASISTENTE").map((p) => p.colaborador.uuid),
       medio: c.medio || c.aspersion?.medio || "",
       hectareasAplicadas: c.hectareasAplicadas !== null && c.hectareasAplicadas !== undefined ? String(Number(c.hectareasAplicadas)) : "",
       galonesTotales: c.galonesTotales !== null && c.galonesTotales !== undefined ? String(Number(c.galonesTotales)) : "",
@@ -161,6 +172,7 @@ export default function ComprobantesAspersionPage() {
     try {
       const body = {
         piloto: m.piloto.trim() || null,
+        ...(m.medio === "DRON" ? { pilotoColaboradorUuid: m.pilotoColaboradorUuid || null, asistentesUuids: m.asistentesUuids } : {}),
         medio: m.medio || null,
         observaciones: m.observaciones.trim() || null,
         aeronave: m.aeronave.trim() || null,
@@ -217,14 +229,51 @@ export default function ComprobantesAspersionPage() {
     }
   }
 
-  async function eliminar(c) {
-    if (!confirm(`¿Eliminar el borrador ${c.numero}? La aspersión seguirá ejecutada, pero quedará sin comprobante.`)) return;
+  // Anular reemplaza al borrado: el comprobante queda como histórico (con el
+  // motivo y quién lo anuló) y su aspersión queda sin documento vigente, así
+  // que desde ahí se puede regenerar un borrador.
+  function abrirAnulacion(c) {
+    setAnulacion({ comprobante: c, motivo: "", error: "" });
+  }
+
+  async function confirmarAnulacion() {
+    const m = anulacion;
+    if (!m) return;
+    setAnulando(true);
+    try {
+      const actualizado = await apiFetch(`/comprobantes-aspersion/${m.comprobante.uuid}/anular`, {
+        method: "POST",
+        body: JSON.stringify({ motivo: m.motivo.trim() }),
+      });
+      setItems((prev) => prev.map((it) => (it.uuid === actualizado.uuid ? actualizado : it)));
+      // Si estaba abierto el detalle de ese comprobante, se refresca con la anulación.
+      setDetalleModal((d) => (d?.comprobante?.uuid === actualizado.uuid ? { comprobante: actualizado, cargando: false } : d));
+      setAnulacion(null);
+    } catch (err) {
+      setAnulacion({ ...m, error: err.message });
+    } finally {
+      setAnulando(false);
+    }
+  }
+
+  // Crea un borrador nuevo con los datos del anulado (la aspersión no se vuelve
+  // a ejecutar). El anulado se conserva para auditoría.
+  async function regenerar(c) {
+    if (
+      !confirm(
+        `¿Regenerar un borrador desde ${c.numero}? Se copiarán los datos de la aplicación y el comprobante anulado se conserva como histórico.`,
+      )
+    ) {
+      return;
+    }
     setProcesandoUuid(c.uuid);
     try {
-      await apiFetch(`/comprobantes-aspersion/${c.uuid}`, { method: "DELETE" });
-      setItems((prev) => prev.filter((it) => it.uuid !== c.uuid));
+      const nuevo = await apiFetch(`/comprobantes-aspersion/${c.uuid}/regenerar`, { method: "POST", body: JSON.stringify({}) });
+      await load();
+      setDetalleModal({ comprobante: nuevo, cargando: false });
     } catch (err) {
       setError(err.message);
+      alert(err.message);
     } finally {
       setProcesandoUuid("");
     }
@@ -287,6 +336,7 @@ export default function ComprobantesAspersionPage() {
                 <option value="">Todos</option>
                 <option value="BORRADOR">Borrador</option>
                 <option value="EMITIDO">Emitido</option>
+                <option value="ANULADO">Anulado</option>
               </select>
             </div>
             <div className="col-12 col-md-3 d-flex gap-2">
@@ -341,9 +391,15 @@ export default function ComprobantesAspersionPage() {
                 {!loading &&
                   items.map((c) => {
                     const borrador = c.estado === "BORRADOR";
+                    const anulado = c.estado === "ANULADO";
                     const ocupado = procesandoUuid === c.uuid;
                     return (
-                      <tr key={c.uuid} style={{ cursor: "pointer" }} title="Ver el detalle de la aspersión" onClick={() => abrirDetalle(c)}>
+                      <tr
+                        key={c.uuid}
+                        style={{ cursor: "pointer", opacity: anulado ? 0.7 : 1 }}
+                        title="Ver el detalle de la aspersión"
+                        onClick={() => abrirDetalle(c)}
+                      >
                         <td className="fw-medium text-nowrap">{c.aspersion?.semana?.codigo || "—"}</td>
                         <td className="text-nowrap">{fmtFecha(c.ejecutadoEn)}</td>
                         <td>{c.aspersion?.finca?.nombre || "—"}</td>
@@ -369,16 +425,28 @@ export default function ComprobantesAspersionPage() {
                               <FiEdit2 size={15} />
                             </button>
                           )}
-                          {borrador && puedeEliminar && (
+                          {!anulado && puedeAnular && (
                             <button
                               type="button"
                               className="btn btn-sm btn-link p-1 d-inline-flex"
                               style={{ color: "#dc2626" }}
-                              title="Eliminar borrador"
+                              title="Anular comprobante"
                               disabled={ocupado}
-                              onClick={() => eliminar(c)}
+                              onClick={() => abrirAnulacion(c)}
                             >
-                              <FiTrash2 size={15} />
+                              <FiXCircle size={15} />
+                            </button>
+                          )}
+                          {anulado && c.puedeRegenerar && puedeAnular && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-link p-1 d-inline-flex"
+                              style={{ color: "#166534" }}
+                              title="Regenerar borrador desde este comprobante anulado"
+                              disabled={ocupado}
+                              onClick={() => regenerar(c)}
+                            >
+                              <FiRotateCcw size={15} />
                             </button>
                           )}
                           </div>
@@ -438,16 +506,6 @@ export default function ComprobantesAspersionPage() {
             </div>
             {edicion.error && <div className="alert alert-danger py-2 small">{edicion.error}</div>}
             <div className="row g-2">
-              <div className="col-8">
-                <label className="form-label small fw-medium mb-1">Piloto *</label>
-                <input
-                  type="text"
-                  className="form-control form-control-sm rounded-3"
-                  maxLength={150}
-                  value={edicion.piloto}
-                  onChange={(e) => setEdicion((m) => ({ ...m, piloto: e.target.value }))}
-                />
-              </div>
               <div className="col-4">
                 <label className="form-label small fw-medium mb-1">Aplicado con</label>
                 <select
@@ -459,6 +517,13 @@ export default function ComprobantesAspersionPage() {
                   <option value="AVION">Avión</option>
                   <option value="DRON">Dron</option>
                 </select>
+              </div>
+              <div className="col-12">
+                <PilotoAsistentes medio={edicion.medio} valor={edicion} onChange={(patch) => setEdicion((m) => ({ ...m, ...patch }))} />
+              </div>
+              <div className="col-12">
+                {/* El KML se guarda apenas se sube (no espera al botón Guardar). */}
+                <RecorridoKml comprobante={edicion.comprobante} editable onCambio={(act) => setEdicion((m) => ({ ...m, comprobante: act }))} />
               </div>
               <div className="col-6">
                 <label className="form-label small fw-medium mb-1">Hectáreas aplicadas *</label>
@@ -579,6 +644,39 @@ export default function ComprobantesAspersionPage() {
               </button>
               <button type="button" className="btn btn-brand btn-sm rounded-3" disabled={guardando} onClick={() => guardarEdicion()}>
                 {guardando ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </ModalShell>
+        )}
+
+        {anulacion && (
+          <ModalShell title={`Anular comprobante ${anulacion.comprobante.numero}`} onClose={() => setAnulacion(null)} width="32rem">
+            <p className="small text-secondary mb-2">
+              El comprobante no se borra: queda registrado como <strong>anulado</strong> con el motivo y quién lo hizo. La
+              aspersión seguirá ejecutada y desde ese registro podrás <strong>regenerar un borrador</strong> con los mismos datos.
+            </p>
+            <label className="form-label small fw-medium mb-1">Motivo de la anulación *</label>
+            <textarea
+              className="form-control form-control-sm rounded-3"
+              rows={3}
+              maxLength={500}
+              autoFocus
+              value={anulacion.motivo}
+              onChange={(e) => setAnulacion((m) => ({ ...m, motivo: e.target.value }))}
+            />
+            <div className="form-text">Mínimo 5 caracteres. Queda guardado en el comprobante.</div>
+            {anulacion.error && <div className="alert alert-danger py-2 small mt-2">{anulacion.error}</div>}
+            <div className="d-flex justify-content-end gap-2 mt-3">
+              <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setAnulacion(null)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-danger rounded-3"
+                disabled={anulando || anulacion.motivo.trim().length < 5}
+                onClick={() => confirmarAnulacion()}
+              >
+                {anulando ? "Anulando..." : "Anular comprobante"}
               </button>
             </div>
           </ModalShell>

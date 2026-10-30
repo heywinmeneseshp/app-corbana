@@ -84,7 +84,8 @@ function Tramos({ tramos, colaborador, onMapa }) {
 }
 
 // Jornadas: por colaborador y día, cuánto estuvo en cada lugar (finca u oficina: ENTRADA → SALIDA) y cuánto tardó entre uno y otro.
-export default function JornadasAsistencia({ fincas, lugares = [], colaboradores, veTodo = true }) {
+// `modulo`: solo las jornadas de los colaboradores de ese módulo (Sanidad Vegetal → Colaboradores).
+export default function JornadasAsistencia({ fincas, lugares = [], colaboradores, veTodo = true, modulo = null }) {
   const vacios = () => ({ ubicacion: "", colaboradorUuid: "", desde: restarDias(hoyBogota(), 6), hasta: hoyBogota() });
   const [filtros, setFiltros] = useState(vacios);
   const [aplicados, setAplicados] = useState(filtros);
@@ -101,8 +102,9 @@ export default function JornadasAsistencia({ fincas, lugares = [], colaboradores
     const qs = new URLSearchParams({ page: String(page), limit: String(limit) });
     const { ubicacion, ...resto } = f;
     for (const [k, v] of Object.entries({ ...resto, ...aParametros(ubicacion) })) if (v) qs.set(k, v);
+    if (modulo) qs.set("modulo", modulo);
     return qs;
-  }, []);
+  }, [modulo]);
 
   useEffect(() => {
     let activo = true;

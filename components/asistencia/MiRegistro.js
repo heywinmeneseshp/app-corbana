@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { FiCheckCircle, FiClock, FiUser } from "react-icons/fi";
 import ModalShell from "@/components/ModalShell";
+import CargoSelect from "@/components/CargoSelect";
 import { apiFetch } from "@/lib/api";
 import EnrolarRostroModal from "./EnrolarRostroModal";
 import { SelectorUbicacion, aParametros, valorDe } from "./ubicaciones";
@@ -163,7 +164,7 @@ function FichaModal({ ficha, fincas, lugares, onClose, onGuardada }) {
         </div>
         <div className="col-6">
           <label className="form-label small fw-medium">Cargo</label>
-          <input className="form-control form-control-sm rounded-3" maxLength={100} value={f.cargo} onChange={(e) => campo("cargo", e.target.value)} />
+          <CargoSelect value={f.cargo} onChange={(v) => campo("cargo", v)} className="form-select form-select-sm rounded-3" ayuda={false} />
         </div>
         <div className="col-6">
           <label className="form-label small fw-medium">Lugar predeterminado (opcional)</label>

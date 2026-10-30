@@ -43,6 +43,7 @@ import {
   FiTarget,
   FiDownload,
   FiUserCheck,
+  FiTag,
 } from "react-icons/fi";
 import { GiFarmTractor, GiBananaBunch, GiCancel, GiScissors, GiFruitBowl, GiWeightScale } from "react-icons/gi";
 import { clearSession, hasPermission } from "@/lib/auth";
@@ -71,6 +72,7 @@ const NAV = [
       { key: "zonas", label: "Zonas", icon: FiMapPin, permKey: "zonas", href: "/maestros/zonas" },
       { key: "areaLoteConfig", label: "Área de Lotes", icon: FiMap, permKey: "areaLoteConfig", href: "/maestros/area-lotes-config" },
       { key: "usuarios", label: "Usuarios", icon: FiUsers, permKey: "usuarios", href: "/maestros/usuarios" },
+      { key: "cargos", label: "Cargos", icon: FiTag, permKey: "cargos", href: "/maestros/cargos" },
       { key: "roles", label: "Roles", icon: FiShield, permKey: "roles", href: "/maestros/roles" },
       { key: "semanas", label: "Semanas", icon: FiCalendar, permKey: "semanas", href: "/maestros/semanas" },
       { key: "calendario", label: "Calendario", icon: FiCalendar, permKey: "calendario", href: "/maestros/calendario" },
@@ -131,6 +133,7 @@ const NAV = [
       { key: "sanidadObjetivos", label: "Objetivos", icon: FiTarget, permKey: "sanidadObjetivos", href: "/sanidad-vegetal/objetivos" },
       { key: "sanidadAspersiones", label: "Programación de Aspersiones", icon: FiDroplet, permKey: "sanidadAspersiones", href: "/sanidad-vegetal/aspersiones" },
       { key: "sanidadComprobantesAspersion", label: "Comprobante de aspersiones", icon: FiFileText, permKey: "sanidadComprobantesAspersion", href: "/sanidad-vegetal/comprobantes-aspersion" },
+      { key: "sanidadColaboradores", label: "Colaboradores", icon: FiUsers, permKey: "sanidadColaboradores", href: "/sanidad-vegetal/colaboradores" },
       { key: "sanidadPistas", label: "Pistas", icon: FiSend, permKey: "sanidadPistas", href: "/sanidad-vegetal/pistas" },
       // Un solo ítem de menú para las 3 vistas (Mezclas/Insumos/Ingredientes
       // Activos), que comparten la misma barra de pestañas — igual patrón
@@ -316,6 +319,7 @@ export default function Sidebar() {
       zonas: hasPermission("menu.maestros.zonas"),
       areaLoteConfig: hasPermission("menu.maestros.area_lotes"),
       usuarios: hasPermission("menu.maestros.usuarios"),
+      cargos: hasPermission("menu.maestros.cargos"),
       roles: hasPermission("menu.maestros.roles"),
       semanas: hasPermission("menu.maestros.semanas"),
       calendario: hasPermission("menu.maestros.calendario"),
@@ -355,6 +359,7 @@ export default function Sidebar() {
       sanidadAspersiones: hasPermission("menu.sanidad_vegetal.aspersiones"),
       sanidadComprobantesAspersion: hasPermission("menu.sanidad_vegetal.comprobantes_aspersion"),
       sanidadPistas: hasPermission("menu.sanidad_vegetal.pistas"),
+      sanidadColaboradores: hasPermission("menu.sanidad_vegetal.colaboradores"),
       sanidadInsumos: hasPermission("menu.sanidad_vegetal.insumos"),
 
       precipitacionDiaria: hasPermission("menu.precipitacion_diaria"),

@@ -7,7 +7,7 @@ import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 
-const VACIA = { nombre: "", correos: [], observaciones: "", estado: true };
+const VACIA = { nombre: "", responsable: "", telefono: "", correos: [], observaciones: "", estado: true };
 const esCorreo = (c) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c);
 const normalizar = (t) =>
   String(t || "")
@@ -38,7 +38,7 @@ export default function PistasPage() {
   }, []);
 
   const abrir = (p) => {
-    setForm(p ? { ...VACIA, ...p, observaciones: p.observaciones || "" } : VACIA);
+    setForm(p ? { ...VACIA, ...p, responsable: p.responsable || "", telefono: p.telefono || "", observaciones: p.observaciones || "" } : VACIA);
     setCorreoNuevo("");
     setFormError("");
   };
@@ -71,7 +71,14 @@ export default function PistasPage() {
     setGuardando(true);
     setFormError("");
     try {
-      const body = { nombre: form.nombre, correos, observaciones: form.observaciones || null, estado: form.estado };
+      const body = {
+        nombre: form.nombre,
+        responsable: form.responsable.trim() || null,
+        telefono: form.telefono.trim() || null,
+        correos,
+        observaciones: form.observaciones || null,
+        estado: form.estado,
+      };
       await apiFetch(form.uuid ? `/pistas/${form.uuid}` : "/pistas", { method: form.uuid ? "PUT" : "POST", body: JSON.stringify(body) });
       setForm(null);
       await cargar();
@@ -86,7 +93,7 @@ export default function PistasPage() {
   const fCorreo = normalizar(filtros.correo.trim());
   const visibles = pistas.filter(
     (p) =>
-      (!fNombre || normalizar(p.nombre).includes(fNombre)) &&
+      (!fNombre || normalizar(`${p.nombre} ${p.responsable || ""}`).includes(fNombre)) &&
       (!fCorreo || p.correos.some((c) => normalizar(c).includes(fCorreo))) &&
       (!filtros.estado || (filtros.estado === "activas" ? p.estado : !p.estado)),
   );
@@ -113,28 +120,23 @@ export default function PistasPage() {
               asperjar) cuando se envía el aviso de la finca.
             </p>
           </div>
-          {hasPermission("pista.crear") && (
-            <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => abrir(null)}>
-              <FiPlus /> Nueva pista
-            </button>
-          )}
         </div>
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
         <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
           <div className="row g-2 align-items-end">
-            <div className="col-12 col-md-4">
+            <div className="col-12 col-md">
               <label className="form-label small fw-medium">Pista</label>
               <input
                 type="search"
                 className="form-control form-control-sm rounded-3"
-                placeholder="Buscar por nombre..."
+                placeholder="Nombre o responsable..."
                 value={filtros.nombre}
                 onChange={(e) => setFiltros((f) => ({ ...f, nombre: e.target.value }))}
               />
             </div>
-            <div className="col-12 col-md-4">
+            <div className="col-12 col-md">
               <label className="form-label small fw-medium">Correo</label>
               <input
                 type="search"
@@ -152,7 +154,7 @@ export default function PistasPage() {
                 <option value="inactivas">Inactivas</option>
               </select>
             </div>
-            <div className="col-4 col-md-2 small text-secondary text-end">
+            <div className="col-4 col-md-auto small text-secondary text-nowrap">
               {hayFiltros && (
                 <button type="button" className="btn btn-sm btn-link p-0" onClick={() => setFiltros({ nombre: "", correo: "", estado: "" })}>
                   Quitar filtros
@@ -162,6 +164,13 @@ export default function PistasPage() {
                 {visibles.length} de {pistas.length}
               </div>
             </div>
+            {hasPermission("pista.crear") && (
+              <div className="col-12 col-md-auto">
+                <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => abrir(null)}>
+                  <FiPlus /> Nueva pista
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -178,6 +187,7 @@ export default function PistasPage() {
                 <thead className="table-light">
                   <tr>
                     <th className="fw-medium">Pista</th>
+                    <th className="fw-medium">Responsable</th>
                     <th className="fw-medium">Correos del aviso</th>
                     <th className="fw-medium">Observaciones</th>
                     <th className="fw-medium text-center">Estado</th>
@@ -188,6 +198,16 @@ export default function PistasPage() {
                   {visibles.map((p) => (
                     <tr key={p.uuid} className={p.estado ? "" : "text-secondary"}>
                       <td className="fw-semibold">{p.nombre}</td>
+                      <td>
+                        {p.responsable ? (
+                          <>
+                            <div>{p.responsable}</div>
+                            {p.telefono && <div className="text-secondary small">{p.telefono}</div>}
+                          </>
+                        ) : (
+                          <span className="text-warning small">Sin responsable: el aviso sale firmado con el nombre de la pista</span>
+                        )}
+                      </td>
                       <td>
                         {p.correos.length ? (
                           <div className="d-flex flex-wrap gap-1">
@@ -250,6 +270,28 @@ export default function PistasPage() {
                     Activa (se puede elegir al programar)
                   </label>
                 </div>
+              </div>
+              <div className="col-md-8">
+                <label className="form-label small fw-medium">Responsable / representante de la pista</label>
+                <input
+                  className="form-control form-control-sm rounded-3"
+                  maxLength={150}
+                  placeholder="Nombre de quien firma el aviso de la pista"
+                  value={form.responsable}
+                  onChange={(e) => setForm((f) => ({ ...f, responsable: e.target.value }))}
+                />
+                <div className="form-text small">Firma el aviso de aspersión de la pista como «Representante de pista».</div>
+              </div>
+              <div className="col-md-4">
+                <label className="form-label small fw-medium">Teléfono</label>
+                <input
+                  type="tel"
+                  className="form-control form-control-sm rounded-3"
+                  maxLength={40}
+                  placeholder="Ej. 300 123 4567"
+                  value={form.telefono}
+                  onChange={(e) => setForm((f) => ({ ...f, telefono: e.target.value }))}
+                />
               </div>
               <div className="col-12">
                 <label className="form-label small fw-medium">Correos que reciben el aviso</label>

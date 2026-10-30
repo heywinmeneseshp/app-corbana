@@ -5,6 +5,7 @@
 // hectárea (cantidad ÷ hectáreas de la aspersión).
 import { FiCheck } from "react-icons/fi";
 import ModalShell from "@/components/ModalShell";
+import RecorridoKml from "@/components/aspersion/RecorridoKml";
 
 const MEDIO_LABEL = { AVION: "Avión", DRON: "Dron" };
 
@@ -53,6 +54,14 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
   const a = c?.aspersion || {};
   const hectareas = Number(a.hectareas) || 0;
   const emitido = c?.estado === "EMITIDO";
+  const anulado = c?.estado === "ANULADO";
+  // Solo un borrador se puede aprobar: ni el emitido ni el anulado.
+  const esBorrador = c?.estado === "BORRADOR";
+  const badge = anulado
+    ? { fondo: "#fee2e2", color: "#b91c1c", texto: "Anulado" }
+    : emitido
+      ? { fondo: "#d1fae5", color: "#047857", texto: "Emitido" }
+      : { fondo: "#fef3c7", color: "#b45309", texto: "Borrador" };
 
   return (
     <ModalShell title={c ? `Comprobante ${c.numero}` : "Comprobante"} onClose={onClose} width="60rem">
@@ -61,14 +70,27 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
       ) : (
         <>
           <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <span className="badge rounded-pill small" style={{ backgroundColor: emitido ? "#d1fae5" : "#fef3c7", color: emitido ? "#047857" : "#b45309" }}>
-              {emitido ? "Emitido" : "Borrador"}
+            <span className="badge rounded-pill small" style={{ backgroundColor: badge.fondo, color: badge.color }}>
+              {badge.texto}
             </span>
             <span className="small text-secondary">
               Aspersión {a.numero || "—"}
               {emitido && c.emitidoEn ? ` · emitido el ${fmtFechaHora(c.emitidoEn)} por ${nombreUsuario(c.emitidoPor)}` : ""}
+              {anulado && c.anuladoEn ? ` · anulado el ${fmtFechaHora(c.anuladoEn)} por ${nombreUsuario(c.anuladoPor)}` : ""}
             </span>
           </div>
+
+          {anulado && (
+            <div className="alert alert-danger py-2 small">
+              <div className="fw-semibold mb-1">Comprobante anulado</div>
+              <div className="mb-0">Motivo: {c.motivoAnulacion || "—"}</div>
+              {c.puedeRegenerar && (
+                <div className="text-secondary mt-1">
+                  Esta aspersión quedó sin comprobante vigente: puedes regenerar un borrador desde la lista.
+                </div>
+              )}
+            </div>
+          )}
 
           <Seccion titulo="Aspersión">
             <Dato label="Finca">{a.finca?.nombre}</Dato>
@@ -90,7 +112,15 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
           </Seccion>
 
           <Seccion titulo="Aplicación">
-            <Dato label="Piloto">{c.piloto}</Dato>
+            <Dato label={c.medio === "DRON" ? "Piloto del dron" : "Piloto"}>{c.pilotoColaborador?.nombre || c.piloto}</Dato>
+            {(c.participantes || []).some((p) => p.rol === "ASISTENTE") && (
+              <Dato label="Asistentes">
+                {c.participantes
+                  .filter((p) => p.rol === "ASISTENTE")
+                  .map((p) => p.colaborador.nombre)
+                  .join(", ")}
+              </Dato>
+            )}
             <Dato label="Aeronave">{c.aeronave}</Dato>
             <Dato label="Volumen de aplicación">{c.volumenAplicacionHa != null ? `${num(c.volumenAplicacionHa)} /ha` : "—"}</Dato>
             <Dato label="Horario">{c.horaInicio || c.horaFinal ? `${c.horaInicio || "—"} a ${c.horaFinal || "—"}` : "—"}</Dato>
@@ -100,6 +130,11 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
             <Dato label="Velocidad del viento">{c.velocidadViento != null ? `${num(c.velocidadViento, 1)} km/h` : "—"}</Dato>
             <Dato label="Humedad relativa final">{c.humedadRelativaFinal != null ? `${num(c.humedadRelativaFinal, 1)} %` : "—"}</Dato>
           </Seccion>
+
+          {/* Recorrido (KML): vista previa del mapa y descarga; se sube al editar el borrador. */}
+          <div className="mb-3">
+            <RecorridoKml comprobante={c} />
+          </div>
 
           <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>
             Receta y cantidades utilizadas
@@ -132,13 +167,18 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
                             Principal
                           </span>
                         )}
+                        {i.esAdicional && (
+                          <span className="badge rounded-pill ms-2" style={{ backgroundColor: "#fef3c7", color: "#b45309" }} title="Agregado a esta aspersión; no está en la receta de la mezcla">
+                            Adicional
+                          </span>
+                        )}
                       </td>
                       <td className="text-secondary">{i.unidad?.simbolo || i.unidad?.nombre || "—"}</td>
                       <td className="text-secondary text-end">
                         {i.cantidad != null && hectareas > 0 ? `${num(i.cantidad / hectareas, 2)} ${i.unidad?.simbolo || ""}/ha` : "—"}
                       </td>
                       <td className="text-end fw-semibold">
-                        {i.cantidad != null ? `${num(i.cantidad, 4)} ${i.unidad?.simbolo || ""}` : "—"}
+                        {i.cantidad != null ? `${num(i.cantidad, /^agua$/i.test((i.nombre || "").trim()) ? 0 : 4)} ${i.unidad?.simbolo || ""}` : "—"}
                       </td>
                     </tr>
                   ))}
@@ -161,13 +201,13 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
           )}
 
           <div className="d-flex flex-wrap align-items-center justify-content-end gap-2 border-top pt-3 mt-3">
-            {!emitido && onAprobar && (!c.piloto || !(Number(c.hectareasAplicadas) > 0)) && (
+            {esBorrador && onAprobar && (!c.piloto || !(Number(c.hectareasAplicadas) > 0)) && (
               <span className="small text-secondary me-auto">Para aprobarlo faltan el piloto o las hectáreas aplicadas: se abrirá la edición.</span>
             )}
             <button type="button" className="btn btn-sm btn-outline-secondary rounded-3" onClick={onClose}>
               Cerrar
             </button>
-            {!emitido && onAprobar && (
+            {esBorrador && onAprobar && (
               <button
                 type="button"
                 className="btn btn-sm btn-brand rounded-3 d-flex align-items-center gap-1"
