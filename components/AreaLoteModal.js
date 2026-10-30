@@ -112,6 +112,17 @@ export default function AreaLoteModal() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!listo) return;
+    // El área bruta siempre es mayor que el área en producción (ni inferior ni igual).
+    for (const f of pendientes) {
+      for (const l of f.lotes) {
+        const bruta = Number(valores[`${l.uuid}|total`]);
+        const prod = Number(valores[`${l.uuid}|produccion`]);
+        if (prod > 0 && prod >= bruta - 0.005) {
+          alert(`Lote ${l.nombre}${f.fincaNombre ? ` (${f.fincaNombre})` : ""}: el área bruta (${bruta} ha) debe ser mayor que el área en producción (${prod} ha). No puede ser inferior ni igual.`);
+          return;
+        }
+      }
+    }
     setError("");
     setSaving(true);
     try {
@@ -160,7 +171,7 @@ export default function AreaLoteModal() {
           )}
         </div>
         <p className="text-secondary small mb-4">
-          Confirma el área total y el área en producción de cada lote para poder continuar.
+          Confirma el área bruta y el área en producción de cada lote para poder continuar.
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -189,7 +200,7 @@ export default function AreaLoteModal() {
                     </div>
                     <div className="col-12 col-md-4">
                       <div className="input-group input-group-sm">
-                        <span className="input-group-text">Total</span>
+                        <span className="input-group-text">Bruta</span>
                         <input
                           type="number"
                           min="0"

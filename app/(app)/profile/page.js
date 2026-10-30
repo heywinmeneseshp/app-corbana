@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { FiSave, FiUser, FiMail, FiLock, FiCheck } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import { useEffect, useRef, useState } from "react";
+import { FiSave, FiUser, FiMail, FiLock, FiCheck, FiEdit3, FiUpload, FiTrash2 } from "react-icons/fi";
+import { apiFetch, apiFetchBlob, apiFetchFormData } from "@/lib/api";
 import { getCurrentUser, saveSession } from "@/lib/auth";
 
 export default function ProfilePage() {
@@ -22,6 +22,71 @@ export default function ProfilePage() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
 
+  // Firma (PNG) para los documentos: se guarda en Google Drive; aquí solo la vista previa.
+  const [firmaUrl, setFirmaUrl] = useState(null);
+  const [subiendoFirma, setSubiendoFirma] = useState(false);
+  const [firmaMensaje, setFirmaMensaje] = useState("");
+  const inputFirmaRef = useRef(null);
+
+  async function cargarVistaFirma() {
+    try {
+      const blob = await apiFetchBlob("/auth/me/firma");
+      setFirmaUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+    } catch {
+      setFirmaUrl(null);
+    }
+  }
+
+  // Actualiza la sesión guardada (tieneFirma) sin perder permisos ni roles.
+  function guardarEnSesion(userData) {
+    const merged = { ...getCurrentUser(), ...userData };
+    setUser(merged);
+    saveSession({ accessToken: localStorage.getItem("corbana_access_token"), refreshToken: localStorage.getItem("corbana_refresh_token"), user: merged });
+  }
+
+  async function handleSubirFirma(file) {
+    setFirmaMensaje("");
+    setError("");
+    if (!file) return;
+    if (file.type !== "image/png") return setError("La firma debe ser una imagen PNG (idealmente con fondo transparente).");
+    if (file.size > 1024 * 1024) return setError("La imagen de la firma no puede pesar más de 1 MB.");
+    setSubiendoFirma(true);
+    try {
+      const fd = new FormData();
+      fd.append("firma", file, file.name);
+      const userData = await apiFetchFormData("/auth/me/firma", fd, { method: "PUT" });
+      guardarEnSesion(userData);
+      await cargarVistaFirma();
+      setFirmaMensaje("Firma guardada");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubiendoFirma(false);
+      if (inputFirmaRef.current) inputFirmaRef.current.value = "";
+    }
+  }
+
+  async function handleQuitarFirma() {
+    if (!confirm("¿Quitar tu firma? Los documentos dejarán de llevarla.")) return;
+    setFirmaMensaje("");
+    setSubiendoFirma(true);
+    try {
+      const userData = await apiFetch("/auth/me/firma", { method: "DELETE" });
+      guardarEnSesion(userData);
+      setFirmaUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubiendoFirma(false);
+    }
+  }
+
   useEffect(() => {
     const cached = getCurrentUser();
     if (cached) {
@@ -36,6 +101,7 @@ export default function ProfilePage() {
         setNombre(userData.nombre || "");
         setApellido(userData.apellido || "");
         setEmail(userData.email || "");
+        if (userData.tieneFirma) cargarVistaFirma();
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -162,6 +228,47 @@ export default function ProfilePage() {
               )}
             </div>
           </form>
+        </div>
+      </div>
+
+      <div className="card border-0 shadow-sm rounded-4 mb-4">
+        <div className="card-body p-4">
+          <h5 className="fw-semibold mb-1 d-flex align-items-center gap-2">
+            <FiEdit3 size={18} /> Mi firma
+          </h5>
+          <p className="small text-secondary mb-3">
+            Sube una imagen <strong>PNG</strong> de tu firma (idealmente con fondo transparente, máximo 1 MB). Se usa para firmar los documentos y se guarda en la carpeta de Google Drive de Corbana.
+          </p>
+          <div
+            className="border rounded-3 d-flex align-items-center justify-content-center mb-3"
+            style={{ height: 120, backgroundColor: "#f8fafc", backgroundImage: "repeating-conic-gradient(#f1f5f9 0% 25%, transparent 0% 50%)", backgroundSize: "16px 16px" }}
+          >
+            {firmaUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={firmaUrl} alt="Mi firma" style={{ maxHeight: 104, maxWidth: "90%", objectFit: "contain" }} />
+            ) : (
+              <span className="small text-secondary">{user?.tieneFirma ? "Cargando firma..." : "Todavía no has subido tu firma"}</span>
+            )}
+          </div>
+          <input ref={inputFirmaRef} type="file" accept="image/png" className="d-none" onChange={(e) => handleSubirFirma(e.target.files?.[0])} />
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            <button type="button" disabled={subiendoFirma} className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1" onClick={() => inputFirmaRef.current?.click()}>
+              <FiUpload /> {subiendoFirma ? "Guardando..." : user?.tieneFirma ? "Cambiar firma" : "Subir firma"}
+            </button>
+            {user?.tieneFirma && (
+              <button type="button" disabled={subiendoFirma} className="btn btn-link btn-sm text-danger text-decoration-none d-flex align-items-center gap-1" onClick={handleQuitarFirma}>
+                <FiTrash2 /> Quitar
+              </button>
+            )}
+            {firmaMensaje && (
+              <span className="small text-success d-flex align-items-center gap-1">
+                <FiCheck /> {firmaMensaje}
+              </span>
+            )}
+            {user?.firmaActualizadaEn && (
+              <span className="small text-secondary ms-auto">Actualizada el {new Date(user.firmaActualizadaEn).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })}</span>
+            )}
+          </div>
         </div>
       </div>
 

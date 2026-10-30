@@ -229,7 +229,7 @@ export default function SanidadGraficosPage() {
           ))}
         </ul>
 
-        <BarraSelecciones sel={sel} />
+        <BarraSelecciones sel={sel} compararTodas />
 
         {tab === "Índice de infección" ? (
           <InfeccionGraficos sel={sel} />

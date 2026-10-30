@@ -223,8 +223,9 @@ export default function FincasPage() {
                     Coordenadas
                   </button>
                 </th>
-                <th className="fw-medium text-end">Área total (Ha)</th>
+                <th className="fw-medium text-end">Área bruta (Ha)</th>
                 <th className="fw-medium text-end">En producción (Ha)</th>
+                <th className="fw-medium text-end">Fumigación (Ha)</th>
                 <th className="fw-medium text-center">Plot</th>
                 <th className="fw-medium text-center">Acciones</th>
                 <th className="fw-medium text-center">Estado</th>
@@ -286,6 +287,9 @@ export default function FincasPage() {
                     </td>
                     <td className="text-end small text-nowrap" title="Suma de la última área en producción registrada de cada lote activo">
                       {Number(finca.areaProduccion) > 0 ? Number(finca.areaProduccion).toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
+                    </td>
+                    <td className="text-end small text-nowrap" title="Suma del área de fumigación de cada lote activo">
+                      {Number(finca.areaFumigacion) > 0 ? Number(finca.areaFumigacion).toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
                     </td>
                     <td className="text-center">
                       <div className="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
@@ -731,6 +735,8 @@ function LotesModal({ finca, onClose }) {
       const total = esActual ? (l.area != null ? String(Number(l.area)) : "") : ev && ev.areaTotal != null ? String(Number(ev.areaTotal)) : "";
       out[`${l.uuid}|total`] = total;
       out[`${l.uuid}|produccion`] = ev ? String(Number(ev.area)) : "";
+      // El área de fumigación es del lote (no tiene histórico por semana).
+      out[`${l.uuid}|fumigacion`] = l.areaFumigacion != null ? String(Number(l.areaFumigacion)) : "";
     }
     return out;
   }
@@ -784,35 +790,47 @@ function LotesModal({ finca, onClose }) {
 
   const cambioTotal = (l) => (valores[`${l.uuid}|total`] ?? "") !== (base[`${l.uuid}|total`] ?? "");
   const cambioProd = (l) => (valores[`${l.uuid}|produccion`] ?? "") !== (base[`${l.uuid}|produccion`] ?? "");
-  const hayCambios = lotes.some((l) => !l.deletedAt && (cambioTotal(l) || cambioProd(l)));
+  const cambioFumigacion = (l) => (valores[`${l.uuid}|fumigacion`] ?? "") !== (base[`${l.uuid}|fumigacion`] ?? "");
+  const hayCambios = lotes.some((l) => !l.deletedAt && (cambioTotal(l) || cambioProd(l) || cambioFumigacion(l)));
 
   async function handleGuardar(e) {
     e.preventDefault();
     setError("");
     setAviso("");
+    // Cambios por lote; si el campo de producción está vacío se conserva la vigente en la semana elegida.
+    const cambios = [];
+    for (const l of lotes) {
+      if (l.deletedAt) continue;
+      const cT = cambioTotal(l);
+      const cP = cambioProd(l);
+      const cF = cambioFumigacion(l) && editandoActual;
+      if (!cT && !cP && !cF) continue;
+      const t = valores[`${l.uuid}|total`];
+      const p = valores[`${l.uuid}|produccion`];
+      const f = valores[`${l.uuid}|fumigacion`];
+      const vig = vigenteEn(l.uuid, semanaElegida);
+      const prodVal = p !== "" && !Number.isNaN(Number(p)) ? Number(p) : vig ? Number(vig.area) : null;
+      cambios.push({ l, cT, cP, cF, t, f, prodVal });
+    }
+    // Se valida todo antes de guardar nada: el área bruta siempre es mayor que el área en producción (ni igual), y la de fumigación
+    // no puede pasar de la bruta.
+    for (const { l, cT, cP, cF, t, f, prodVal } of cambios) {
+      if ((cT || cP) && t !== "" && prodVal !== null && prodVal > 0 && prodVal >= Number(t) - 0.005) {
+        alert(`Lote ${l.nombre}: el área bruta (${Number(t)} ha) debe ser mayor que el área en producción (${prodVal} ha). No puede ser inferior ni igual.`);
+        return;
+      }
+      if (cF && f !== "" && t !== "" && Number(f) > Number(t) + 0.005) {
+        alert(`Lote ${l.nombre}: el área de fumigación (${Number(f)} ha) no puede ser mayor que el área bruta (${Number(t)} ha).`);
+        return;
+      }
+    }
     setGuardando(true);
     try {
       let guardados = 0;
-      for (const l of lotes) {
-        if (l.deletedAt) continue;
-        const cT = cambioTotal(l);
-        const cP = cambioProd(l);
-        if (!cT && !cP) continue;
-        const t = valores[`${l.uuid}|total`];
-        const p = valores[`${l.uuid}|produccion`];
-        // El total del lote solo se actualiza al editar la semana actual.
-        if (cT && editandoActual) {
-          await apiFetch(`/lotes/${l.uuid}`, { method: "PUT", body: JSON.stringify({ area: t === "" ? null : Number(t) }) });
-        }
-        // Cada actualización queda en el histórico, en la semana elegida; si el
-        // campo de producción está vacío se conserva la vigente en esa semana.
-        const vig = vigenteEn(l.uuid, semanaElegida);
-        const prodVal = p !== "" && !Number.isNaN(Number(p)) ? Number(p) : vig ? Number(vig.area) : null;
-        // Regla: el área total siempre es mayor o igual que el área en producción.
-        if (t !== "" && prodVal !== null && prodVal > Number(t) + 0.005) {
-          throw new Error(`Lote ${l.nombre}: el área en producción (${prodVal}) no puede ser mayor que el área total (${Number(t)}).`);
-        }
-        if (prodVal !== null) {
+      for (const { l, cT, cP, cF, t, f, prodVal } of cambios) {
+        // Primero el área en producción (cada actualización queda en el histórico, en la semana elegida), para que al bajar
+        // bruta y producción a la vez la bruta nueva no quede por debajo de la producción anterior.
+        if ((cT || cP) && prodVal !== null) {
           await apiFetch(`/lotes/${l.uuid}/area-produccion`, {
             method: "POST",
             body: JSON.stringify({
@@ -821,6 +839,13 @@ function LotesModal({ finca, onClose }) {
               ...(editandoActual ? {} : { semanaUuid: semanaElegida.uuid }),
             }),
           });
+        }
+        // El área bruta y la de fumigación del lote solo se actualizan al editar la semana actual.
+        const cambiosLote = {};
+        if (cT && editandoActual) cambiosLote.area = t === "" ? null : Number(t);
+        if (cF) cambiosLote.areaFumigacion = f === "" ? null : Number(f);
+        if (Object.keys(cambiosLote).length) {
+          await apiFetch(`/lotes/${l.uuid}`, { method: "PUT", body: JSON.stringify(cambiosLote) });
         }
         guardados++;
       }
@@ -877,7 +902,7 @@ function LotesModal({ finca, onClose }) {
       } else {
         const nuevo = await apiFetch("/lotes", { method: "POST", body: JSON.stringify({ fincaUuid: finca.uuid, nombre, estado: true }) });
         setLotes((prev) => [...prev, nuevo]);
-        const vacios = { [`${nuevo.uuid}|total`]: "", [`${nuevo.uuid}|produccion`]: "" };
+        const vacios = { [`${nuevo.uuid}|total`]: "", [`${nuevo.uuid}|produccion`]: "", [`${nuevo.uuid}|fumigacion`]: "" };
         setValores((prev) => ({ ...prev, ...vacios }));
         setBase((prev) => ({ ...prev, ...vacios }));
       }
@@ -912,8 +937,11 @@ function LotesModal({ finca, onClose }) {
     const area = Number(edicion.area);
     if (!edicion.loteUuid || !sem) return setError("Elige el lote y la semana.");
     if (edicion.area === "" || Number.isNaN(area) || area < 0) return setError("El área en producción debe ser un número (0 o más).");
-    if (edicion.areaTotal !== "" && (Number.isNaN(Number(edicion.areaTotal)) || Number(edicion.areaTotal) < 0)) return setError("El área total debe ser un número (0 o más).");
-    if (edicion.areaTotal !== "" && area > Number(edicion.areaTotal) + 0.005) return setError("El área en producción no puede ser mayor que el área total.");
+    if (edicion.areaTotal !== "" && (Number.isNaN(Number(edicion.areaTotal)) || Number(edicion.areaTotal) < 0)) return setError("El área bruta debe ser un número (0 o más).");
+    if (edicion.areaTotal !== "" && area > 0 && area >= Number(edicion.areaTotal) - 0.005) {
+      alert("El área bruta debe ser mayor que el área en producción. No puede ser inferior ni igual.");
+      return;
+    }
     setGuardandoEdicion(true);
     setError("");
     try {
@@ -964,7 +992,7 @@ function LotesModal({ finca, onClose }) {
       className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
       style={{ backgroundColor: "rgba(0,0,0,0.55)", zIndex: 1050 }}
     >
-      <div className="bg-white rounded-4 shadow-lg p-4 p-md-5" style={{ maxWidth: tab === "historico" ? 820 : 640, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+      <div className="bg-white rounded-4 shadow-lg p-4 p-md-5" style={{ maxWidth: tab === "historico" ? 820 : 1000, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
         <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
           <div className="d-flex align-items-center gap-2">
             <FiMap className="text-primary" size={22} />
@@ -1057,7 +1085,7 @@ function LotesModal({ finca, onClose }) {
                     <input type="number" min="0" step="0.01" className="form-control form-control-sm" value={edicion.area} onChange={(e) => setEdicion({ ...edicion, area: e.target.value })} />
                   </div>
                   <div className="col-6 col-md-2">
-                    <label className="form-label small mb-1">Total (Ha)</label>
+                    <label className="form-label small mb-1">Bruta (Ha)</label>
                     <input type="number" min="0" step="0.01" className="form-control form-control-sm" value={edicion.areaTotal} onChange={(e) => setEdicion({ ...edicion, areaTotal: e.target.value })} />
                   </div>
                   <div className="col-12 col-md-3">
@@ -1094,7 +1122,7 @@ function LotesModal({ finca, onClose }) {
                     <tr className="table-light small text-secondary">
                       <th>Semana</th>
                       <th>Lote</th>
-                      <th className="text-end">Total (Ha)</th>
+                      <th className="text-end">Bruta (Ha)</th>
                       <th className="text-end">En producción (Ha)</th>
                       <th>Última edición</th>
                       <th style={{ width: "4rem" }}></th>
@@ -1144,7 +1172,7 @@ function LotesModal({ finca, onClose }) {
                                 <thead>
                                   <tr className="text-secondary">
                                     <th>Día</th>
-                                    <th className="text-end">Total (Ha)</th>
+                                    <th className="text-end">Bruta (Ha)</th>
                                     <th className="text-end">En producción (Ha)</th>
                                     <th>Registró</th>
                                     <th></th>
@@ -1204,7 +1232,7 @@ function LotesModal({ finca, onClose }) {
               )}
             </div>
             <p className="text-secondary small mb-4">
-              Código de la finca: {finca.codigo}. Edita el área total y el área en producción de cada lote
+              Código de la finca: {finca.codigo}. Edita el área bruta, el área en producción y el área de fumigación de cada lote
               {editandoActual ? " (se guarda en la semana actual)" : ` (semana ${semanaElegida?.codigo})`}.
             </p>
 
@@ -1244,9 +1272,9 @@ function LotesModal({ finca, onClose }) {
                               )}
                             </span>
                           </div>
-                          <div className="col-12 col-md-4">
-                            <div className="input-group input-group-sm">
-                              <span className="input-group-text">Total</span>
+                          <div className="col-12 col-md-3">
+                            <div className="input-group input-group-sm flex-nowrap">
+                              <span className="input-group-text">Bruta</span>
                               <input
                                 type="number"
                                 min="0"
@@ -1260,9 +1288,9 @@ function LotesModal({ finca, onClose }) {
                               <span className="input-group-text">Ha</span>
                             </div>
                           </div>
-                          <div className="col-12 col-md-5">
-                            <div className="input-group input-group-sm">
-                              <span className="input-group-text">En producción</span>
+                          <div className="col-12 col-md-3">
+                            <div className="input-group input-group-sm flex-nowrap">
+                              <span className="input-group-text">Producción</span>
                               <input
                                 type="number"
                                 min="0"
@@ -1272,6 +1300,22 @@ function LotesModal({ finca, onClose }) {
                                 disabled={!puedeEditar || oculto}
                                 value={valores[`${l.uuid}|produccion`] ?? ""}
                                 onChange={(e) => setValor(l.uuid, "produccion", e.target.value)}
+                              />
+                              <span className="input-group-text">Ha</span>
+                            </div>
+                          </div>
+                          <div className="col-12 col-md-3">
+                            <div className="input-group input-group-sm flex-nowrap" title={editandoActual ? "Área que se asperja (no puede pasar del área bruta)" : "El área de fumigación se edita en la semana actual"}>
+                              <span className="input-group-text">Fumigación</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="form-control"
+                                placeholder="0.00"
+                                disabled={!puedeEditar || oculto || !editandoActual}
+                                value={valores[`${l.uuid}|fumigacion`] ?? ""}
+                                onChange={(e) => setValor(l.uuid, "fumigacion", e.target.value)}
                               />
                               <span className="input-group-text">Ha</span>
                             </div>
@@ -1470,7 +1514,7 @@ function AreasMasivoModal({ onClose, onDone }) {
         { header: "finca", key: "finca", width: 22 },
         { header: "lote", key: "lote", width: 10 },
         { header: "semana", key: "semana", width: 14 },
-        { header: "area_total", key: "areaTotal", width: 14 },
+        { header: "area_bruta", key: "areaTotal", width: 14 },
         { header: "area_en_produccion", key: "areaProduccion", width: 20 },
       ];
       ws.getRow(1).eachCell((c) => {
@@ -1488,11 +1532,11 @@ function AreasMasivoModal({ onClose, onDone }) {
       [
         "Actualización masiva de áreas por semana",
         `La columna semana es OBLIGATORIA en cada fila que quieras actualizar: escribe el código de la semana (ej. ${semanaActual || "S41-2026"}). Una misma carga puede incluir semanas distintas.`,
-        "Edita area_total y area_en_produccion (en hectáreas). No cambies codigo_finca ni lote: con eso se identifica cada lote. La columna finca es solo informativa.",
+        "Edita area_bruta y area_en_produccion (en hectáreas). No cambies codigo_finca ni lote: con eso se identifica cada lote. La columna finca es solo informativa.",
         "Los valores de la plantilla son los vigentes hoy. Si dejas una celda de área vacía, se conserva el valor vigente de la semana escrita. El 0 es un valor válido.",
         "Las filas sin semana se reportan como error al validar; las filas sin cambios de área se omiten.",
-        "El área total del lote solo se actualiza cuando la semana escrita es la actual; en semanas anteriores solo queda en el histórico de esa semana.",
-        "Si el lote no existe en la finca, se CREA (activo, sin área total): el nombre del lote debe ser solo números. Si el lote existe pero está oculto, el área se agrega a ese mismo lote.",
+        "El área bruta del lote solo se actualiza cuando la semana escrita es la actual; en semanas anteriores solo queda en el histórico de esa semana.",
+        "Si el lote no existe en la finca, se CREA (activo, sin área bruta): el nombre del lote debe ser solo números. Si el lote existe pero está oculto, el área se agrega a ese mismo lote.",
         "No se pueden actualizar semanas futuras.",
       ].forEach((t, i) => {
         const r = ins.getRow(i + 1);
@@ -1540,7 +1584,7 @@ function AreasMasivoModal({ onClose, onDone }) {
   return (
     <ModalShell title="Actualizar áreas de lotes (masivo)" onClose={onClose} size="lg">
       <p className="small text-secondary mb-3">
-        Actualiza el área total y en producción de muchos lotes con un Excel. En cada fila es <strong>obligatorio escribir la semana</strong> (columna{" "}
+        Actualiza el área bruta y en producción de muchos lotes con un Excel. En cada fila es <strong>obligatorio escribir la semana</strong> (columna{" "}
         <code>semana</code>, ej. S41-2026).
       </p>
 

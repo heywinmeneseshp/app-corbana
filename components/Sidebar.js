@@ -131,6 +131,7 @@ const NAV = [
       { key: "sanidadObjetivos", label: "Objetivos", icon: FiTarget, permKey: "sanidadObjetivos", href: "/sanidad-vegetal/objetivos" },
       { key: "sanidadAspersiones", label: "Programación de Aspersiones", icon: FiDroplet, permKey: "sanidadAspersiones", href: "/sanidad-vegetal/aspersiones" },
       { key: "sanidadComprobantesAspersion", label: "Comprobante de aspersiones", icon: FiFileText, permKey: "sanidadComprobantesAspersion", href: "/sanidad-vegetal/comprobantes-aspersion" },
+      { key: "sanidadPistas", label: "Pistas", icon: FiSend, permKey: "sanidadPistas", href: "/sanidad-vegetal/pistas" },
       // Un solo ítem de menú para las 3 vistas (Mezclas/Insumos/Ingredientes
       // Activos), que comparten la misma barra de pestañas — igual patrón
       // que Estimaciones Fincas. Mezclas vive acá directamente (ruta
@@ -353,6 +354,7 @@ export default function Sidebar() {
       sanidadObjetivos: hasPermission("menu.sanidad_vegetal.objetivos"),
       sanidadAspersiones: hasPermission("menu.sanidad_vegetal.aspersiones"),
       sanidadComprobantesAspersion: hasPermission("menu.sanidad_vegetal.comprobantes_aspersion"),
+      sanidadPistas: hasPermission("menu.sanidad_vegetal.pistas"),
       sanidadInsumos: hasPermission("menu.sanidad_vegetal.insumos"),
 
       precipitacionDiaria: hasPermission("menu.precipitacion_diaria"),

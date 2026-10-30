@@ -16,6 +16,9 @@ export default function UsuariosPage() {
   const [search, setSearch] = useState("");
   const [fincasFiltro, setFincasFiltro] = useState([]);
   const [fincaFiltro, setFincaFiltro] = useState("");
+  // Filtro por rol (en el navegador, sobre los usuarios cargados): "" = todos, "__sin__" = sin roles, o el uuid del rol.
+  const [rolesFiltro, setRolesFiltro] = useState([]);
+  const [rolFiltro, setRolFiltro] = useState("");
 
   const [usuarioModal, setUsuarioModal] = useState(null); // null | {} | usuario
   const [rolesModal, setRolesModal] = useState(null); // null | usuario
@@ -53,8 +56,20 @@ export default function UsuariosPage() {
     apiFetch("/fincas?limit=100")
       .then((d) => setFincasFiltro(d.items || []))
       .catch(() => {});
+    apiFetch("/roles?limit=100")
+      .then((d) => setRolesFiltro([...(d.items || [])].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))))
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sin permiso para ver roles, las opciones salen de los roles de los usuarios cargados.
+  const opcionesRol = rolesFiltro.length
+    ? rolesFiltro
+    : [...new Map(usuarios.flatMap((u) => u.roles || []).map((rol) => [rol.uuid, rol])).values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+
+  const visibles = !rolFiltro
+    ? usuarios
+    : usuarios.filter((u) => (rolFiltro === "__sin__" ? !(u.roles || []).length : (u.roles || []).some((rol) => rol.uuid === rolFiltro)));
 
   const handleToggleEstado = async (usuario) => {
     const nuevoEstado = !usuario.estado;
@@ -91,10 +106,10 @@ export default function UsuariosPage() {
   };
 
   const toggleAll = () => {
-    if (selected.size === usuarios.length) {
+    if (selected.size === visibles.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(usuarios.map((u) => u.uuid)));
+      setSelected(new Set(visibles.map((u) => u.uuid)));
     }
   };
 
@@ -167,6 +182,22 @@ export default function UsuariosPage() {
             <option key={f.uuid} value={f.uuid}>{f.codigo} — {f.nombre}</option>
           ))}
         </select>
+        <select
+          className="form-select rounded-3"
+          style={{ maxWidth: "14rem" }}
+          value={rolFiltro}
+          onChange={(e) => {
+            setRolFiltro(e.target.value);
+            setSelected(new Set());
+          }}
+          title="Filtrar por rol"
+        >
+          <option value="">Todos los roles</option>
+          {opcionesRol.map((rol) => (
+            <option key={rol.uuid} value={rol.uuid}>{rol.nombre}</option>
+          ))}
+          <option value="__sin__">Sin roles</option>
+        </select>
         <button type="button" className="btn btn-brand btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1" onClick={() => setUsuarioModal({})}>
           <FiPlus /> Nuevo Usuario
         </button>
@@ -184,8 +215,8 @@ export default function UsuariosPage() {
                     <input
                       type="checkbox"
                       className="form-check-input"
-                      checked={selected.size > 0 && selected.size === usuarios.length}
-                      ref={(el) => { if (el) el.indeterminate = selected.size > 0 && selected.size < usuarios.length; }}
+                      checked={selected.size > 0 && selected.size === visibles.length}
+                      ref={(el) => { if (el) el.indeterminate = selected.size > 0 && selected.size < visibles.length; }}
                       onChange={toggleAll}
                     />
                   </div>
@@ -207,15 +238,15 @@ export default function UsuariosPage() {
                   </td>
                 </tr>
               )}
-              {!loading && usuarios.length === 0 && (
+              {!loading && visibles.length === 0 && (
                 <tr>
                   <td colSpan={7} className="text-center text-secondary py-4">
-                    No hay usuarios registrados todavía.
+                    {usuarios.length === 0 ? "No hay usuarios registrados todavía." : "Ningún usuario tiene ese rol."}
                   </td>
                 </tr>
               )}
               {!loading &&
-                usuarios.map((usuario) => (
+                visibles.map((usuario) => (
                   <tr key={usuario.uuid}>
                     <td>
                       <div className="form-check">

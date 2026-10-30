@@ -3,7 +3,7 @@
 import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useId, useMemo, useState, useRef } from "react";
 import ExcelJS from "exceljs";
-import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiLink, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSend, FiAlertTriangle, FiInfo } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiLink, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSend, FiAlertTriangle, FiInfo, FiNavigation } from "react-icons/fi";
 import BotonConfiguracion from "@/components/BotonConfiguracion";
 import { apiFetch, apiFetchFormData, apiUpload, apiFetchTodos } from "@/lib/api";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
@@ -11,6 +11,7 @@ import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import StockInsuficienteModal from "@/components/StockInsuficienteModal";
+import DetalleAspersionModal from "@/components/aspersion/DetalleAspersionModal";
 import TagPicker from "@/components/TagPicker";
 import { generarAvisoAspersionPdfBlob, verAvisoAspersionPdf } from "@/lib/aspersionExport";
 import { ubicarSemana, formatRangoSemana } from "@/lib/laborCalendarBuilder";
@@ -129,6 +130,8 @@ function emptyForm() {
     tipo: ["SIGATOKA_NEGRA"],
     // Selección única — nunca los dos a la vez (pedido explícito).
     medio: "",
+    // Pista de la que sale (opcional): sus correos reciben el aviso de la pista. Por defecto, la última usada en la finca.
+    pistaUuid: "",
     mezclaUuid: "",
     almacenUuid: "",
     hectareas: "",
@@ -246,6 +249,17 @@ export default function AspersionesPage() {
   const [formError, setFormError] = useState("");
   // uuid de la aspersión que se está editando — null = "Programar" (crear).
   const [editingUuid, setEditingUuid] = useState(null);
+  const [pistas, setPistas] = useState([]); // pistas activas (Sanidad Vegetal → Pistas)
+  useEffect(() => {
+    apiFetch("/pistas?activas=true").then(setPistas).catch(() => {});
+  }, []);
+  // Al elegir la finca (aspersión nueva) se propone la última pista usada en ella.
+  function proponerPista(fincaUuid) {
+    if (!fincaUuid) return;
+    apiFetch(`/pistas/ultima?fincaUuid=${fincaUuid}`)
+      .then((p) => setForm((f) => (f.fincaUuid === fincaUuid && f.medio !== "DRON" ? { ...f, pistaUuid: p?.uuid || "" } : f)))
+      .catch(() => {});
+  }
   const [usuariosFinca, setUsuariosFinca] = useState([]);
   const [cargandoUsuariosFinca, setCargandoUsuariosFinca] = useState(false);
   const [semanaPreview, setSemanaPreview] = useState(null);
@@ -303,7 +317,7 @@ export default function AspersionesPage() {
     try {
       const anioActual = new Date().getFullYear();
       const [fincasRes, mezclasRes, almacenesRes, semanasRes, conversionesRes, unidadesVolumenRes, unidadesPesoRes] = await Promise.all([
-        apiFetch("/fincas?limit=100&soloOperativas=true"),
+        apiFetch("/fincas?limit=100&soloOperativas=true&incluirAreas=true"),
         apiFetch("/inventarios/mezclas?limit=100"),
         apiFetch("/inventarios/almacenes?limit=100&estado=true"),
         apiFetch(`/semanas?anio=${anioActual}&limit=100`),
@@ -583,6 +597,7 @@ export default function AspersionesPage() {
         fecha: String(d.fecha || "").slice(0, 10),
         tipo: Array.isArray(d.tipo) ? d.tipo : d.tipo ? [d.tipo] : ["SIGATOKA_NEGRA"],
         medio: d.medio || "",
+        pistaUuid: d.pista?.uuid || "",
         mezclaUuid: d.mezcla?.uuid || "",
         almacenUuid: d.almacen?.uuid || "",
         hectareas: String(Number(d.hectareas)),
@@ -1539,6 +1554,7 @@ export default function AspersionesPage() {
           fecha: form.fecha,
           tipo,
           medio: form.medio,
+          pistaUuid: form.medio === "DRON" ? null : form.pistaUuid || null,
           mezclaUuid: form.mezclaUuid,
           almacenUuid: form.almacenUuid,
           hectareas: Number(form.hectareas),
@@ -1609,6 +1625,47 @@ export default function AspersionesPage() {
   // ejecuta la aspersión y se guarda el comprobante en BORRADOR (ver
   // Sanidad Vegetal → Comprobante de aspersiones).
   const [ejecutarModal, setEjecutarModal] = useState(null);
+  // Detalle al hacer clic en la fila: { fila, aspersion, cargando }. `fila` es la del listado (la usa Ejecutar).
+  const [detalleModal, setDetalleModal] = useState(null);
+
+  const [revisandoUuid, setRevisandoUuid] = useState(null);
+
+  // Vuelve a cargar el detalle abierto (después de enviar el aviso o revisar).
+  async function refrescarDetalle(fila) {
+    try {
+      const d = await apiFetch(`/aspersiones/${fila.uuid}`);
+      setDetalleModal((m) => (m && m.fila.uuid === fila.uuid ? { ...m, aspersion: { ...m.fila, ...(d?.data || d) }, cargando: false } : m));
+    } catch {
+      /* el detalle queda como estaba */
+    }
+  }
+
+  // Marca la aspersión como revisada por el usuario (su firma va en el aviso), o quita la revisión.
+  async function handleRevisar(fila, quitar = false) {
+    if (quitar && !confirm("¿Quitar la revisión de esta aspersión? Su firma deja de salir en el aviso.")) return;
+    setRevisandoUuid(fila.uuid);
+    try {
+      const actualizada = await apiFetch(`/aspersiones/${fila.uuid}/revisar`, { method: quitar ? "DELETE" : "POST" });
+      actualizarFila(actualizada?.data || actualizada);
+      await refrescarDetalle(fila);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setRevisandoUuid(null);
+    }
+  }
+
+  async function abrirDetalle(a) {
+    setDetalleModal({ fila: a, aspersion: a, cargando: true });
+    try {
+      const d = await apiFetch(`/aspersiones/${a.uuid}`);
+      // Se combina con la fila del listado (trae datos calculados como el intervalo y las partes del ciclo).
+      setDetalleModal((m) => (m && m.fila.uuid === a.uuid ? { ...m, aspersion: { ...a, ...(d?.data || d) }, cargando: false } : m));
+    } catch (err) {
+      setDetalleModal(null);
+      setError(err.message);
+    }
+  }
   const [stockModal, setStockModal] = useState(null);
 
   // Ciclo = una aplicación hecha en varias partes (días). Modal para corregir qué aspersiones son del mismo ciclo.
@@ -1741,11 +1798,12 @@ export default function AspersionesPage() {
     }
   }
 
-  async function handleVerAviso(aspersion) {
+  // `paraPista`: el aviso que reciben los correos de la pista (con la pista y las hectáreas a asperjar).
+  async function handleVerAviso(aspersion, paraPista = false) {
     try {
       const detalle = await apiFetch(`/aspersiones/${aspersion.uuid}`);
       const administradorFincaCargo = await resolverCargoAdministrador(detalle);
-      verAvisoAspersionPdf({ ...detalle, administradorFincaCargo });
+      verAvisoAspersionPdf({ ...detalle, administradorFincaCargo }, { paraPista });
     } catch (err) {
       setError(err.message);
     }
@@ -1756,6 +1814,14 @@ export default function AspersionesPage() {
   // Destinatarios, roles filtrados por la finca + usuarios + correos
   // sueltos) y manda de una vez, sin pedirle al operador que los escriba o
   // confirme cada vez que reenvía un aviso.
+  // Si la aspersión sale de una pista con correos, adjunta el aviso de la pista (con la pista y las hectáreas). Devuelve si lo adjuntó.
+  function adjuntarAvisoPista(formData, detalle) {
+    if (!detalle.pista?.uuid || !(detalle.pista.correos || []).length) return false;
+    const { blob, nombre } = generarAvisoAspersionPdfBlob(detalle, { paraPista: true });
+    formData.append("pdfPista", blob, nombre);
+    return true;
+  }
+
   async function handleEnviarCorreo(aspersion) {
     setEnviandoCorreoUuid(aspersion.uuid);
     try {
@@ -1771,12 +1837,16 @@ export default function AspersionesPage() {
       const { blob, nombre } = generarAvisoAspersionPdfBlob({ ...detalle, administradorFincaCargo });
       const formData = new FormData();
       formData.append("pdf", blob, nombre);
+      const conPista = adjuntarAvisoPista(formData, { ...detalle, administradorFincaCargo });
       formData.append("destinatarios", sugeridos.destinatarios.join(", "));
       const actualizada = await apiFetchFormData(`/aspersiones/${aspersion.uuid}/correo`, formData);
       actualizarFila(actualizada);
-      alert("Aviso enviado por correo correctamente.");
+      alert(conPista ? `Aviso enviado a la finca y a la pista ${detalle.pista.nombre}.` : "Aviso enviado por correo correctamente.");
+      return actualizada;
     } catch (err) {
       setError(err.message);
+      alert(err.message);
+      return null;
     } finally {
       setEnviandoCorreoUuid(null);
     }
@@ -1823,6 +1893,7 @@ export default function AspersionesPage() {
           }
           const formData = new FormData();
           formData.append("pdf", blob, nombre);
+          adjuntarAvisoPista(formData, { ...detalle, administradorFincaCargo });
           formData.append("destinatarios", sugeridos.destinatarios.join(", "));
           await apiFetchFormData(`/aspersiones/${a.uuid}/correo`, formData);
           enviados++;
@@ -2051,7 +2122,7 @@ export default function AspersionesPage() {
                   items.map((a) => {
                     const info = ESTADO_INFO[a.estado] || ESTADO_INFO.PROGRAMADA;
                     return (
-                      <tr key={a.uuid}>
+                      <tr key={a.uuid} style={{ cursor: "pointer" }} title="Ver el detalle de la aspersión" onClick={() => abrirDetalle(a)}>
                         <td className="fw-medium text-nowrap">{a.semana?.codigo || "—"}</td>
                         <td className="text-nowrap">{a.fecha}</td>
                         <td >{a.finca?.nombre || "—"}</td>
@@ -2075,7 +2146,7 @@ export default function AspersionesPage() {
                             {info.label}
                           </span>
                         </td>
-                        <td>
+                        <td onClick={(e) => e.stopPropagation()} style={{ cursor: "default" }}>
                           <div className="d-flex justify-content-end gap-1 flex-nowrap">
                             <button
                               type="button"
@@ -2085,6 +2156,16 @@ export default function AspersionesPage() {
                             >
                               <FiEye size={15} />
                             </button>
+                            {a.pista?.uuid && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
+                                title={`Ver aviso de la pista ${a.pista.nombre}`}
+                                onClick={() => handleVerAviso(a, true)}
+                              >
+                                <FiNavigation size={15} />
+                              </button>
+                            )}
                             {hasPermission("sanidad_vegetal.aspersiones.enviar_correo") && (
                               <button
                                 type="button"
@@ -2472,7 +2553,24 @@ export default function AspersionesPage() {
                     className="form-select form-select-sm rounded-3"
                     required
                     value={form.fincaUuid}
-                    onChange={(e) => setForm((f) => ({ ...f, fincaUuid: e.target.value, administradorFincaUuid: "", administradorFincaNombre: "" }))}
+                    onChange={(e) => {
+                      const fincaUuid = e.target.value;
+                      // Aspersión nueva: se proponen como hectáreas el área de fumigación de la finca (si ya hay hectáreas escritas a
+                      // mano, se respetan; si eran las propuestas por la finca anterior, se cambian por las de la nueva).
+                      const fumigacionDe = (uuid) => Number(fincas.find((x) => x.uuid === uuid)?.areaFumigacion) || 0;
+                      setForm((f) => {
+                        const next = { ...f, fincaUuid, administradorFincaUuid: "", administradorFincaNombre: "" };
+                        const propuesta = fumigacionDe(fincaUuid);
+                        const anterior = fumigacionDe(f.fincaUuid);
+                        const eraPropuesta = f.hectareas === "" || (anterior > 0 && Number(f.hectareas) === anterior);
+                        if (!editingUuid && propuesta > 0 && eraPropuesta && Number(f.hectareas) !== propuesta) {
+                          next.hectareas = String(propuesta);
+                          next.componentesAjustados = Object.keys(f.componentesAjustados).length ? {} : f.componentesAjustados;
+                        }
+                        return next;
+                      });
+                      if (!editingUuid) proponerPista(fincaUuid);
+                    }}
                   >
                     <option value="">Selecciona...</option>
                     {fincas.map((f) => (
@@ -3640,7 +3738,7 @@ export default function AspersionesPage() {
                           id={`medio-${valor}`}
                           required
                           checked={form.medio === valor}
-                          onChange={() => setForm((f) => ({ ...f, medio: valor }))}
+                          onChange={() => setForm((f) => ({ ...f, medio: valor, ...(valor === "DRON" ? { pistaUuid: "" } : {}) }))}
                         />
                         <label className="form-check-label small text-nowrap" htmlFor={`medio-${valor}`}>
                           {label}
@@ -3650,6 +3748,25 @@ export default function AspersionesPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Solo aspersión en avión sale de una pista: con dron no se elige. */}
+              {form.medio !== "DRON" && (
+              <div className="row g-2 mb-2">
+                <div className="col-12">
+                  <label className="form-label small fw-medium mb-1">Pista</label>
+                  <select className="form-select form-select-sm rounded-3" value={form.pistaUuid} onChange={(e) => setForm((f) => ({ ...f, pistaUuid: e.target.value }))}>
+                    <option value="">Sin pista</option>
+                    {pistas.map((p) => (
+                      <option key={p.uuid} value={p.uuid}>
+                        {p.nombre}
+                        {p.correos?.length ? "" : " (sin correos)"}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="form-text small">Se propone la última pista usada en la finca. Al enviar el aviso, la pista recibe el suyo con las hectáreas a asperjar.</div>
+                </div>
+              </div>
+              )}
 
               <div className="row g-2 mb-2">
                 <div className="col-6">
@@ -3771,6 +3888,34 @@ export default function AspersionesPage() {
               await handleEjecutar(aspersion, true, comprobante);
             }}
             textoContinuar="Ejecutar de todas formas"
+          />
+        )}
+
+        {detalleModal && (
+          <DetalleAspersionModal
+            aspersion={detalleModal.aspersion}
+            cargando={detalleModal.cargando}
+            onClose={() => setDetalleModal(null)}
+            onEnviar={
+              hasPermission("sanidad_vegetal.aspersiones.enviar_correo")
+                ? async () => {
+                    const fila = detalleModal.fila;
+                    if (await handleEnviarCorreo(fila)) await refrescarDetalle(fila);
+                  }
+                : undefined
+            }
+            enviando={enviandoCorreoUuid === detalleModal.fila.uuid}
+            onRevisar={hasPermission("sanidad_vegetal.aspersiones.revisar") ? (quitar) => handleRevisar(detalleModal.fila, quitar) : undefined}
+            revisando={revisandoUuid === detalleModal.fila.uuid}
+            onEjecutar={
+              hasPermission("sanidad_vegetal.aspersiones.ejecutar")
+                ? () => {
+                    const fila = detalleModal.fila;
+                    setDetalleModal(null);
+                    abrirEjecutar(fila);
+                  }
+                : undefined
+            }
           />
         )}
 

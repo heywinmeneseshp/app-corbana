@@ -13,13 +13,23 @@
 // apilarlas todas en filas sueltas de ancho completo — con 4 selecciones
 // entran en solo 2 filas.
 import { useId } from "react";
-import { FiPlus, FiX } from "react-icons/fi";
+import { FiPlus, FiX, FiLayers } from "react-icons/fi";
 import SelectorObjetivos from "@/components/reportes/SelectorObjetivos";
 import SelectorAnios from "@/components/reportes/SelectorAnios";
 
 const SERIE_COLORS = ["#16a34a", "#2563eb", "#d97706", "#dc2626", "#7c3aed", "#0891b2", "#be185d", "#65a30d"];
 
-export default function SelectorCanastas({ fincas, anioOpciones, canastas, onChange }) {
+// Color de la serie i: la paleta fija y, pasadas sus 8, tonos repartidos con el ángulo áureo (al comparar todas las fincas
+// no se repiten colores).
+export function colorSerie(i) {
+  if (i < SERIE_COLORS.length) return SERIE_COLORS[i];
+  const tono = Math.round((i * 137.508) % 360);
+  return `hsl(${tono}, 65%, ${i % 2 ? 38 : 48}%)`;
+}
+
+// `compararTodas`: muestra el botón «Comparar todas las fincas», que arma una selección por finca (las propias y activas)
+// con los años de la primera selección.
+export default function SelectorCanastas({ fincas, anioOpciones, canastas, onChange, compararTodas = false }) {
   const idBase = useId();
 
   function actualizarCanasta(id, cambios) {
@@ -33,6 +43,39 @@ export default function SelectorCanastas({ fincas, anioOpciones, canastas, onCha
   function quitarCanasta(id) {
     onChange(canastas.filter((c) => c.id !== id));
   }
+
+  const fincasComparables = (fincas || [])
+    .filter((f) => !f.esExterna && f.estado !== false)
+    .sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), undefined, { numeric: true }));
+
+  function compararTodasLasFincas() {
+    const anios = canastas[0]?.anios || [];
+    const stamp = Date.now();
+    onChange(
+      fincasComparables.map((f, i) => ({
+        id: `${idBase}-todas-${i}-${stamp}`,
+        nombre: f.nombre,
+        objetivos: [{ tipo: "finca", uuid: f.uuid, nombre: f.nombre, fincaIds: [f.id], fincaUuids: [f.uuid] }],
+        anios,
+      })),
+    );
+  }
+
+  // Vuelve a una sola selección (todas las fincas juntas) conservando los años.
+  function quitarComparacion() {
+    onChange([{ id: `${idBase}-0-${Date.now()}`, nombre: "", objetivos: [], anios: canastas[0]?.anios || [] }]);
+  }
+
+  const botonTodas = compararTodas && fincasComparables.length > 1 && (
+    <button
+      type="button"
+      className="btn btn-outline-success btn-sm rounded-3 d-flex align-items-center gap-1"
+      onClick={compararTodasLasFincas}
+      title="Una línea por cada finca"
+    >
+      <FiLayers /> Comparar todas las fincas
+    </button>
+  );
 
   const varias = canastas.length > 1;
 
@@ -52,9 +95,12 @@ export default function SelectorCanastas({ fincas, anioOpciones, canastas, onCha
           seleccionados={canastas[0].anios}
           onChange={(anios) => actualizarCanasta(canastas[0].id, { anios })}
         />
-        <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1 ms-auto" style={{ order: 99 }} onClick={agregarCanasta}>
-          <FiPlus /> Comparar con otra selección
-        </button>
+        <div className="d-flex align-items-center gap-2 ms-auto" style={{ order: 99 }}>
+          {botonTodas}
+          <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1" onClick={agregarCanasta}>
+            <FiPlus /> Comparar con otra selección
+          </button>
+        </div>
       </div>
     );
   }
@@ -72,7 +118,7 @@ export default function SelectorCanastas({ fincas, anioOpciones, canastas, onCha
           <div key={canasta.id} className="card border-0 bg-transparent shadow-none rounded-0 px-0 py-1 d-flex flex-row flex-wrap align-items-center gap-2">
             <span
               className="rounded-circle flex-shrink-0"
-              style={{ width: "0.6rem", height: "0.6rem", backgroundColor: SERIE_COLORS[i % SERIE_COLORS.length] }}
+              style={{ width: "0.6rem", height: "0.6rem", backgroundColor: colorSerie(i) }}
             />
             <input
               type="text"
@@ -110,14 +156,18 @@ export default function SelectorCanastas({ fincas, anioOpciones, canastas, onCha
         ))}
       </div>
 
-      <div className="d-flex justify-content-end mt-1">
-      <button
-        type="button"
-        className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1"
-        onClick={agregarCanasta}
-      >
-        <FiPlus /> Comparar con otra selección
-      </button>
+      <div className="d-flex justify-content-end gap-2 mt-1">
+        <button type="button" className="btn btn-link btn-sm text-secondary text-decoration-none" onClick={quitarComparacion}>
+          Quitar comparación
+        </button>
+        {botonTodas}
+        <button
+          type="button"
+          className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1"
+          onClick={agregarCanasta}
+        >
+          <FiPlus /> Comparar con otra selección
+        </button>
       </div>
     </div>
   );

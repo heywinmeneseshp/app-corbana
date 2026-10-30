@@ -196,8 +196,17 @@ export default function IndicadoresEvaluaciones() {
       const f = data.porFinca.find((x) => x.finca === finca);
       return { filas: f?.lotes || [], tipo: "lote", finca: f };
     }
-    return { filas: data.porFinca, tipo: "finca" };
-  }, [data, ruta]);
+    // También las fincas sin evaluaciones en la semana (con "—" y total 0), para ver cuáles faltan. Las externas no llevan
+    // seguimiento; con una finca filtrada solo se muestra esa.
+    const conDatos = new Set(data.porFinca.map((f) => f.uuid));
+    const sinEvaluaciones = fincas
+      .filter((f) => !f.esExterna && f.estado !== false && !conDatos.has(f.uuid) && (!fincaUuid || f.uuid === fincaUuid))
+      .map((f) => ({ uuid: f.uuid, finca: f.nombre, tipos: {}, total: 0, lotes: [], sinEvaluaciones: true }));
+    // Primero las que tienen evaluaciones y al final las que no; cada grupo en orden alfabético.
+    const porNombre = (x, y) => String(x.finca).localeCompare(String(y.finca), "es");
+    const filas = [...[...data.porFinca].sort(porNombre), ...sinEvaluaciones.sort(porNombre)];
+    return { filas, tipo: "finca" };
+  }, [data, ruta, fincas, fincaUuid]);
 
   const tiposVisibles = useMemo(() => {
     const set = new Set();
@@ -728,9 +737,14 @@ function FilaNivel({ fila, tipoNivel, tipos, activa, onOpen, onToggleLote, onVer
       title="Filtrar por esta finca"
       style={{ cursor: "pointer" }}
     >
-      <td className="fw-semibold d-flex align-items-center gap-2" style={{ color: "#0f172a" }}>
-        <FiPackage size={15} className="text-success" />
+      <td className="fw-semibold d-flex align-items-center gap-2" style={{ color: fila.sinEvaluaciones ? "#94a3b8" : "#0f172a" }}>
+        <FiPackage size={15} className={fila.sinEvaluaciones ? "text-secondary" : "text-success"} />
         {nombre}
+        {fila.sinEvaluaciones && (
+          <span className="badge rounded-pill fw-normal" style={{ background: "#fef3c7", color: "#b45309", fontSize: "0.65rem" }}>
+            Sin evaluaciones
+          </span>
+        )}
       </td>
       {columnas}
       {total}

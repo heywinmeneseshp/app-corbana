@@ -2,11 +2,12 @@
 
 import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
-import { FiEye, FiDownload, FiEdit2, FiCheck, FiTrash2, FiSearch, FiFileText } from "react-icons/fi";
+import { FiEye, FiDownload, FiEdit2, FiTrash2, FiSearch, FiFileText } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import DetalleComprobanteModal from "@/components/aspersion/DetalleComprobanteModal";
 import { descargarComprobanteAspersionPdf, verComprobanteAspersionPdf } from "@/lib/comprobanteAspersionExport";
 
 const MEDIO_LABEL = { AVION: "Avión", DRON: "Dron" };
@@ -24,7 +25,7 @@ function EstadoBadge({ estado }) {
   const emitido = estado === "EMITIDO";
   return (
     <span
-      className="badge rounded-pill"
+      className="badge rounded-pill small"
       style={{ backgroundColor: emitido ? "#d1fae5" : "#fef3c7", color: emitido ? "#047857" : "#b45309" }}
     >
       {emitido ? "Emitido" : "Borrador"}
@@ -46,6 +47,8 @@ export default function ComprobantesAspersionPage() {
   const [aplicados, setAplicados] = useState({ search: "", estado: "", fincaUuid: "" });
 
   const [edicion, setEdicion] = useState(null);
+  // Detalle al hacer clic en la fila: { comprobante, cargando }.
+  const [detalleModal, setDetalleModal] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [procesandoUuid, setProcesandoUuid] = useState("");
 
@@ -108,6 +111,13 @@ export default function ComprobantesAspersionPage() {
     }
   }
 
+  async function abrirDetalle(c) {
+    setDetalleModal({ comprobante: c, cargando: true });
+    const detalle = await obtenerDetalle(c);
+    if (detalle) setDetalleModal((m) => (m && m.comprobante.uuid === c.uuid ? { comprobante: detalle, cargando: false } : m));
+    else setDetalleModal(null);
+  }
+
   async function verPdf(c) {
     const detalle = await obtenerDetalle(c);
     if (detalle) verComprobanteAspersionPdf(detalle);
@@ -118,14 +128,15 @@ export default function ComprobantesAspersionPage() {
     if (detalle) descargarComprobanteAspersionPdf(detalle);
   }
 
-  async function abrirEdicionConDetalle(c) {
+  async function abrirEdicionConDetalle(c, opciones = {}) {
     const detalle = await obtenerDetalle(c);
-    if (detalle) abrirEdicion(detalle);
+    if (detalle) abrirEdicion(detalle, opciones);
   }
 
-  function abrirEdicion(c) {
+  function abrirEdicion(c, { volverADetalle = false } = {}) {
     setEdicion({
       comprobante: c,
+      volverADetalle,
       piloto: c.piloto || "",
       medio: c.medio || c.aspersion?.medio || "",
       hectareasAplicadas: c.hectareasAplicadas !== null && c.hectareasAplicadas !== undefined ? String(Number(c.hectareasAplicadas)) : "",
@@ -143,12 +154,9 @@ export default function ComprobantesAspersionPage() {
     });
   }
 
-  async function guardarEdicion(emitirDespues) {
+  // La edición solo guarda el borrador: se aprueba (emite) desde el detalle del comprobante (clic en la fila).
+  async function guardarEdicion() {
     const m = edicion;
-    if (emitirDespues && (!m.piloto.trim() || !(Number(m.hectareasAplicadas) > 0))) {
-      setEdicion({ ...m, error: "Para emitir completa el piloto y las hectáreas aplicadas." });
-      return;
-    }
     setGuardando(true);
     try {
       const body = {
@@ -166,12 +174,11 @@ export default function ComprobantesAspersionPage() {
         ...(m.hectareasAplicadas !== "" ? { hectareasAplicadas: Number(m.hectareasAplicadas) } : {}),
         ...(m.galonesTotales !== "" ? { galonesTotales: Number(m.galonesTotales) } : {}),
       };
-      let actualizado = await apiFetch(`/comprobantes-aspersion/${m.comprobante.uuid}`, { method: "PUT", body: JSON.stringify(body) });
-      if (emitirDespues) {
-        actualizado = await apiFetch(`/comprobantes-aspersion/${m.comprobante.uuid}/emitir`, { method: "POST", body: JSON.stringify({}) });
-      }
+      const actualizado = await apiFetch(`/comprobantes-aspersion/${m.comprobante.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       setItems((prev) => prev.map((it) => (it.uuid === actualizado.uuid ? actualizado : it)));
       setEdicion(null);
+      // Si se llegó a la edición desde «Aprobar» en el detalle (faltaban datos), se vuelve al detalle para aprobarlo.
+      if (m.volverADetalle) abrirDetalle(actualizado);
     } catch (err) {
       setEdicion({ ...m, error: err.message });
     } finally {
@@ -179,20 +186,34 @@ export default function ComprobantesAspersionPage() {
     }
   }
 
+  // Devuelve true si quedó emitido (aprobado).
   async function emitir(c) {
     if (!c.piloto || !(Number(c.hectareasAplicadas) > 0)) {
-      abrirEdicionConDetalle(c);
-      return;
+      // Faltan datos obligatorios: se completan en la edición (y desde ahí se emite).
+      setDetalleModal(null);
+      abrirEdicionConDetalle(c, { volverADetalle: true });
+      return false;
     }
-    if (!confirm(`¿Emitir el comprobante ${c.numero}? Después ya no se podrá editar.`)) return;
+    if (!confirm(`¿Aprobar (emitir) el comprobante ${c.numero}? Después ya no se podrá editar.`)) return false;
     setProcesandoUuid(c.uuid);
     try {
       const actualizado = await apiFetch(`/comprobantes-aspersion/${c.uuid}/emitir`, { method: "POST", body: JSON.stringify({}) });
       setItems((prev) => prev.map((it) => (it.uuid === actualizado.uuid ? actualizado : it)));
+      return true;
     } catch (err) {
       setError(err.message);
+      alert(err.message);
+      return false;
     } finally {
       setProcesandoUuid("");
+    }
+  }
+
+  // Aprobar desde el modal de detalle: emite y vuelve a cargar el detalle (queda en Emitido).
+  async function aprobarDesdeDetalle(c) {
+    if (await emitir(c)) {
+      const detalle = await obtenerDetalle(c);
+      if (detalle) setDetalleModal({ comprobante: detalle, cargando: false });
     }
   }
 
@@ -283,33 +304,36 @@ export default function ComprobantesAspersionPage() {
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
-        <div className="card border-0 rounded-2" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        {/* Misma vista que la tabla de Programación de Aspersiones. */}
+        <div className="card border-0 rounded-2 overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <div className="table-responsive">
-            <table className="table table-sm align-middle mb-0">
+            <table className="table table-sm table-hover mb-0 align-middle" style={{ fontSize: "0.72rem" }}>
               <thead>
-                <tr className="small" style={{ backgroundColor: "#f0fdf4", color: "#166534" }}>
-                  <th>N.°</th>
-                  <th>Ejecutada</th>
-                  <th>Finca</th>
-                  <th>Mezcla</th>
-                  <th>Con</th>
-                  <th className="text-end">Ha aplic.</th>
-                  <th className="text-end">Galones</th>
-                  <th>Estado</th>
-                  <th className="text-end">Acciones</th>
+                <tr className="table-light text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
+                  <th className="fw-medium text-nowrap">Semana</th>
+                  <th className="fw-medium text-nowrap">Ejecutada</th>
+                  <th className="fw-medium">Finca</th>
+                  <th className="fw-medium">Mezcla</th>
+                  <th className="fw-medium text-nowrap">Vehículo</th>
+                  <th className="fw-medium">Número</th>
+                  <th className="fw-medium">Aspersión</th>
+                  <th className="fw-medium text-nowrap">Ha aplicadas</th>
+                  <th className="fw-medium">Galones</th>
+                  <th className="fw-medium">Estado</th>
+                  <th className="fw-medium text-end">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={9} className="text-center text-secondary small py-4">
+                    <td colSpan={11} className="text-center text-secondary py-3 small">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center text-secondary small py-4">
+                    <td colSpan={11} className="text-center text-secondary py-3 small">
                       No hay comprobantes. Se crean automáticamente al ejecutar una aspersión.
                     </td>
                   </tr>
@@ -319,45 +343,36 @@ export default function ComprobantesAspersionPage() {
                     const borrador = c.estado === "BORRADOR";
                     const ocupado = procesandoUuid === c.uuid;
                     return (
-                      <tr key={c.uuid} className="small">
-                        <td className="fw-semibold">{c.numero}</td>
+                      <tr key={c.uuid} style={{ cursor: "pointer" }} title="Ver el detalle de la aspersión" onClick={() => abrirDetalle(c)}>
+                        <td className="fw-medium text-nowrap">{c.aspersion?.semana?.codigo || "—"}</td>
                         <td className="text-nowrap">{fmtFecha(c.ejecutadoEn)}</td>
                         <td>{c.aspersion?.finca?.nombre || "—"}</td>
-                        <td>{c.aspersion?.mezcla?.nombre || c.aspersion?.mezcla?.codigo || "—"}</td>
-                        <td>{MEDIO_LABEL[c.medio] || "—"}</td>
-                        <td className="text-end">{num(c.hectareasAplicadas)}</td>
-                        <td className="text-end">{num(c.galonesTotales)}</td>
+                        <td className="text-secondary" style={{ lineHeight: 1.25 }}>{c.aspersion?.mezcla?.nombre || c.aspersion?.mezcla?.codigo || "—"}</td>
+                        <td className="text-secondary text-nowrap">{MEDIO_LABEL[c.medio] || "—"}</td>
+                        <td className="text-secondary">{c.numero}</td>
+                        <td className="text-secondary">{c.aspersion?.numero || "—"}</td>
+                        <td className="text-secondary">{c.hectareasAplicadas != null ? Number(c.hectareasAplicadas).toFixed(2) : "—"}</td>
+                        <td className="text-secondary text-nowrap">{num(c.galonesTotales)}</td>
                         <td>
                           <EstadoBadge estado={c.estado} />
                         </td>
-                        <td className="text-end text-nowrap">
-                          <button type="button" className="btn btn-sm btn-link p-1 text-secondary" title="Ver PDF" onClick={() => verPdf(c)}>
+                        <td onClick={(e) => e.stopPropagation()} style={{ cursor: "default" }}>
+                          <div className="d-flex justify-content-end gap-1 flex-nowrap">
+                          <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex text-secondary" title="Ver PDF" onClick={() => verPdf(c)}>
                             <FiEye size={15} />
                           </button>
-                          <button type="button" className="btn btn-sm btn-link p-1 text-secondary" title="Descargar PDF" onClick={() => descargarPdf(c)}>
+                          <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex text-secondary" title="Descargar PDF" onClick={() => descargarPdf(c)}>
                             <FiDownload size={15} />
                           </button>
                           {borrador && puedeEditar && (
-                            <button type="button" className="btn btn-sm btn-link p-1 text-secondary" title="Editar" onClick={() => abrirEdicionConDetalle(c)}>
+                            <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex text-secondary" title="Editar" onClick={() => abrirEdicionConDetalle(c)}>
                               <FiEdit2 size={15} />
-                            </button>
-                          )}
-                          {borrador && puedeEmitir && (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-link p-1"
-                              style={{ color: "#166534" }}
-                              title="Emitir"
-                              disabled={ocupado}
-                              onClick={() => emitir(c)}
-                            >
-                              <FiCheck size={16} />
                             </button>
                           )}
                           {borrador && puedeEliminar && (
                             <button
                               type="button"
-                              className="btn btn-sm btn-link p-1"
+                              className="btn btn-sm btn-link p-1 d-inline-flex"
                               style={{ color: "#dc2626" }}
                               title="Eliminar borrador"
                               disabled={ocupado}
@@ -366,6 +381,7 @@ export default function ComprobantesAspersionPage() {
                               <FiTrash2 size={15} />
                             </button>
                           )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -395,6 +411,16 @@ export default function ComprobantesAspersionPage() {
             </div>
           )}
         </div>
+
+        {detalleModal && (
+          <DetalleComprobanteModal
+            comprobante={detalleModal.comprobante}
+            cargando={detalleModal.cargando}
+            onClose={() => setDetalleModal(null)}
+            onAprobar={puedeEmitir ? aprobarDesdeDetalle : undefined}
+            aprobando={procesandoUuid === detalleModal.comprobante.uuid}
+          />
+        )}
 
         {edicion && (
           <ModalShell title={`Editar comprobante ${edicion.comprobante.numero}`} onClose={() => setEdicion(null)} width="34rem">
@@ -551,14 +577,9 @@ export default function ComprobantesAspersionPage() {
               <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setEdicion(null)}>
                 Cancelar
               </button>
-              <button type="button" className="btn btn-outline-success btn-sm rounded-3" disabled={guardando} onClick={() => guardarEdicion(false)}>
-                {guardando ? "Guardando..." : "Guardar borrador"}
+              <button type="button" className="btn btn-brand btn-sm rounded-3" disabled={guardando} onClick={() => guardarEdicion()}>
+                {guardando ? "Guardando..." : "Guardar"}
               </button>
-              {puedeEmitir && (
-                <button type="button" className="btn btn-brand btn-sm rounded-3" disabled={guardando} onClick={() => guardarEdicion(true)}>
-                  Guardar y emitir
-                </button>
-              )}
             </div>
           </ModalShell>
         )}

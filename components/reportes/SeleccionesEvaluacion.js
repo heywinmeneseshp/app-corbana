@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import SelectorCanastas from "@/components/reportes/SelectorCanastas";
+import SelectorCanastas, { colorSerie } from "@/components/reportes/SelectorCanastas";
 
 export const SERIE_COLORS = ["#16a34a", "#2563eb", "#d97706", "#dc2626", "#7c3aed", "#0891b2", "#be185d", "#65a30d"];
 
@@ -61,7 +61,7 @@ export function useSelecciones({ fincas: fincasExternas } = {}) {
           fincaUuids: obj.fincaUuids,
           fincaIds: obj.fincaIds,
           anio,
-          color: SERIE_COLORS[out.length % SERIE_COLORS.length],
+          color: colorSerie(out.length),
         });
       }
     }
@@ -73,10 +73,11 @@ export function useSelecciones({ fincas: fincasExternas } = {}) {
 
 // Barra de filtros (misma que Reportes > Producción): fincas/grupos, años y el
 // botón verde «Comparar con otra selección» al extremo derecho.
-export function BarraSelecciones({ sel }) {
+// `compararTodas`: también el botón «Comparar todas las fincas» (una serie por finca).
+export function BarraSelecciones({ sel, compararTodas = false }) {
   return (
     <div className="mb-3 d-flex flex-wrap align-items-end gap-2">
-      <SelectorCanastas fincas={sel.fincas} anioOpciones={sel.anioOpciones} canastas={sel.canastas} onChange={sel.setCanastas} />
+      <SelectorCanastas fincas={sel.fincas} anioOpciones={sel.anioOpciones} canastas={sel.canastas} onChange={sel.setCanastas} compararTodas={compararTodas} />
     </div>
   );
 }
