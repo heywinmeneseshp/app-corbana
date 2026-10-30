@@ -4,8 +4,9 @@
 // receta (insumos con su dosis por hectárea y la cantidad) y, al final, los botones «Enviar aviso», «Marcar como revisado»
 // (su firma va en el aviso) y «Ejecutar aspersión» si está programada.
 // Si ya se ejecutó, las cantidades son las definitivas (las que se descontaron del inventario).
-import { FiCheck, FiMail, FiCheckCircle } from "react-icons/fi";
+import { FiCheck, FiMail, FiCheckCircle, FiDownload } from "react-icons/fi";
 import ModalShell from "@/components/ModalShell";
+import { descargarDetalleAspersionPdf } from "@/lib/aspersionDetallePdf";
 
 const MEDIO_LABEL = { AVION: "Avión", DRON: "Dron" };
 const TIPO_LABEL = { SIGATOKA_NEGRA: "Sigatoka Negra", DEFOLIADOR: "Defoliador", FERTILIZACION: "Fertilización" };
@@ -27,9 +28,9 @@ const num = (v, dec = 2) =>
 
 const nombreUsuario = (u) => (u ? [u.nombre, u.apellido].filter(Boolean).join(" ") || u.usuario : "—");
 
-function Dato({ label, children }) {
+function Dato({ label, children, ancho = "col-6 col-md-3" }) {
   return (
-    <div className="col-6 col-md-3">
+    <div className={ancho}>
       <div className="text-secondary" style={{ fontSize: "0.68rem" }}>
         {label}
       </div>
@@ -45,7 +46,18 @@ export default function DetalleAspersionModal({ aspersion: a, cargando, onClose,
   const componentes = a?.componentes || [];
 
   return (
-    <ModalShell title={a ? `Aspersión ${a.numero}` : "Aspersión"} onClose={onClose} width="60rem">
+    <ModalShell
+      title={a ? `Aspersión ${a.numero}` : "Aspersión"}
+      onClose={onClose}
+      width="60rem"
+      acciones={
+        a && !cargando ? (
+          <button type="button" className="btn btn-sm btn-outline-success rounded-3 d-flex align-items-center gap-1" title="Descargar este detalle en PDF" onClick={() => descargarDetalleAspersionPdf(a)}>
+            <FiDownload /> PDF
+          </button>
+        ) : null
+      }
+    >
       {cargando || !a ? (
         <p className="text-secondary small py-4 text-center mb-0">Cargando...</p>
       ) : (
@@ -79,21 +91,28 @@ export default function DetalleAspersionModal({ aspersion: a, cargando, onClose,
           <div className="row g-2 mb-3">
             <Dato label="Finca">{a.finca?.nombre}</Dato>
             <Dato label="Semana">{a.semana?.codigo}</Dato>
-            <Dato label="Fecha">{a.fecha}</Dato>
-            <Dato label="Ejecutada">{a.fechaEjecucion || "—"}</Dato>
-            <Dato label="Mezcla">{a.mezcla?.nombre || a.mezcla?.codigo}</Dato>
+            <Dato label="Fecha programada">{a.fecha}</Dato>
+            <Dato label="Fecha de ejecución">{a.fechaEjecucion || "—"}</Dato>
+            <Dato label="Mezcla" ancho="col-12 col-md-9">{a.mezcla?.nombre || a.mezcla?.codigo}</Dato>
             <Dato label="Tipo">{Array.isArray(a.tipo) && a.tipo.length ? a.tipo.map((t) => TIPO_LABEL[t] || t).join(", ") : "—"}</Dato>
             <Dato label="Vehículo">{MEDIO_LABEL[a.medio] || "—"}</Dato>
             <Dato label="Pista">{a.pista?.nombre || "—"}</Dato>
-            <Dato label="Almacén">{a.almacen?.nombre}</Dato>
-            <Dato label="Hectáreas">{num(hectareas)}</Dato>
+            <Dato label="Hectáreas">{`${num(hectareas)} ha`}</Dato>
             <Dato label="Cantidad a preparar">
               {a.cantidadCalculada != null ? `${num(a.cantidadCalculada)} ${a.mezcla?.unidadRendimiento?.simbolo || ""}` : "—"}
             </Dato>
-            <Dato label="Intervalo">{a.diasDesdeUltima != null ? `${a.diasDesdeUltima} días` : "—"}</Dato>
+            <Dato label="Almacén" ancho="col-6">{a.almacen?.nombre}</Dato>
+            <Dato label="Intervalo desde la anterior" ancho="col-6">{a.diasDesdeUltima != null ? `${a.diasDesdeUltima} días` : "—"}</Dato>
+          </div>
+
+          <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>
+            Responsables
+          </div>
+          <div className="row g-2 mb-3">
             <Dato label="Representante Corbana">{a.representanteCorbanaNombre}</Dato>
             <Dato label="Administrador de finca">{a.administradorFincaNombre}</Dato>
             <Dato label="Programó">{nombreUsuario(a.usuario)}</Dato>
+            <Dato label="Revisado por">{a.revisadoPor ? `${nombreUsuario(a.revisadoPor)} · ${fmtFechaHora(a.revisadoEn)}` : "Sin revisar"}</Dato>
           </div>
 
           <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>
@@ -123,7 +142,7 @@ export default function DetalleAspersionModal({ aspersion: a, cargando, onClose,
                       <td className="fw-medium">{c.articulo?.nombre || "—"}</td>
                       <td className="text-secondary">{c.unidad?.simbolo || c.unidad?.nombre || "—"}</td>
                       <td className="text-secondary text-end">
-                        {c.cantidad != null && hectareas > 0 ? `${num(Number(c.cantidad) / hectareas, 4)} ${c.unidad?.simbolo || ""}/ha` : "—"}
+                        {c.cantidad != null && hectareas > 0 ? `${num(Number(c.cantidad) / hectareas, 2)} ${c.unidad?.simbolo || ""}/ha` : "—"}
                       </td>
                       <td className="text-end fw-semibold">{c.cantidad != null ? `${num(c.cantidad, 4)} ${c.unidad?.simbolo || ""}` : "—"}</td>
                     </tr>

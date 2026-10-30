@@ -1,4 +1,5 @@
-export default function ModalShell({ title, onClose, children, size, width, height, minHeight, fullscreen }) {
+// `acciones`: botones opcionales en el encabezado, a la izquierda de la X (ej. descargar en PDF).
+export default function ModalShell({ title, onClose, children, size, width, height, minHeight, fullscreen, acciones }) {
   const alto = fullscreen ? "100vh" : height || "85vh";
   return (
     <div
@@ -16,7 +17,10 @@ export default function ModalShell({ title, onClose, children, size, width, heig
       >
         <div className={`d-flex align-items-center justify-content-between ${fullscreen ? "px-3 py-2 border-bottom" : "p-4 pb-0"}`}>
           <h3 className={`fw-bold mb-0 ${fullscreen ? "h6" : "h5"}`}>{title}</h3>
-          <button type="button" className="btn-close" onClick={onClose} aria-label="Cerrar"></button>
+          <div className="d-flex align-items-center gap-2">
+            {acciones}
+            <button type="button" className="btn-close" onClick={onClose} aria-label="Cerrar"></button>
+          </div>
         </div>
         <div
           className={fullscreen ? "flex-grow-1 d-flex flex-column overflow-hidden" : "p-4 overflow-y-auto"}

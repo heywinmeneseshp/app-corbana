@@ -135,7 +135,7 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
                       </td>
                       <td className="text-secondary">{i.unidad?.simbolo || i.unidad?.nombre || "—"}</td>
                       <td className="text-secondary text-end">
-                        {i.cantidad != null && hectareas > 0 ? `${num(i.cantidad / hectareas, 4)} ${i.unidad?.simbolo || ""}/ha` : "—"}
+                        {i.cantidad != null && hectareas > 0 ? `${num(i.cantidad / hectareas, 2)} ${i.unidad?.simbolo || ""}/ha` : "—"}
                       </td>
                       <td className="text-end fw-semibold">
                         {i.cantidad != null ? `${num(i.cantidad, 4)} ${i.unidad?.simbolo || ""}` : "—"}
