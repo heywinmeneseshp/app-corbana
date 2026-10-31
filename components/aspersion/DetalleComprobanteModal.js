@@ -3,7 +3,7 @@
 // Detalle completo de un comprobante de aspersión: datos de la aspersión, de la aplicación (piloto, clima, horas) y los
 // insumos con las cantidades DEFINITIVAS — lo que se descontó del inventario al ejecutarla — y la dosis aplicada por
 // hectárea (cantidad ÷ hectáreas de la aspersión).
-import { FiCheck } from "react-icons/fi";
+import { FiCheck, FiMail } from "react-icons/fi";
 import ModalShell from "@/components/ModalShell";
 import RecorridoKml from "@/components/aspersion/RecorridoKml";
 
@@ -50,7 +50,8 @@ function Seccion({ titulo, children }) {
 }
 
 // `onAprobar(c)`: si viene (permiso de emitir) y el comprobante está en borrador, muestra al final el botón «Aprobar».
-export default function DetalleComprobanteModal({ comprobante: c, cargando, onClose, onAprobar, aprobando = false }) {
+// `onEnviar(c)`: con el comprobante ya emitido, botón «Enviar por correo» (PDF con el mapa + KMZ del recorrido).
+export default function DetalleComprobanteModal({ comprobante: c, cargando, onClose, onAprobar, aprobando = false, onEnviar, enviando = false }) {
   const a = c?.aspersion || {};
   const hectareas = Number(a.hectareas) || 0;
   const emitido = c?.estado === "EMITIDO";
@@ -201,8 +202,10 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
           )}
 
           <div className="d-flex flex-wrap align-items-center justify-content-end gap-2 border-top pt-3 mt-3">
-            {esBorrador && onAprobar && (!c.piloto || !(Number(c.hectareasAplicadas) > 0)) && (
-              <span className="small text-secondary me-auto">Para aprobarlo faltan el piloto o las hectáreas aplicadas: se abrirá la edición.</span>
+            {esBorrador && onAprobar && (!c.piloto || !(Number(c.hectareasAplicadas) > 0) || !c.kmlNombre) && (
+              <span className="small text-secondary me-auto">
+                Para aprobarlo falta {[!c.piloto && "el piloto", !(Number(c.hectareasAplicadas) > 0) && "las hectáreas aplicadas", !c.kmlNombre && "el recorrido (KML o KMZ)"].filter(Boolean).join(", ")}: se abrirá la edición.
+              </span>
             )}
             <button type="button" className="btn btn-sm btn-outline-secondary rounded-3" onClick={onClose}>
               Cerrar
@@ -215,6 +218,17 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
                 onClick={() => onAprobar(c)}
               >
                 <FiCheck /> {aprobando ? "Aprobando..." : "Aprobar comprobante"}
+              </button>
+            )}
+            {c.estado === "EMITIDO" && onEnviar && (
+              <button
+                type="button"
+                className="btn btn-sm btn-brand rounded-3 d-flex align-items-center gap-1"
+                disabled={enviando}
+                title={c.correoEnviadoEn ? `Enviado el ${new Date(c.correoEnviadoEn).toLocaleString("es-CO")}: se enviará de nuevo` : "Enviar el PDF y el KMZ por correo"}
+                onClick={() => onEnviar(c)}
+              >
+                <FiMail /> {enviando ? "Enviando..." : c.correoEnviadoEn ? "Reenviar" : "Enviar por correo"}
               </button>
             )}
           </div>

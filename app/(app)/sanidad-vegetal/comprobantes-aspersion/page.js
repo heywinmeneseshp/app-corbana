@@ -2,15 +2,16 @@
 
 import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
-import { FiEye, FiDownload, FiEdit2, FiRotateCcw, FiSearch, FiFileText, FiXCircle } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import { FiEye, FiDownload, FiEdit2, FiRotateCcw, FiSearch, FiFileText, FiXCircle, FiMail } from "react-icons/fi";
+import JSZip from "jszip";
+import { apiFetch, apiFetchBlob, apiFetchFormData } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import DetalleComprobanteModal from "@/components/aspersion/DetalleComprobanteModal";
 import PilotoAsistentes from "@/components/aspersion/PilotoAsistentes";
 import RecorridoKml from "@/components/aspersion/RecorridoKml";
-import { descargarComprobanteAspersionPdf, verComprobanteAspersionPdf } from "@/lib/comprobanteAspersionExport";
+import { descargarComprobanteAspersionPdf, verComprobanteAspersionPdf, generarComprobanteAspersionPdfBlob } from "@/lib/comprobanteAspersionExport";
 
 const MEDIO_LABEL = { AVION: "Avión", DRON: "Dron" };
 
@@ -170,21 +171,12 @@ export default function ComprobantesAspersionPage() {
     const m = edicion;
     setGuardando(true);
     try {
+      // Los datos de la ejecución (hectáreas, galones, aeronave, clima y horario) no se editan en el borrador.
       const body = {
         piloto: m.piloto.trim() || null,
         ...(m.medio === "DRON" ? { pilotoColaboradorUuid: m.pilotoColaboradorUuid || null, asistentesUuids: m.asistentesUuids } : {}),
         medio: m.medio || null,
         observaciones: m.observaciones.trim() || null,
-        aeronave: m.aeronave.trim() || null,
-        horaInicio: m.horaInicio || null,
-        horaFinal: m.horaFinal || null,
-        volumenAplicacionHa: m.volumenAplicacionHa !== "" ? Number(m.volumenAplicacionHa) : null,
-        temperaturaInicial: m.temperaturaInicial !== "" ? Number(m.temperaturaInicial) : null,
-        temperaturaFinal: m.temperaturaFinal !== "" ? Number(m.temperaturaFinal) : null,
-        velocidadViento: m.velocidadViento !== "" ? Number(m.velocidadViento) : null,
-        humedadRelativaFinal: m.humedadRelativaFinal !== "" ? Number(m.humedadRelativaFinal) : null,
-        ...(m.hectareasAplicadas !== "" ? { hectareasAplicadas: Number(m.hectareasAplicadas) } : {}),
-        ...(m.galonesTotales !== "" ? { galonesTotales: Number(m.galonesTotales) } : {}),
       };
       const actualizado = await apiFetch(`/comprobantes-aspersion/${m.comprobante.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       setItems((prev) => prev.map((it) => (it.uuid === actualizado.uuid ? actualizado : it)));
@@ -200,7 +192,7 @@ export default function ComprobantesAspersionPage() {
 
   // Devuelve true si quedó emitido (aprobado).
   async function emitir(c) {
-    if (!c.piloto || !(Number(c.hectareasAplicadas) > 0)) {
+    if (!c.piloto || !(Number(c.hectareasAplicadas) > 0) || !c.kmlNombre) {
       // Faltan datos obligatorios: se completan en la edición (y desde ahí se emite).
       setDetalleModal(null);
       abrirEdicionConDetalle(c, { volverADetalle: true });
@@ -222,6 +214,35 @@ export default function ComprobantesAspersionPage() {
   }
 
   // Aprobar desde el modal de detalle: emite y vuelve a cargar el detalle (queda en Emitido).
+  // Enviar por correo (solo emitido): el PDF con el mapa del recorrido y el KMZ (el KML guardado, comprimido) a los destinatarios
+  // configurados para la finca.
+  async function enviarCorreo(c) {
+    if (!confirm(`¿Enviar el comprobante ${c.numero} por correo a los destinatarios de la finca?`)) return;
+    setProcesandoUuid(c.uuid);
+    try {
+      const detalle = await obtenerDetalle(c);
+      if (!detalle) return;
+      const { blob, nombre } = await generarComprobanteAspersionPdfBlob(detalle);
+      const fd = new FormData();
+      fd.append("pdf", blob, nombre);
+      if (detalle.kmlNombre) {
+        const kml = await apiFetchBlob(`/comprobantes-aspersion/${detalle.uuid}/kml`);
+        const zip = new JSZip();
+        zip.file("doc.kml", kml);
+        const kmz = await zip.generateAsync({ type: "blob", compression: "DEFLATE", mimeType: "application/vnd.google-earth.kmz" });
+        fd.append("kmz", kmz, `Recorrido-${detalle.numero}.kmz`);
+      }
+      const actualizado = await apiFetchFormData(`/comprobantes-aspersion/${c.uuid}/correo`, fd);
+      setItems((prev) => prev.map((it) => (it.uuid === actualizado.uuid ? { ...it, correoEnviadoEn: actualizado.correoEnviadoEn } : it)));
+      setDetalleModal((d) => (d?.comprobante?.uuid === actualizado.uuid ? { comprobante: actualizado, cargando: false } : d));
+      alert(`Comprobante ${c.numero} enviado${detalle.kmlNombre ? " con el PDF y el KMZ del recorrido" : ""}.`);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setProcesandoUuid("");
+    }
+  }
+
   async function aprobarDesdeDetalle(c) {
     if (await emitir(c)) {
       const detalle = await obtenerDetalle(c);
@@ -420,6 +441,18 @@ export default function ComprobantesAspersionPage() {
                           <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex text-secondary" title="Descargar PDF" onClick={() => descargarPdf(c)}>
                             <FiDownload size={15} />
                           </button>
+                          {c.estado === "EMITIDO" && puedeEmitir && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-link p-1 d-inline-flex"
+                              style={{ color: c.correoEnviadoEn ? "#16a34a" : "#64748b" }}
+                              title={c.correoEnviadoEn ? `Enviado el ${new Date(c.correoEnviadoEn).toLocaleString("es-CO")} — enviar de nuevo` : "Enviar por correo (PDF + KMZ)"}
+                              disabled={procesandoUuid === c.uuid}
+                              onClick={() => enviarCorreo(c)}
+                            >
+                              <FiMail size={15} />
+                            </button>
+                          )}
                           {borrador && puedeEditar && (
                             <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex text-secondary" title="Editar" onClick={() => abrirEdicionConDetalle(c)}>
                               <FiEdit2 size={15} />
@@ -487,6 +520,8 @@ export default function ComprobantesAspersionPage() {
             onClose={() => setDetalleModal(null)}
             onAprobar={puedeEmitir ? aprobarDesdeDetalle : undefined}
             aprobando={procesandoUuid === detalleModal.comprobante.uuid}
+            onEnviar={puedeEmitir ? enviarCorreo : undefined}
+            enviando={procesandoUuid === detalleModal.comprobante.uuid}
           />
         )}
 
@@ -533,6 +568,8 @@ export default function ComprobantesAspersionPage() {
                   min="0.01"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.hectareasAplicadas}
+                  disabled
+                  title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, hectareasAplicadas: e.target.value }))}
                 />
               </div>
@@ -544,6 +581,8 @@ export default function ComprobantesAspersionPage() {
                   min="0"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.galonesTotales}
+                  disabled
+                  title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, galonesTotales: e.target.value }))}
                 />
               </div>
@@ -554,6 +593,8 @@ export default function ComprobantesAspersionPage() {
                   maxLength={150}
                   className="form-control form-control-sm rounded-3"
                   value={edicion.aeronave}
+                  disabled
+                  title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, aeronave: e.target.value }))}
                 />
               </div>
@@ -564,6 +605,8 @@ export default function ComprobantesAspersionPage() {
                   step="0.01" min="0"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.volumenAplicacionHa}
+                  disabled
+                  title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, volumenAplicacionHa: e.target.value }))}
                 />
               </div>
@@ -574,6 +617,8 @@ export default function ComprobantesAspersionPage() {
                   step="0.1" min="0"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.velocidadViento}
+                  disabled
+                  title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, velocidadViento: e.target.value }))}
                 />
               </div>
@@ -584,6 +629,8 @@ export default function ComprobantesAspersionPage() {
                   step="0.1"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.temperaturaInicial}
+                  disabled
+                  title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, temperaturaInicial: e.target.value }))}
                 />
               </div>
@@ -594,6 +641,8 @@ export default function ComprobantesAspersionPage() {
                   step="0.1"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.temperaturaFinal}
+                  disabled
+                  title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, temperaturaFinal: e.target.value }))}
                 />
               </div>
@@ -604,6 +653,8 @@ export default function ComprobantesAspersionPage() {
                   step="0.1" min="0" max="100"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.humedadRelativaFinal}
+                  disabled
+                  title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, humedadRelativaFinal: e.target.value }))}
                 />
               </div>
@@ -614,6 +665,8 @@ export default function ComprobantesAspersionPage() {
                   
                   className="form-control form-control-sm rounded-3"
                   value={edicion.horaInicio}
+                  disabled
+                  title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, horaInicio: e.target.value }))}
                 />
               </div>
@@ -624,6 +677,8 @@ export default function ComprobantesAspersionPage() {
                   
                   className="form-control form-control-sm rounded-3"
                   value={edicion.horaFinal}
+                  disabled
+                  title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, horaFinal: e.target.value }))}
                 />
               </div>

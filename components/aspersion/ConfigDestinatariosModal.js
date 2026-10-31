@@ -96,7 +96,7 @@ export default function ConfigDestinatariosModal({ onClose }) {
   const [mensaje, setMensaje] = useState("");
 
   // Configuración editable y la guardada (para saber si hay cambios sin guardar).
-  const [aviso, setAviso] = useState({ rolesUuids: [], usuariosUuids: [], correos: "" });
+  const [aviso, setAviso] = useState({ rolesUuids: [], usuariosUuids: [], rolesCopiaUuids: [], correos: "" });
   const [resumen, setResumen] = useState({ rolesUuids: [], usuariosUuids: [], correos: "" });
   const [original, setOriginal] = useState(null);
   const [fincaPrevia, setFincaPrevia] = useState("");
@@ -115,7 +115,12 @@ export default function ConfigDestinatariosModal({ onClose }) {
         const listaFincas = [...(fincasRes.items || [])].filter((f) => !f.esExterna).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
         setFincas(listaFincas);
         setFincaPrevia(listaFincas[0]?.uuid || "");
-        const a = { rolesUuids: destRes.rolesUuids || [], usuariosUuids: destRes.usuariosUuids || [], correos: (destRes.correos || []).join(", ") };
+        const a = {
+          rolesUuids: destRes.rolesUuids || [],
+          usuariosUuids: destRes.usuariosUuids || [],
+          rolesCopiaUuids: destRes.rolesCopiaUuids || [],
+          correos: (destRes.correos || []).join(", "),
+        };
         const r = { rolesUuids: resumenRes.rolesUuids || [], usuariosUuids: resumenRes.usuariosUuids || [], correos: (resumenRes.correos || []).join(", ") };
         setAviso(a);
         setResumen(r);
@@ -156,9 +161,13 @@ export default function ConfigDestinatariosModal({ onClose }) {
         }
       }
     }
-    const copiaUsuarios = activos
-      .filter((u) => aviso.usuariosUuids.includes(u.uuid) && !para.some((p) => p.uuid === u.uuid))
-      .map((u) => ({ uuid: u.uuid, nombre: nombreCompleto(u), email: u.email, detalle: "Usuario en copia" }));
+    const copiaUsuarios = [];
+    for (const u of activos) {
+      if (para.some((p) => p.uuid === u.uuid)) continue;
+      const rolCopia = (u.roles || []).find((r) => aviso.rolesCopiaUuids.includes(r.uuid));
+      if (aviso.usuariosUuids.includes(u.uuid)) copiaUsuarios.push({ uuid: u.uuid, nombre: nombreCompleto(u), email: u.email, detalle: "Usuario en copia" });
+      else if (rolCopia) copiaUsuarios.push({ uuid: u.uuid, nombre: nombreCompleto(u), email: u.email, detalle: `${rolCopia.nombre} (rol en copia)` });
+    }
     const copiaCorreos = separarCorreos(aviso.correos)
       .filter((c) => EMAIL_RE.test(c))
       .map((c) => ({ uuid: c, nombre: c, email: c, detalle: "Correo externo" }));
@@ -190,7 +199,12 @@ export default function ConfigDestinatariosModal({ onClose }) {
     }
     setGuardando(true);
     try {
-      const cuerpo = (c) => ({ correos: separarCorreos(c.correos), rolesUuids: c.rolesUuids, usuariosUuids: c.usuariosUuids });
+      const cuerpo = (c) => ({
+        correos: separarCorreos(c.correos),
+        rolesUuids: c.rolesUuids,
+        usuariosUuids: c.usuariosUuids,
+        ...(c.rolesCopiaUuids ? { rolesCopiaUuids: c.rolesCopiaUuids } : {}),
+      });
       await Promise.all([
         apiFetch("/aspersiones/destinatarios", { method: "PUT", body: JSON.stringify(cuerpo(aviso)) }),
         apiFetch("/aspersiones/resumen-semanal/destinatarios", { method: "PUT", body: JSON.stringify(cuerpo(resumen)) }),
@@ -280,6 +294,16 @@ export default function ConfigDestinatariosModal({ onClose }) {
                 </div>
                 <div className="col-lg-4">
                   <Paso numero={2} icono={FiUsers} titulo="En copia" subtitulo="Reciben los avisos de todas las fincas." color="#0e7490" fondo="#ecfeff">
+                    <label className="form-label small fw-medium mb-1">Roles</label>
+                    <TagPicker
+                      items={rolItems}
+                      selected={seleccion(rolItems, aviso.rolesCopiaUuids)}
+                      onChange={(n) => setAviso((s) => ({ ...s, rolesCopiaUuids: n.map((x) => x.uuid) }))}
+                      placeholder="Agregar rol..."
+                    />
+                    <div className="form-text mb-3" style={{ fontSize: "0.7rem" }}>
+                      Todos los usuarios con ese rol, sin importar sus fincas.
+                    </div>
                     <label className="form-label small fw-medium mb-1">Usuarios</label>
                     <TagPicker
                       items={usuarioItems}
