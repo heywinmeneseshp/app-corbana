@@ -192,8 +192,17 @@ export default function ComprobantesAspersionPage() {
 
   // Devuelve true si quedó emitido (aprobado).
   async function emitir(c) {
-    if (!c.piloto || !(Number(c.hectareasAplicadas) > 0) || !c.kmlNombre) {
-      // Faltan datos obligatorios: se completan en la edición (y desde ahí se emite).
+    const faltan = [
+      !c.piloto && "el piloto",
+      c.medio === "DRON" && !c.pilotoColaborador && c.piloto && "el piloto del listado de colaboradores (con dron)",
+      !(Number(c.hectareasAplicadas) > 0) && "las hectáreas aplicadas",
+      !c.kmlNombre && "el recorrido (archivo KML o KMZ)",
+    ].filter(Boolean);
+    if (faltan.length) {
+      // Faltan datos obligatorios: se explica cuáles y se abre la edición para completarlos.
+      alert(`No se puede aprobar el comprobante ${c.numero} porque falta ${faltan.join(", ")}.
+
+Se abrirá la edición para completarlo.`);
       setDetalleModal(null);
       abrirEdicionConDetalle(c, { volverADetalle: true });
       return false;
