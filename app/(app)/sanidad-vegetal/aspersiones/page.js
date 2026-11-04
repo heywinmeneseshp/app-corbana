@@ -1,9 +1,9 @@
 "use client";
 
 import InfoModulo from "@/components/InfoModulo";
-import { useEffect, useId, useMemo, useState, useRef } from "react";
+import { Fragment, useEffect, useId, useMemo, useState, useRef } from "react";
 import ExcelJS from "exceljs";
-import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiLink, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSend, FiAlertTriangle, FiInfo, FiNavigation } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiMail, FiLink, FiDownload, FiUploadCloud, FiEye, FiChevronLeft, FiChevronRight, FiChevronDown, FiCalendar, FiClock, FiCheckCircle, FiXCircle, FiSend, FiAlertTriangle, FiInfo, FiNavigation } from "react-icons/fi";
 import BotonConfiguracion from "@/components/BotonConfiguracion";
 import { apiFetch, apiFetchFormData, apiUpload, apiFetchTodos } from "@/lib/api";
 import { hasPermission, getCurrentUser } from "@/lib/auth";
@@ -62,10 +62,12 @@ const ESTADO_INFO = {
   REVISADA: { label: "Revisada", bg: "#ede9fe", color: "#7c3aed", Icono: FiCheckCircle },
   ENVIADA: { label: "Enviada", bg: "#cffafe", color: "#0e7490", Icono: FiSend },
   EJECUTADA: { label: "Ejecutada", bg: "#dcfce7", color: "#16a34a", Icono: FiCheckCircle },
+  EJECUCION_PARCIAL: { label: "Ejecución parcial", bg: "#fef3c7", color: "#b45309", Icono: FiCheckCircle },
   CANCELADA: { label: "Cancelada", bg: "#f3f4f6", color: "#dc2626", Icono: FiXCircle },
 };
 
 function estadoFlujo(a) {
+  if (a.ejecucionParcial) return "EJECUCION_PARCIAL";
   if (a.estado !== "PROGRAMADA") return a.estado;
   if (a.correoEnviadoEn) return "ENVIADA";
   if (a.revisadoPor || a.revisadoPorId) return "REVISADA";
@@ -1715,6 +1717,33 @@ export default function AspersionesPage() {
 
   // Ciclo = una aplicación hecha en varias partes (días). Modal para corregir qué aspersiones son del mismo ciclo.
   const [cicloModal, setCicloModal] = useState(null);
+  // Fila expandida con las partes de su ciclo: { uuid, partes, cargando, error }.
+  const [partesAbiertas, setPartesAbiertas] = useState(null);
+
+  async function alternarPartes(a) {
+    if (partesAbiertas?.uuid === a.uuid) {
+      setPartesAbiertas(null);
+      return;
+    }
+    setPartesAbiertas({ uuid: a.uuid, partes: [], cargando: true, error: "" });
+    try {
+      const r = await apiFetch(`/aspersiones/${a.uuid}/ciclo`);
+      const partes = Array.isArray(r) ? r : r?.data || [];
+      setPartesAbiertas((m) => (m?.uuid === a.uuid ? { ...m, partes, cargando: false } : m));
+    } catch (err) {
+      setPartesAbiertas((m) => (m?.uuid === a.uuid ? { ...m, cargando: false, error: err.message } : m));
+    }
+  }
+
+  // La parte puede ser de otra semana: se trae su fila completa para abrir su detalle o el modal de ejecutar.
+  async function abrirParte(p, abrir) {
+    try {
+      const { items: filas } = await apiFetch(`/aspersiones?search=${encodeURIComponent(p.numero)}&limit=1`);
+      if (filas?.[0]) abrir(filas[0]);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   async function abrirCiclo(aspersion) {
     setCicloModal({ aspersion, partes: [], candidatas: [], unirCon: "", cargando: true, error: "" });
@@ -1760,7 +1789,11 @@ export default function AspersionesPage() {
       aspersion,
       insumos: null,
       fechaParteRestante: manana.toISOString().slice(0, 10),
+      completa: true, // ¿se asperja todo lo programado? Desmarcada = ejecución parcial
       prepararTodo: false, // ejecución parcial: true = hoy se prepara toda la mezcla
+      editarCantidades: false, // botón «Modificar cantidades»
+      cantidades: {}, // { uuid del componente: cantidad escrita }
+      adicionales: [], // [{ key, articuloUuid, cantidad }]
       cicloCon: "",
       candidatas: [],
       piloto: "",
@@ -1768,9 +1801,6 @@ export default function AspersionesPage() {
       pilotoColaboradorUuid: "",
       asistentesUuids: [],
       hectareasAplicadas: String(Number(aspersion.hectareas)),
-      // Galones de la programación (cantidad a preparar llevada a galones),
-      // editables si en la aplicación real fueron otros.
-      galonesTotales: aspersion.galonesProgramados !== null && aspersion.galonesProgramados !== undefined ? String(aspersion.galonesProgramados) : "",
       observaciones: "",
       error: "",
     });
@@ -1793,13 +1823,32 @@ export default function AspersionesPage() {
       piloto: m.piloto.trim(),
       ...(conDron ? { pilotoColaboradorUuid: m.pilotoColaboradorUuid, asistentesUuids: m.asistentesUuids } : {}),
       hectareasAplicadas: aplicadas,
-      ...(m.galonesTotales !== "" ? { galonesTotales: Number(m.galonesTotales) } : {}),
       ...(m.observaciones.trim() ? { observaciones: m.observaciones.trim() } : {}),
       // Ejecución parcial: lo que falta queda como parte pendiente del mismo ciclo.
       ...(aplicadas < Number(m.aspersion.hectareas) && m.fechaParteRestante ? { fechaParteRestante: m.fechaParteRestante } : {}),
       ...(aplicadas < Number(m.aspersion.hectareas) && m.prepararTodo ? { prepararTodo: true } : {}),
       ...(m.cicloCon ? { cicloConAspersionUuid: m.cicloCon } : {}),
     };
+    // Lo escrito en Kg (ACONDICIONADOR) vuelve a la unidad de la fila.
+    const ajustadas = Object.entries(m.editarCantidades ? m.cantidades : {}).map(([componenteUuid, v]) => ({
+      componenteUuid,
+      cantidad: Number(String(v).replace(",", ".")) / (Number(m.insumos?.find((c) => c.uuid === componenteUuid)?.factorKg) || 1),
+    }));
+    if (ajustadas.some((a) => !(a.cantidad > 0))) {
+      setEjecutarModal({ ...m, error: "Las cantidades modificadas deben ser mayores a 0." });
+      return;
+    }
+    if (ajustadas.length) comprobante.cantidadesAjustadas = ajustadas;
+    const adicionales = [];
+    for (const ad of m.adicionales) {
+      const cantidad = Number(String(ad.cantidad).replace(",", "."));
+      if (!ad.articuloUuid || !(cantidad > 0)) {
+        setEjecutarModal({ ...m, error: "Elige cada insumo adicional y su cantidad, o quítalo." });
+        return;
+      }
+      adicionales.push({ articuloUuid: ad.articuloUuid, cantidad });
+    }
+    if (adicionales.length) comprobante.insumosAdicionales = adicionales;
     setEjecutarModal(null);
     await handleEjecutar(m.aspersion, false, comprobante);
   }
@@ -1809,7 +1858,10 @@ export default function AspersionesPage() {
     try {
       const resultado = await apiFetch(`/aspersiones/${aspersion.uuid}/ejecutar`, {
         method: "POST",
-        body: JSON.stringify({ forzarSaldoNegativo, ...(comprobante ? { comprobante } : {}) }),
+        body: (() => {
+          const { insumosAdicionales: adicionales, ...datos } = comprobante || {};
+          return JSON.stringify({ forzarSaldoNegativo, ...(comprobante ? { comprobante: datos } : {}), ...(adicionales ? { insumosAdicionales: adicionales } : {}) });
+        })(),
       });
       if (resultado.requiereConfirmacion) {
         setProcesandoTexto("");
@@ -1819,7 +1871,7 @@ export default function AspersionesPage() {
       }
       actualizarFila(resultado.aspersion);
       recargarCalendario();
-      if (resultado.parteRestante) load(); // apareció la parte pendiente del ciclo
+      if (resultado.parteRestante || aspersion.partesCiclo > 1) load(); // cambió la parte pendiente del ciclo
       if (resultado.comprobante?.numero) {
         alert(
           `Aspersión ejecutada. Se guardó el comprobante ${resultado.comprobante.numero} en borrador (Sanidad Vegetal → Comprobante de aspersiones).` +
@@ -2197,7 +2249,8 @@ export default function AspersionesPage() {
                     const info = ESTADO_INFO[estadoFlujo(a)] || ESTADO_INFO.PROGRAMADA;
                     const revisada = Boolean(a.revisadoPor || a.revisadoPorId);
                     return (
-                      <tr key={a.uuid} style={{ cursor: "pointer" }} title="Ver el detalle de la aspersión" onClick={() => abrirDetalle(a)}>
+                      <Fragment key={a.uuid}>
+                      <tr style={{ cursor: "pointer" }} title="Ver el detalle de la aspersión" onClick={() => abrirDetalle(a)}>
                         <td className="fw-medium text-nowrap">{a.semana?.codigo || "—"}</td>
                         <td className="text-nowrap">{a.fecha}</td>
                         <td >{a.finca?.nombre || "—"}</td>
@@ -2207,9 +2260,18 @@ export default function AspersionesPage() {
                         <td className="text-secondary">
                           {a.numero}
                           {a.partesCiclo > 1 && (
-                            <span className="ms-1 text-secondary fw-normal" title="Una misma aplicación hecha en varias partes (días): FRAC la cuenta como una sola">
-                              · Parte {a.cicloParte}/{a.partesCiclo}
-                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-link p-0 ms-1 text-decoration-none text-nowrap align-baseline"
+                              style={{ fontSize: "inherit" }}
+                              title="Ver y ejecutar cada parte de esta aplicación"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                alternarPartes(a);
+                              }}
+                            >
+                              · Parte {a.cicloParte}/{a.partesCiclo} <FiChevronDown size={12} style={{ transform: partesAbiertas?.uuid === a.uuid ? "rotate(180deg)" : undefined }} />
+                            </button>
                           )}
                         </td>
                         <td className="text-secondary">{Number(a.hectareas).toFixed(2)}</td>
@@ -2325,6 +2387,71 @@ export default function AspersionesPage() {
                           </div>
                         </td>
                       </tr>
+                      {partesAbiertas?.uuid === a.uuid && (
+                        <tr>
+                          <td colSpan={11} style={{ backgroundColor: "#f0fdf4" }}>
+                            {partesAbiertas.cargando && <span className="small text-secondary">Cargando partes...</span>}
+                            {partesAbiertas.error && <span className="small text-danger">{partesAbiertas.error}</span>}
+                            {partesAbiertas.partes.map((p) => (
+                              <div
+                                key={p.uuid}
+                                className="d-flex flex-wrap align-items-center gap-3 small py-1"
+                                style={{ cursor: "pointer" }}
+                                title="Ver el detalle de esta parte"
+                                onClick={() => abrirParte(p, abrirDetalle)}
+                              >
+                                <span className="fw-medium">Parte {p.cicloParte}</span>
+                                <span>{p.numero}</span>
+                                <span className="text-nowrap">{String(p.fecha).slice(0, 10)}</span>
+                                <span>{Number(p.hectareas).toFixed(2)} ha</span>
+                                <span className="text-secondary">{p.estado === "PROGRAMADA" ? (p.correoEnviadoEn ? "Enviada" : "Falta enviar el aviso") : p.estado === "EJECUTADA" ? "Ejecutada" : "Cancelada"}</span>
+                                {p.estado === "PROGRAMADA" && (
+                                  <span className="ms-auto" />
+                                )}
+                                {p.estado === "PROGRAMADA" && hasPermission("sanidad_vegetal.aspersiones.enviar_correo") && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-secondary rounded-3 d-inline-flex align-items-center gap-1"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      abrirParte(p, (fila) => {
+                                        setPartesAbiertas(null);
+                                        handleEnviarCorreo(fila);
+                                      });
+                                    }}
+                                  >
+                                    <FiMail size={13} /> {p.correoEnviadoEn ? "Reenviar aviso" : "Enviar aviso"}
+                                  </button>
+                                )}
+                                {p.estado === "PROGRAMADA" && hasPermission("sanidad_vegetal.aspersiones.editar") && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-secondary rounded-3 d-inline-flex align-items-center gap-1"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      abrirParte(p, (fila) => {
+                                        setPartesAbiertas(null);
+                                        setReprogramar({ aspersion: fila, fecha: String(fila.fecha).slice(0, 10), motivo: "" });
+                                      });
+                                    }}
+                                  >
+                                    <FiCalendar size={13} /> Reprogramar
+                                  </button>
+                                )}
+                                {p.estado === "PROGRAMADA" && p.correoEnviadoEn && hasPermission("sanidad_vegetal.aspersiones.ejecutar") && (
+                                  <button type="button" className="btn btn-sm btn-brand rounded-3 d-inline-flex align-items-center gap-1" onClick={(e) => {
+                                    e.stopPropagation();
+                                    abrirParte(p, abrirEjecutar);
+                                  }}>
+                                    <FiCheck size={13} /> Ejecutar
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     );
                   })}
               </tbody>
@@ -4048,7 +4175,7 @@ export default function AspersionesPage() {
         )}
 
         {ejecutarModal && (
-          <ModalShell title="Ejecutar aspersión" onClose={() => setEjecutarModal(null)} width="32rem">
+          <ModalShell title="Ejecutar aspersión" onClose={() => setEjecutarModal(null)} width="52rem">
             <form onSubmit={confirmarEjecutar}>
               <p className="small text-secondary mb-3">
                 Completa los datos de la aplicación. Se descontarán los insumos y se guardará el{" "}
@@ -4063,6 +4190,36 @@ export default function AspersionesPage() {
                 </div>
               </div>
               <div className="mb-3">
+                <div className="form-check mb-2">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    id="aspersion-completa"
+                    checked={ejecutarModal.completa}
+                    onChange={(e) => {
+                      const completa = e.target.checked;
+                      setEjecutarModal((m) => ({ ...m, completa, prepararTodo: false, hectareasAplicadas: completa ? String(Number(m.aspersion.hectareas)) : "" }));
+                    }}
+                  />
+                  <label className="form-check-label small fw-medium" htmlFor="aspersion-completa">
+                    ¿La aspersión se hará completa? ({Number(ejecutarModal.aspersion.hectareas)} ha)
+                  </label>
+                  {!ejecutarModal.completa && <div className="form-text small">Escribe las hectáreas que se aplican hoy; lo demás queda como parte pendiente.</div>}
+                </div>
+              <div className="row g-2 mb-3">
+                <div className="col-12 col-md-6">
+                  <label className="form-label small fw-medium mb-1">Hectáreas aplicadas *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    className="form-control form-control-sm rounded-3"
+                    disabled={ejecutarModal.completa}
+                    value={ejecutarModal.hectareasAplicadas}
+                    onChange={(e) => setEjecutarModal((m) => ({ ...m, hectareasAplicadas: e.target.value }))}
+                  />
+                </div>
+              </div>
                 {(() => {
                   const prog = Number(ejecutarModal.aspersion.hectareas);
                   const apl = Number(ejecutarModal.hectareasAplicadas);
@@ -4093,7 +4250,14 @@ export default function AspersionesPage() {
                 {ejecutarModal.aspersion.insumosDescontados && (
                   <div className="alert alert-info py-2 small mb-2">La mezcla de esta parte ya se preparó y descontó en la ejecución anterior: no se descuenta de nuevo.</div>
                 )}
-                <div className="small fw-semibold mb-1">Cantidades a usar{ejecutarModal.aspersion.insumosDescontados ? " (ya descontadas)" : ""}</div>
+                <div className="d-flex align-items-center justify-content-between mb-1">
+                  <span className="small fw-semibold">Cantidades a usar{ejecutarModal.aspersion.insumosDescontados ? " (ya descontadas)" : ""}</span>
+                  {!ejecutarModal.aspersion.insumosDescontados && (
+                    <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => setEjecutarModal((m) => ({ ...m, editarCantidades: !m.editarCantidades, cantidades: {} }))}>
+                      {ejecutarModal.editarCantidades ? "Usar las calculadas" : "Modificar cantidades"}
+                    </button>
+                  )}
+                </div>
                 {ejecutarModal.insumos === null ? (
                   <div className="small text-secondary">Cargando insumos...</div>
                 ) : ejecutarModal.insumos.length === 0 ? (
@@ -4106,19 +4270,103 @@ export default function AspersionesPage() {
                           <td>{c.articulo?.nombre || "—"}</td>
                           <td className="text-end fw-medium text-nowrap">
                             {(() => {
-                              // Parcial preparando solo lo de hoy: cantidad en proporción a las hectáreas aplicadas.
+                              // Parcial preparando solo lo de hoy: en proporción a las hectáreas aplicadas, con la regla de redondeo.
                               const prog = Number(ejecutarModal.aspersion.hectareas);
                               const apl = Number(ejecutarModal.hectareasAplicadas);
-                              const factor = apl > 0 && apl < prog && !ejecutarModal.prepararTodo ? apl / prog : 1;
-                              return (Number(c.cantidad) * factor).toLocaleString("es-CO", { maximumFractionDigits: 2 });
+                              const total = Number(c.cantidad);
+                              let cantidad = total;
+                              if (apl > 0 && apl < prog && !ejecutarModal.prepararTodo) {
+                                const exacta = (total * apl) / prog;
+                                const paso = Number(c.pasoRedondeo) || 0.5;
+                                const redondeada = Math.round(Math.round(exacta / paso) * paso * 1e6) / 1e6;
+                                cantidad = redondeada > 0 && redondeada < total ? redondeada : exacta;
+                              }
+                              cantidad *= Number(c.factorKg) || 1;
+                              if (ejecutarModal.editarCantidades) {
+                                return (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    className="form-control form-control-sm rounded-3 d-inline-block text-end"
+                                    style={{ width: "7rem" }}
+                                    value={ejecutarModal.cantidades[c.uuid] ?? Math.round(cantidad * 1000) / 1000}
+                                    onChange={(e) => setEjecutarModal((m) => ({ ...m, cantidades: { ...m.cantidades, [c.uuid]: e.target.value } }))}
+                                  />
+                                );
+                              }
+                              return cantidad.toLocaleString("es-CO", { maximumFractionDigits: c.factorKg ? 3 : 2 });
                             })()}{" "}
-                            {c.unidad?.simbolo || ""}
+                            {c.factorKg ? "Kg" : c.unidad?.simbolo || ""}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 )}
+                {Number(ejecutarModal.aspersion.galonesProgramados) > 0 && Number(ejecutarModal.hectareasAplicadas) > 0 && (
+                  <div className="d-flex justify-content-between small fw-semibold border-top pt-1">
+                    <span>Galones totales a asperjar en esta ejecución</span>
+                    <span>
+                      {(
+                        (Number(ejecutarModal.aspersion.galonesProgramados) * Math.min(Number(ejecutarModal.hectareasAplicadas), Number(ejecutarModal.aspersion.hectareas))) /
+                        Number(ejecutarModal.aspersion.hectareas)
+                      ).toLocaleString("es-CO", { maximumFractionDigits: 2 })}{" "}
+                      Gal
+                    </span>
+                  </div>
+                )}
+                <div className="d-flex align-items-center justify-content-between mt-2 mb-1">
+                  <span className="small fw-semibold">Insumos adicionales</span>
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm p-0 text-decoration-none"
+                    onClick={() => setEjecutarModal((m) => ({ ...m, adicionales: [...m.adicionales, { key: Date.now(), articuloUuid: "", cantidad: "" }] }))}
+                  >
+                    Agregar insumo
+                  </button>
+                </div>
+                {ejecutarModal.adicionales.map((ad) => {
+                  const cambiar = (patch) => setEjecutarModal((m) => ({ ...m, adicionales: m.adicionales.map((x) => (x.key === ad.key ? { ...x, ...patch } : x)) }));
+                  const art = articulosInsumo.find((a) => a.uuid === ad.articuloUuid);
+                  return (
+                    <div key={ad.key} className="row g-1 align-items-center mb-1">
+                      <div className="col-7">
+                        <select className="form-select form-select-sm rounded-3" value={ad.articuloUuid} onChange={(e) => cambiar({ articuloUuid: e.target.value })}>
+                          <option value="">Selecciona el insumo</option>
+                          {articulosInsumo
+                            .filter((a) => !(ejecutarModal.insumos || []).some((c) => c.articulo?.uuid === a.uuid))
+                            .map((a) => (
+                              <option key={a.uuid} value={a.uuid}>
+                                {a.nombre}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <div className="col-4">
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          className="form-control form-control-sm rounded-3"
+                          placeholder={`Cantidad${art?.unidadMedida?.simbolo ? ` (${art.unidadMedida.simbolo})` : ""}`}
+                          value={ad.cantidad}
+                          onChange={(e) => cambiar({ cantidad: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-1 text-end">
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm p-0 text-danger text-decoration-none"
+                          aria-label="Quitar insumo"
+                          onClick={() => setEjecutarModal((m) => ({ ...m, adicionales: m.adicionales.filter((x) => x.key !== ad.key) }))}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               {ejecutarModal.error && <div className="alert alert-danger py-2 small">{ejecutarModal.error}</div>}
               <div className="row g-2 mb-2">
@@ -4127,29 +4375,6 @@ export default function AspersionesPage() {
                     medio={ejecutarModal.aspersion.medio}
                     valor={ejecutarModal}
                     onChange={(patch) => setEjecutarModal((m) => ({ ...m, ...patch }))}
-                  />
-                </div>
-                <div className="col-6">
-                  <label className="form-label small fw-medium mb-1">Hectáreas aplicadas *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    className="form-control form-control-sm rounded-3"
-                    value={ejecutarModal.hectareasAplicadas}
-                    onChange={(e) => setEjecutarModal((m) => ({ ...m, hectareasAplicadas: e.target.value }))}
-                  />
-                </div>
-                <div className="col-6">
-                  <label className="form-label small fw-medium mb-1">Galones totales de la mezcla</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="form-control form-control-sm rounded-3"
-                    placeholder="Sin conversión"
-                    value={ejecutarModal.galonesTotales}
-                    onChange={(e) => setEjecutarModal((m) => ({ ...m, galonesTotales: e.target.value }))}
                   />
                 </div>
                 {Number(ejecutarModal.hectareasAplicadas) > 0 && Number(ejecutarModal.hectareasAplicadas) < Number(ejecutarModal.aspersion.hectareas) && (

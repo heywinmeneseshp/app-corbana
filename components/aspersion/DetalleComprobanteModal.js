@@ -132,6 +132,38 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
             <Dato label="Humedad relativa final">{c.humedadRelativaFinal != null ? `${num(c.humedadRelativaFinal, 1)} %` : "—"}</Dato>
           </Seccion>
 
+          {(c.partes || []).length > 1 && (
+            <div className="mb-3">
+              <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>
+                Aspersiones parciales
+              </div>
+              <div className="table-responsive">
+                <table className="table table-sm mb-0 align-middle" style={{ fontSize: "0.72rem" }}>
+                  <thead>
+                    <tr className="table-light text-secondary">
+                      <th className="fw-medium">Parte</th>
+                      <th className="fw-medium">Aspersión</th>
+                      <th className="fw-medium">Fecha</th>
+                      <th className="fw-medium text-end">Hectáreas</th>
+                      <th className="fw-medium">Observaciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {c.partes.map((p, i) => (
+                      <tr key={`${p.aspersion}-${i}`}>
+                        <td>{i + 1}</td>
+                        <td>{p.aspersion || "—"}</td>
+                        <td>{p.fecha}</td>
+                        <td className="text-end fw-semibold">{num(p.hectareas)}</td>
+                        <td>{p.observaciones || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Recorrido (KML): vista previa del mapa y descarga; se sube al editar el borrador. */}
           <div className="mb-3">
             <RecorridoKml comprobante={c} />

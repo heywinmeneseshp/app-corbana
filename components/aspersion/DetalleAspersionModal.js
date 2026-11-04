@@ -255,6 +255,39 @@ export default function DetalleAspersionModal({
               : `Cantidades para ${num(hectareas)} ha; se descuentan del inventario al ejecutar.`}
           </p>
 
+          {(a.historialCantidades || []).length > 0 && (
+            <div className="mb-3">
+              <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>
+                Historial de cambios en la ejecución
+              </div>
+              <div className="table-responsive">
+                <table className="table table-sm mb-0 align-middle" style={{ fontSize: "0.72rem" }}>
+                  <thead>
+                    <tr className="table-light text-secondary">
+                      <th className="fw-medium">Fecha</th>
+                      <th className="fw-medium">Usuario</th>
+                      <th className="fw-medium">Insumo</th>
+                      <th className="fw-medium">Cambio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {a.historialCantidades.map((h) => {
+                      const cant = (v) => `${Number(v).toLocaleString("es-CO", { maximumFractionDigits: 4 })} ${h.unidadSimbolo || ""}`;
+                      return (
+                        <tr key={h.id}>
+                          <td className="text-nowrap">{fmtFechaHora(h.createdAt)}</td>
+                          <td>{nombreUsuario(h.usuario)}</td>
+                          <td>{h.articuloNombre}</td>
+                          <td>{h.cantidadAnterior === null ? `Agregado: ${cant(h.cantidadNueva)}` : `${cant(h.cantidadAnterior)} → ${cant(h.cantidadNueva)}`}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {a.observaciones && (
             <div className="mb-1">
               <div
