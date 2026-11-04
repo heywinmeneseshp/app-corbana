@@ -1598,6 +1598,34 @@ export default function AspersionesPage() {
     setItems((prev) => prev.map((it) => (it.uuid === actualizada.uuid ? actualizada : it)));
   }
 
+  // Reprogramar: cambia la fecha y anuncia el cambio por correo (a la finca y la pista solo si el aviso ya se había enviado).
+  const [reprogramar, setReprogramar] = useState(null); // { aspersion, fecha, motivo, error }
+
+  async function confirmarReprogramar(e) {
+    e.preventDefault();
+    const m = reprogramar;
+    setReprogramar(null);
+    setDetalleModal(null);
+    setProcesandoTexto("Reprogramando y notificando...");
+    try {
+      const r = await apiFetch(`/aspersiones/${m.aspersion.uuid}/reprogramar`, {
+        method: "POST",
+        body: JSON.stringify({ fecha: m.fecha, motivo: m.motivo.trim() || null }),
+      });
+      await load();
+      recargarCalendario();
+      alert(
+        r.correoEnviado
+          ? `Aspersión ${m.aspersion.numero} reprogramada para el ${m.fecha}. Se envió el correo con la novedad.`
+          : `Aspersión ${m.aspersion.numero} reprogramada para el ${m.fecha}, pero no se envió el correo: no hay destinatarios o falló el envío.`,
+      );
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setProcesandoTexto("");
+    }
+  }
+
   async function handleCancelar(aspersion) {
     if (!confirm(`¿Cancelar la aspersión ${aspersion.numero} de la finca ${aspersion.finca?.nombre}?`)) return;
     // El cancelar también manda, en el mismo request, el correo automático
@@ -1732,6 +1760,7 @@ export default function AspersionesPage() {
       aspersion,
       insumos: null,
       fechaParteRestante: manana.toISOString().slice(0, 10),
+      prepararTodo: false, // ejecución parcial: true = hoy se prepara toda la mezcla
       cicloCon: "",
       candidatas: [],
       piloto: "",
@@ -1768,6 +1797,7 @@ export default function AspersionesPage() {
       ...(m.observaciones.trim() ? { observaciones: m.observaciones.trim() } : {}),
       // Ejecución parcial: lo que falta queda como parte pendiente del mismo ciclo.
       ...(aplicadas < Number(m.aspersion.hectareas) && m.fechaParteRestante ? { fechaParteRestante: m.fechaParteRestante } : {}),
+      ...(aplicadas < Number(m.aspersion.hectareas) && m.prepararTodo ? { prepararTodo: true } : {}),
       ...(m.cicloCon ? { cicloConAspersionUuid: m.cicloCon } : {}),
     };
     setEjecutarModal(null);
@@ -2259,6 +2289,16 @@ export default function AspersionesPage() {
                                 onClick={() => abrirEjecutar(a)}
                               >
                                 <FiCheck size={15} />
+                              </button>
+                            )}
+                            {a.estado === "PROGRAMADA" && hasPermission("sanidad_vegetal.aspersiones.editar") && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
+                                title="Reprogramar: cambiar la fecha y avisar por correo"
+                                onClick={() => setReprogramar({ aspersion: a, fecha: String(a.fecha).slice(0, 10), motivo: "" })}
+                              >
+                                <FiCalendar size={15} />
                               </button>
                             )}
                             {a.estado === "PROGRAMADA" && hasPermission("sanidad_vegetal.aspersiones.eliminar") && (
@@ -3938,11 +3978,52 @@ export default function AspersionesPage() {
           />
         )}
 
+        {reprogramar && (
+          <ModalShell title={`Reprogramar ${reprogramar.aspersion.numero}`} onClose={() => setReprogramar(null)} height="auto">
+            <form onSubmit={confirmarReprogramar}>
+              <p className="small text-secondary">
+                {reprogramar.aspersion.finca?.nombre} · programada para el {String(reprogramar.aspersion.fecha).slice(0, 10)}.{" "}
+                {reprogramar.aspersion.correoEnviadoEn
+                  ? "Como el aviso ya se envió, el correo le llegará a la finca, a la pista y a los de copia."
+                  : "Como el aviso aún no se ha enviado, el correo le llegará solo a los de copia, a quien la programó y a quien la revisó."}
+              </p>
+              <label className="form-label small fw-medium mb-1">Nueva fecha *</label>
+              <input
+                type="date"
+                required
+                className="form-control form-control-sm rounded-3 mb-3"
+                value={reprogramar.fecha}
+                onChange={(e) => setReprogramar((m) => ({ ...m, fecha: e.target.value }))}
+              />
+              <label className="form-label small fw-medium mb-1">Motivo (opcional, sale en el correo)</label>
+              <input
+                className="form-control form-control-sm rounded-3 mb-3"
+                maxLength={300}
+                value={reprogramar.motivo}
+                onChange={(e) => setReprogramar((m) => ({ ...m, motivo: e.target.value }))}
+              />
+              <div className="d-flex justify-content-end gap-2">
+                <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setReprogramar(null)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={reprogramar.fecha === String(reprogramar.aspersion.fecha).slice(0, 10)}>
+                  Reprogramar y avisar
+                </button>
+              </div>
+            </form>
+          </ModalShell>
+        )}
+
         {detalleModal && (
           <DetalleAspersionModal
             aspersion={detalleModal.aspersion}
             cargando={detalleModal.cargando}
             onClose={() => setDetalleModal(null)}
+            onReprogramar={
+              hasPermission("sanidad_vegetal.aspersiones.editar")
+                ? () => setReprogramar({ aspersion: detalleModal.fila, fecha: String(detalleModal.fila.fecha).slice(0, 10), motivo: "" })
+                : undefined
+            }
             onEnviar={
               hasPermission("sanidad_vegetal.aspersiones.enviar_correo")
                 ? async () => {
@@ -3982,7 +4063,37 @@ export default function AspersionesPage() {
                 </div>
               </div>
               <div className="mb-3">
-                <div className="small fw-semibold mb-1">Insumos a descontar</div>
+                {(() => {
+                  const prog = Number(ejecutarModal.aspersion.hectareas);
+                  const apl = Number(ejecutarModal.hectareasAplicadas);
+                  return (
+                    apl > 0 &&
+                    apl < prog &&
+                    !ejecutarModal.aspersion.insumosDescontados && (
+                      <div className="rounded-3 p-2 mb-2" style={{ backgroundColor: "#f0fdf4" }}>
+                        <div className="small fw-semibold mb-1">
+                          Ejecución parcial: {apl} de {prog} ha. ¿Cómo se prepara la mezcla?
+                        </div>
+                        <div className="form-check">
+                          <input className="form-check-input" type="radio" id="prep-hoy" checked={!ejecutarModal.prepararTodo} onChange={() => setEjecutarModal((m) => ({ ...m, prepararTodo: false }))} />
+                          <label className="form-check-label small" htmlFor="prep-hoy">
+                            Solo la parte de hoy ({apl} ha). Lo demás se descuenta al ejecutar la parte restante.
+                          </label>
+                        </div>
+                        <div className="form-check">
+                          <input className="form-check-input" type="radio" id="prep-todo" checked={ejecutarModal.prepararTodo} onChange={() => setEjecutarModal((m) => ({ ...m, prepararTodo: true }))} />
+                          <label className="form-check-label small" htmlFor="prep-todo">
+                            Toda la mezcla hoy ({prog} ha). La parte restante no vuelve a descontar.
+                          </label>
+                        </div>
+                      </div>
+                    )
+                  );
+                })()}
+                {ejecutarModal.aspersion.insumosDescontados && (
+                  <div className="alert alert-info py-2 small mb-2">La mezcla de esta parte ya se preparó y descontó en la ejecución anterior: no se descuenta de nuevo.</div>
+                )}
+                <div className="small fw-semibold mb-1">Cantidades a usar{ejecutarModal.aspersion.insumosDescontados ? " (ya descontadas)" : ""}</div>
                 {ejecutarModal.insumos === null ? (
                   <div className="small text-secondary">Cargando insumos...</div>
                 ) : ejecutarModal.insumos.length === 0 ? (
@@ -3994,15 +4105,19 @@ export default function AspersionesPage() {
                         <tr key={c.uuid}>
                           <td>{c.articulo?.nombre || "—"}</td>
                           <td className="text-end fw-medium text-nowrap">
-                            {Number(c.cantidad).toLocaleString("es-CO", { maximumFractionDigits: 2 })} {c.unidad?.simbolo || ""}
+                            {(() => {
+                              // Parcial preparando solo lo de hoy: cantidad en proporción a las hectáreas aplicadas.
+                              const prog = Number(ejecutarModal.aspersion.hectareas);
+                              const apl = Number(ejecutarModal.hectareasAplicadas);
+                              const factor = apl > 0 && apl < prog && !ejecutarModal.prepararTodo ? apl / prog : 1;
+                              return (Number(c.cantidad) * factor).toLocaleString("es-CO", { maximumFractionDigits: 2 });
+                            })()}{" "}
+                            {c.unidad?.simbolo || ""}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                )}
-                {Number(ejecutarModal.hectareasAplicadas) > 0 && Number(ejecutarModal.hectareasAplicadas) < Number(ejecutarModal.aspersion.hectareas) && (
-                  <div className="small text-secondary">Son las cantidades de la programación completa; al ejecutar menos hectáreas se descuentan en proporción.</div>
                 )}
               </div>
               {ejecutarModal.error && <div className="alert alert-danger py-2 small">{ejecutarModal.error}</div>}

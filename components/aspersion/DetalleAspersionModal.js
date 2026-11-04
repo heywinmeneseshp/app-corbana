@@ -62,6 +62,7 @@ export default function DetalleAspersionModal({
   enviando = false,
   onRevisar,
   revisando = false,
+  onReprogramar,
 }) {
   const hectareas = Number(a?.hectareas) || 0;
   const revisada = Boolean(a?.revisadoPor || a?.revisadoPorId);
@@ -312,6 +313,11 @@ export default function DetalleAspersionModal({
                     : a.correoEnviadoEn
                       ? "Reenviar aviso"
                       : "Enviar aviso"}
+                </button>
+              )}
+              {a.estado === "PROGRAMADA" && onReprogramar && (
+                <button type="button" className="btn btn-sm btn-outline-secondary rounded-3" onClick={onReprogramar} title="Cambiar la fecha y avisar por correo">
+                  Reprogramar
                 </button>
               )}
               {puedeEjecutar && onEjecutar && (
