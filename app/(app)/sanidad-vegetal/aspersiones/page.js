@@ -591,6 +591,7 @@ export default function AspersionesPage() {
   // Aumento se deduce de la cantidad guardada cuando las unidades de dosis y
   // rendimiento de la mezcla coinciden; si no, queda el sugerido automático.
   async function openEdit(aspersion) {
+    setPartesProgramadas(null);
     try {
       const d = await apiFetch(`/aspersiones/${aspersion.uuid}`);
       const base = Number(d.mezcla?.dosisPorHectarea || 0) * Number(d.hectareas || 0);
@@ -1541,7 +1542,7 @@ export default function AspersionesPage() {
   async function handleCrear(e) {
     e.preventDefault();
     setFormError("");
-    const partesPayload = !editingUuid && partesProgramadas ? partesProgramadas.map((p, i) => ({ fecha: i === 0 ? form.fecha : p.fecha, hectareas: Number(p.hectareas) })) : null;
+    const partesPayload = partesProgramadas ? partesProgramadas.map((p, i) => ({ fecha: i === 0 ? form.fecha : p.fecha, hectareas: Number(p.hectareas) })) : null;
     if (partesPayload) {
       const suma = Math.round(partesPayload.reduce((s, p) => s + p.hectareas, 0) * 100) / 100;
       if (partesPayload.some((p) => !p.fecha || !(p.hectareas > 0))) {
@@ -4051,7 +4052,7 @@ export default function AspersionesPage() {
                 </div>
               </div>
 
-              {!editingUuid && (
+              {(
                 <div className="mb-3">
                   <div className="small fw-medium mb-1">¿La aspersión es total o parcial?</div>
                   <div className="form-check form-check-inline">
