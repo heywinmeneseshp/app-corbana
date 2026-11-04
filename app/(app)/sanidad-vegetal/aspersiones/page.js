@@ -202,6 +202,8 @@ export default function AspersionesPage() {
   const [mostrarCambiarDosis, setMostrarCambiarDosis] = useState(false);
   // Insumos ADICIONALES: artículos que se agregan a esta aspersión y no están en la receta de la mezcla. [{ key, articuloUuid, cantidad, unidadUuid }]
   const [insumosAdicionales, setInsumosAdicionales] = useState([]);
+  // Programación parcial: [{ key, fecha, hectareas }] por día; null = total (por defecto). La primera fila usa la fecha de la aspersión.
+  const [partesProgramadas, setPartesProgramadas] = useState(null);
   const [articulosInsumo, setArticulosInsumo] = useState([]);
   // "Usar decimales": las cantidades de los insumos NO se redondean a pasos de 0.5 (ni 0.1 el ACONDICIONADOR); quedan exactas a 2 decimales.
   const [usarDecimales, setUsarDecimales] = useState(false);
@@ -648,6 +650,7 @@ export default function AspersionesPage() {
 
   function openCreate() {
     setEditingUuid(null);
+    setPartesProgramadas(null);
     setInsumosAdicionales([]);
     setTextosCantidadAjustada({});
     setForm(emptyForm());
@@ -1538,6 +1541,22 @@ export default function AspersionesPage() {
   async function handleCrear(e) {
     e.preventDefault();
     setFormError("");
+    const partesPayload = !editingUuid && partesProgramadas ? partesProgramadas.map((p, i) => ({ fecha: i === 0 ? form.fecha : p.fecha, hectareas: Number(p.hectareas) })) : null;
+    if (partesPayload) {
+      const suma = Math.round(partesPayload.reduce((s, p) => s + p.hectareas, 0) * 100) / 100;
+      if (partesPayload.some((p) => !p.fecha || !(p.hectareas > 0))) {
+        setFormError("Completa la fecha y las hectáreas de cada día.");
+        return;
+      }
+      if (new Set(partesPayload.map((p) => p.fecha)).size !== partesPayload.length || partesPayload.some((p) => p.fecha < form.fecha)) {
+        setFormError("Cada día debe ser distinto y no puede ser anterior a la fecha de la aspersión.");
+        return;
+      }
+      if (suma !== Math.round(hectareasNum * 100) / 100) {
+        setFormError(`Las hectáreas por día suman ${suma} y deben sumar ${hectareasNum}.`);
+        return;
+      }
+    }
     const tipo = Array.isArray(form.tipo) ? form.tipo : form.tipo ? [form.tipo] : [];
     if (tipo.length === 0) {
       setFormError("Marca al menos un tipo de aspersión.");
@@ -1581,6 +1600,7 @@ export default function AspersionesPage() {
           representanteCorbanaNombre: form.representanteCorbanaNombre || null,
           administradorFincaNombre: form.administradorFincaNombre || null,
           observaciones: form.observaciones || null,
+          ...(partesPayload ? { partes: partesPayload } : {}),
         }),
       });
       setModalOpen(false);
@@ -4030,6 +4050,94 @@ export default function AspersionesPage() {
                   />
                 </div>
               </div>
+
+              {!editingUuid && (
+                <div className="mb-3">
+                  <div className="small fw-medium mb-1">¿La aspersión es total o parcial?</div>
+                  <div className="form-check form-check-inline">
+                    <input className="form-check-input" type="radio" id="prog-total" checked={!partesProgramadas} onChange={() => setPartesProgramadas(null)} />
+                    <label className="form-check-label small" htmlFor="prog-total">Total</label>
+                  </div>
+                  <div className="form-check form-check-inline">
+                    <input
+                      className="form-check-input"
+                      type="radio"
+                      id="prog-parcial"
+                      checked={Boolean(partesProgramadas)}
+                      onChange={() =>
+                        setPartesProgramadas([
+                          { key: 1, fecha: "", hectareas: "" },
+                          { key: 2, fecha: "", hectareas: "" },
+                        ])
+                      }
+                    />
+                    <label className="form-check-label small" htmlFor="prog-parcial">Parcial (varios días)</label>
+                  </div>
+                  {partesProgramadas && (
+                    <div className="mt-2">
+                      {partesProgramadas.map((p, i) => {
+                        const cambiar = (patch) => setPartesProgramadas((rows) => rows.map((r) => (r.key === p.key ? { ...r, ...patch } : r)));
+                        return (
+                          <div key={p.key} className="row g-2 align-items-center mb-1">
+                            <div className="col-2 small">Día {i + 1}</div>
+                            <div className="col-5">
+                              <input
+                                type="date"
+                                className="form-control form-control-sm rounded-3"
+                                disabled={i === 0}
+                                title={i === 0 ? "El primer día es la fecha de la aspersión" : undefined}
+                                value={i === 0 ? form.fecha : p.fecha}
+                                onChange={(e) => cambiar({ fecha: e.target.value })}
+                              />
+                            </div>
+                            <div className="col-4">
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                className="form-control form-control-sm rounded-3"
+                                placeholder="Hectáreas"
+                                value={p.hectareas}
+                                onChange={(e) => cambiar({ hectareas: e.target.value })}
+                              />
+                            </div>
+                            <div className="col-1 text-end">
+                              {partesProgramadas.length > 2 && (
+                                <button
+                                  type="button"
+                                  className="btn btn-link btn-sm p-0 text-danger text-decoration-none"
+                                  aria-label="Quitar día"
+                                  onClick={() => setPartesProgramadas((rows) => rows.filter((r) => r.key !== p.key))}
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="d-flex justify-content-between align-items-center mt-1">
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm p-0 text-decoration-none"
+                          onClick={() => setPartesProgramadas((rows) => [...rows, { key: Date.now(), fecha: "", hectareas: "" }])}
+                        >
+                          Agregar día
+                        </button>
+                        {(() => {
+                          const suma = Math.round(partesProgramadas.reduce((s, p) => s + (Number(p.hectareas) || 0), 0) * 100) / 100;
+                          const ok = suma === Math.round(hectareasNum * 100) / 100;
+                          return (
+                            <span className={`small fw-semibold ${ok ? "text-success" : "text-danger"}`}>
+                              Total: {suma} de {hectareasNum} ha
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {formError && <div className="alert alert-danger py-2 small mb-3">{formError}</div>}
 
