@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiSearch, FiEdit2, FiShield, FiSave, FiX, FiMapPin, FiToggleLeft, FiToggleRight, FiCheck, FiRefreshCw, FiEye, FiBox } from "react-icons/fi";
+import { FiPlus, FiSearch, FiEdit2, FiShield, FiSave, FiX, FiMapPin, FiHome, FiCheck, FiRefreshCw, FiEye, FiBox } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { startImpersonation, getCurrentUser } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
@@ -9,6 +9,26 @@ import ModalShell from "@/components/ModalShell";
 import CargoSelect from "@/components/CargoSelect";
 import TagPicker from "@/components/TagPicker";
 import RequirePermission from "@/components/RequirePermission";
+
+// Hasta 3 etiquetas por celda para no alargar la fila; las demás se ven al pasar el cursor por «+n».
+function Etiquetas({ textos, vacio, vertical = false }) {
+  if (!textos.length) return <span className="text-secondary">{vacio}</span>;
+  const resto = textos.slice(3);
+  return (
+    <div className={vertical ? "d-flex flex-column align-items-start gap-1" : "d-inline"}>
+      {textos.slice(0, 3).map((t) => (
+        <span key={t} className={`badge rounded-pill text-bg-light border fw-normal ${vertical ? "" : "me-1"}`}>
+          {t}
+        </span>
+      ))}
+      {resto.length > 0 && (
+        <span className="badge rounded-pill text-bg-light border fw-normal" title={resto.join(", ")}>
+          +{resto.length}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState([]);
@@ -24,6 +44,7 @@ export default function UsuariosPage() {
   const [usuarioModal, setUsuarioModal] = useState(null); // null | {} | usuario
   const [rolesModal, setRolesModal] = useState(null); // null | usuario
   const [fincasModal, setFincasModal] = useState(null); // null | usuario
+  const [lugaresModal, setLugaresModal] = useState(null); // null | usuario
   const [almacenesModal, setAlmacenesModal] = useState(null); // null | usuario
 
   const [selected, setSelected] = useState(new Set());
@@ -208,7 +229,7 @@ export default function UsuariosPage() {
 
       <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
         <div className="table-responsive">
-          <table className="table table-hover mb-0 align-middle">
+          <table className="table table-sm table-hover mb-0 align-middle" style={{ fontSize: "0.72rem" }}>
             <thead className="table-light">
               <tr>
                 <th style={{ width: 40 }}>
@@ -226,6 +247,7 @@ export default function UsuariosPage() {
                 <th>Email</th>
                 <th>Roles</th>
                 <th>Fincas</th>
+                <th>Lugares</th>
                 <th>Almacenes</th>
                 <th>Estado</th>
                 <th className="text-end">Acciones</th>
@@ -234,14 +256,14 @@ export default function UsuariosPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="text-center text-secondary py-4">
+                  <td colSpan={9} className="text-center text-secondary py-4">
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && visibles.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center text-secondary py-4">
+                  <td colSpan={9} className="text-center text-secondary py-4">
                     {usuarios.length === 0 ? "No hay usuarios registrados todavía." : "Ningún usuario tiene ese rol."}
                   </td>
                 </tr>
@@ -260,104 +282,104 @@ export default function UsuariosPage() {
                       </div>
                     </td>
                     <td>
-                      <p className="fw-medium mb-0">
+                      <div className="fw-medium text-nowrap">
                         {usuario.nombre} {usuario.apellido}
-                      </p>
-                      <p className="small text-secondary mb-0">@{usuario.usuario}</p>
+                      </div>
+                      <div className="text-secondary" style={{ fontSize: "0.66rem" }}>@{usuario.usuario}</div>
                     </td>
                     <td>{usuario.email}</td>
                     <td>
-                      {(usuario.roles || []).length > 0 ? (
-                        usuario.roles.map((rol) => (
-                          <span key={rol.uuid} className="badge rounded-pill text-bg-light border me-1 mb-1">
-                            {rol.nombre}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-secondary small">Sin roles</span>
-                      )}
-                    </td>
-                    <td>
-                      {(usuario.fincas || []).length > 0 ? (
-                        usuario.fincas.map((f) => (
-                          <span key={f.uuid} className="badge rounded-pill text-bg-light border me-1 mb-1">
-                            {f.codigo}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-secondary small">Sin fincas</span>
-                      )}
-                    </td>
-                    <td>
-                      {(usuario.almacenes || []).length > 0 ? (
-                        usuario.almacenes.map((a) => (
-                          <span key={a.uuid} className="badge rounded-pill text-bg-light border me-1 mb-1">
-                            {a.codigo || a.nombre}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-secondary small">Sin almacenes</span>
-                      )}
-                    </td>
-                    <td>
-                      {usuario.estado ? (
-                        <span className="badge rounded-pill" style={{ backgroundColor: "#d1fae5", color: "#047857" }}>
-                          Activo
-                        </span>
-                      ) : (
-                        <span className="badge rounded-pill text-bg-secondary">Inactivo</span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                      <div className="d-flex align-items-center gap-1">
                         <button
                           type="button"
-                          className="btn btn-sm btn-outline-warning"
+                          className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
+                          title="Asignar roles"
+                          onClick={() => setRolesModal(usuario)}
+                        >
+                          <FiShield />
+                        </button>
+                        <span>
+                          <Etiquetas textos={(usuario.roles || []).map((r) => r.nombre)} vacio="Sin roles" vertical />
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="d-flex align-items-center gap-1">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
+                          title="Asignar fincas"
+                          onClick={() => setFincasModal(usuario)}
+                        >
+                          <FiMapPin />
+                        </button>
+                        <span>
+                          <Etiquetas textos={(usuario.fincas || []).map((f) => f.codigo)} vacio="Sin fincas" />
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="d-flex align-items-center gap-1">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
+                          title="Asignar lugares"
+                          onClick={() => setLugaresModal(usuario)}
+                        >
+                          <FiHome />
+                        </button>
+                        <span>
+                          <Etiquetas textos={(usuario.lugares || []).map((l) => l.nombre)} vacio="Sin lugares" />
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="d-flex align-items-center gap-1">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
+                          title="Asignar almacenes"
+                          onClick={() => setAlmacenesModal(usuario)}
+                        >
+                          <FiBox />
+                        </button>
+                        <span>
+                          <Etiquetas textos={(usuario.almacenes || []).map((a) => a.codigo || a.nombre)} vacio="Sin almacenes" />
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`badge rounded-pill border-0 ${usuario.estado ? "" : "text-bg-secondary"}`}
+                        style={usuario.estado ? { backgroundColor: "#d1fae5", color: "#047857" } : undefined}
+                        title={usuario.estado ? "Clic para desactivar" : "Clic para activar"}
+                        onClick={() => handleToggleEstado(usuario)}
+                      >
+                        {usuario.estado ? "Activo" : "Inactivo"}
+                      </button>
+                    </td>
+                    <td>
+                      <div className="d-flex justify-content-end gap-1 flex-nowrap">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
                           title="Editar"
                           onClick={() => setUsuarioModal(usuario)}
                         >
                           <FiEdit2 />
                         </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 text-nowrap"
-                          onClick={() => setRolesModal(usuario)}
-                        >
-                          <FiShield /> Roles
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 text-nowrap"
-                          onClick={() => setFincasModal(usuario)}
-                        >
-                          <FiMapPin /> Fincas
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 text-nowrap"
-                          onClick={() => setAlmacenesModal(usuario)}
-                        >
-                          <FiBox /> Almacenes
-                        </button>
                         {esAdmin && usuario.uuid !== miUuid && usuario.estado && (
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 text-nowrap"
+                            className="btn btn-sm btn-link p-1 d-inline-flex text-secondary"
                             title="Ver el menú y las pantallas como este usuario"
                             disabled={verComoLoadingUuid === usuario.uuid}
                             onClick={() => handleVerComoUsuario(usuario)}
                           >
-                            <FiEye /> {verComoLoadingUuid === usuario.uuid ? "Cargando..." : "Ver como"}
+                            <FiEye />
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className={`btn btn-sm border-0 ${usuario.estado ? "text-secondary" : "text-success"}`}
-                          title={usuario.estado ? "Desactivar" : "Activar"}
-                          onClick={() => handleToggleEstado(usuario)}
-                        >
-                          {usuario.estado ? <FiToggleLeft /> : <FiToggleRight />}
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -474,6 +496,8 @@ export default function UsuariosPage() {
           onChanged={loadUsuarios}
         />
       )}
+
+      {lugaresModal && <LugaresUsuarioModal usuario={lugaresModal} onClose={() => setLugaresModal(null)} onChanged={loadUsuarios} />}
 
       {almacenesModal && (
         <AlmacenesModal
@@ -782,6 +806,80 @@ function FincasModal({ usuario, onClose, onChanged }) {
         <p className="text-center text-secondary small py-4 mb-0">Cargando fincas...</p>
       ) : (
         <TagPicker items={allItems} selected={selected} onChange={setSelected} placeholder="Buscar finca para agregar..." />
+      )}
+
+      <div className="d-flex gap-2 mt-3">
+        <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
+          <FiX /> Cancelar
+        </button>
+        <button
+          type="button"
+          disabled={saving || loading}
+          className="btn btn-brand btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+          onClick={handleGuardar}
+        >
+          <FiSave /> {saving ? "Guardando..." : "Guardar"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+// ─── Modal: lugares de asistencia de un usuario ───
+// Junto con sus fincas, definen de qué colaboradores recibe el resumen de jornadas incompletas.
+function LugaresUsuarioModal({ usuario, onClose, onChanged }) {
+  const [allItems, setAllItems] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [originalUuids, setOriginalUuids] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const aItem = (l) => ({ uuid: l.uuid, label: l.nombre, sublabel: l.tipo });
+    Promise.all([apiFetch("/asistencia/lugares?activos=true"), apiFetch(`/users/${usuario.uuid}/lugares`)])
+      .then(([todos, mios]) => {
+        setAllItems(todos.map(aItem));
+        setSelected(mios.map(aItem));
+        setOriginalUuids(new Set(mios.map((l) => l.uuid)));
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [usuario.uuid]);
+
+  const handleGuardar = async () => {
+    setError("");
+    setSaving(true);
+    const elegidos = new Set(selected.map((s) => s.uuid));
+    try {
+      await Promise.all([
+        ...[...elegidos]
+          .filter((uuid) => !originalUuids.has(uuid))
+          .map((lugarUuid) => apiFetch(`/users/${usuario.uuid}/lugares`, { method: "POST", body: JSON.stringify({ lugarUuid }) })),
+        ...[...originalUuids].filter((uuid) => !elegidos.has(uuid)).map((lugarUuid) => apiFetch(`/users/${usuario.uuid}/lugares/${lugarUuid}`, { method: "DELETE" })),
+      ]);
+      onChanged();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title={`Lugares de ${usuario.nombre} ${usuario.apellido}`} onClose={onClose}>
+      <p className="small text-secondary mb-3">
+        Junto con sus fincas, definen de qué colaboradores recibe el resumen de jornadas incompletas, según el lugar predeterminado de cada uno. Sin fincas ni lugares asignados, recibe
+        todos. No cambia lo que el usuario ve en Asistencia.
+      </p>
+
+      {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+      {loading ? (
+        <p className="text-center text-secondary small py-4 mb-0">Cargando lugares...</p>
+      ) : (
+        <TagPicker items={allItems} selected={selected} onChange={setSelected} placeholder="Buscar lugar para agregar..." />
       )}
 
       <div className="d-flex gap-2 mt-3">
