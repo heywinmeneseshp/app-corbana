@@ -131,6 +131,7 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
         setMensaje({ texto: `${etiqueta} registrada: ${r.colaborador.nombre}`, ok: true });
         agregarReciente(`${etiqueta} · ${r.colaborador.nombre}`, true);
         onCambio?.();
+        if (r.fueraDelPerimetro) window.alert(`${r.colaborador.nombre}, esta marcación quedó registrada fuera del perímetro del sitio.`);
       } else if (r?.estado === "DUPLICADA") {
         setMensaje({ texto: `${r.colaborador?.nombre ?? "Esta persona"} ya marcó hace un momento.`, ok: true });
       } else {

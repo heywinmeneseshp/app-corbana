@@ -6,7 +6,7 @@ import ModalShell from "@/components/ModalShell";
 import { apiFetch } from "@/lib/api";
 import { TIPOS_LUGAR, nombreTipoLugar } from "./ubicaciones";
 
-const VACIO = { nombre: "", tipo: "OFICINA", direccion: "", lat: "", lng: "", estado: true };
+const VACIO = { nombre: "", tipo: "OFICINA", direccion: "", lat: "", lng: "", radioMetros: 150, estado: true };
 
 // Lugares de asistencia distintos de las fincas (oficinas, plantas, bodegas...): aparecen junto a las fincas al marcar
 // asistencia, en la web y en la app de campo. Los ve cualquiera con permiso de asistencia.
@@ -35,7 +35,7 @@ export default function LugaresModal({ onClose, onCambio }) {
     setGuardando(true);
     setError("");
     try {
-      const body = { nombre: form.nombre, tipo: form.tipo, direccion: form.direccion || null, lat: num(form.lat), lng: num(form.lng), estado: form.estado };
+      const body = { nombre: form.nombre, tipo: form.tipo, direccion: form.direccion || null, lat: num(form.lat), lng: num(form.lng), radioMetros: num(form.radioMetros) ?? 150, estado: form.estado };
       await apiFetch(form.uuid ? `/asistencia/lugares/${form.uuid}` : "/asistencia/lugares", { method: form.uuid ? "PUT" : "POST", body: JSON.stringify(body) });
       setForm(null);
       await cargar();
@@ -82,11 +82,11 @@ export default function LugaresModal({ onClose, onCambio }) {
               ))}
             </select>
           </div>
-          <div className="col-md-3 d-flex align-items-end">
-            <div className="form-check mb-1">
+          <div className="col-md-3 d-flex align-items-center">
+            <div className="form-check mb-0 mt-md-4">
               <input type="checkbox" className="form-check-input" id="lugar-activo" checked={form.estado} onChange={(e) => campo("estado", e.target.checked)} />
               <label className="form-check-label small" htmlFor="lugar-activo">
-                Activo (se puede marcar)
+                Activo
               </label>
             </div>
           </div>
@@ -94,14 +94,19 @@ export default function LugaresModal({ onClose, onCambio }) {
             <label className="form-label small fw-medium">Dirección (opcional)</label>
             <input className="form-control form-control-sm rounded-3" maxLength={200} value={form.direccion} onChange={(e) => campo("direccion", e.target.value)} />
           </div>
-          <div className="col-6 col-md-3">
-            <label className="form-label small fw-medium">Latitud (opcional)</label>
+          <div className="col-4">
+            <label className="form-label small fw-medium">Latitud</label>
             <input type="number" step="any" min="-90" max="90" className="form-control form-control-sm rounded-3" value={form.lat} onChange={(e) => campo("lat", e.target.value)} />
           </div>
-          <div className="col-6 col-md-3">
-            <label className="form-label small fw-medium">Longitud (opcional)</label>
+          <div className="col-4">
+            <label className="form-label small fw-medium">Longitud</label>
             <input type="number" step="any" min="-180" max="180" className="form-control form-control-sm rounded-3" value={form.lng} onChange={(e) => campo("lng", e.target.value)} />
           </div>
+          <div className="col-4">
+            <label className="form-label small fw-medium">Radio (m)</label>
+            <input type="number" min="10" max="5000" step="1" className="form-control form-control-sm rounded-3" value={form.radioMetros} onChange={(e) => campo("radioMetros", e.target.value)} />
+          </div>
+          <div className="col-12 small text-secondary">Sin coordenadas no se puede saber si una marcación quedó fuera del área.</div>
           <div className="col-12 d-flex justify-content-end gap-2 mt-2">
             <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setForm(null)}>
               Cancelar
@@ -131,6 +136,7 @@ export default function LugaresModal({ onClose, onCambio }) {
                 <th className="fw-medium">Nombre</th>
                 <th className="fw-medium text-center">Tipo</th>
                 <th className="fw-medium">Dirección</th>
+                <th className="fw-medium text-center">Punto y radio</th>
                 <th className="fw-medium text-center">Estado</th>
                 <th className="fw-medium text-center">Acciones</th>
               </tr>
@@ -141,6 +147,7 @@ export default function LugaresModal({ onClose, onCambio }) {
                   <td className="fw-medium">{l.nombre}</td>
                   <td className="text-center">{nombreTipoLugar(l.tipo)}</td>
                   <td>{l.direccion || "—"}</td>
+                  <td className="text-center text-nowrap">{l.lat != null && l.lng != null ? `${l.lat}, ${l.lng} · ${l.radioMetros} m` : "Sin coordenadas"}</td>
                   <td className="text-center">
                     <span className="badge rounded-pill" style={l.estado ? { backgroundColor: "#d1fae5", color: "#047857" } : { backgroundColor: "#f1f5f9", color: "#64748b" }}>
                       {l.estado ? "Activo" : "Inactivo"}
