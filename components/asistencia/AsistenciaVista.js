@@ -6,12 +6,15 @@ import {
   FiCamera,
   FiAlertCircle,
   FiMapPin,
+  FiSettings,
   FiShield,
   FiTrash2,
   FiUserCheck,
 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
+import { esAdministrador } from "@/lib/laborEstados";
+import AlertasConfigModal from "@/components/asistencia/AlertasConfigModal";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
 import MarcarAsistenciaModal from "@/components/asistencia/MarcarAsistenciaModal";
 import ProbarRostroModal from "@/components/asistencia/ProbarRostroModal";
@@ -180,6 +183,17 @@ export default function AsistenciaVista({ modulo = null }) {
                   {solicitudesN}
                 </span>
               )}
+            </button>
+          )}
+          {esAdministrador() && (
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center"
+              title="Roles en copia de las alertas por correo"
+              aria-label="Configurar alertas"
+              onClick={() => setModal("alertas")}
+            >
+              <FiSettings />
             </button>
           )}
           {hasPermission("asistencia.lugares") && (
@@ -513,6 +527,7 @@ export default function AsistenciaVista({ modulo = null }) {
       {modal === "probar" && (
         <ProbarRostroModal onClose={() => setModal(null)} />
       )}
+      {modal === "alertas" && <AlertasConfigModal onClose={() => setModal(null)} />}
       {modal === "lugares" && (
         <LugaresModal onClose={() => setModal(null)} onCambio={cargarLugares} />
       )}
