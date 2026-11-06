@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Polygon, Tooltip, useMap } from "react-leaflet";
+import { Circle, MapContainer, TileLayer, Marker, Polygon, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import ModalShell from "@/components/ModalShell";
 import { apiFetch } from "@/lib/api";
@@ -28,7 +28,13 @@ const numero = (v) => (v === null || v === undefined || v === "" || Number.isNaN
 function Encuadre({ marca, perimetro, sitio }) {
   const map = useMap();
   useEffect(() => {
-    const puntos = [[marca.lat, marca.lng], ...(perimetro || []), ...(sitio ? [[sitio.lat, sitio.lng]] : [])];
+    // Con radio, el encuadre debe abarcar todo el círculo (1° de latitud ≈ 111 km).
+    const d = sitio?.radioMetros ? sitio.radioMetros / 111000 : 0;
+    const puntos = [
+      [marca.lat, marca.lng],
+      ...(perimetro || []),
+      ...(sitio ? [[sitio.lat - d, sitio.lng - d], [sitio.lat + d, sitio.lng + d]] : []),
+    ];
     if (puntos.length > 1) map.fitBounds(L.latLngBounds(puntos), { padding: [40, 40], maxZoom: 18 });
     else map.setView([marca.lat, marca.lng], 17);
   }, [map, marca, perimetro, sitio]);
@@ -37,7 +43,8 @@ function Encuadre({ marca, perimetro, sitio }) {
 
 // Mapa satelital con el punto GPS donde se hizo una marcación (rojo) y la ubicación guardada del sitio (verde): latitud/longitud
 // de la finca o del lugar (oficina...). Si es una finca con KML, también su perímetro.
-// `punto`: { lat, lng, titulo, detalle, fincaUuid?, lugarUuid? }.
+// Un lugar dibuja el círculo de su radio de tolerancia. `punto`: { lat, lng, titulo, detalle, fincaUuid?, lugarUuid?, soloSitio? };
+// `soloSitio`: vista del lugar, sin marcación.
 export default function MapaUbicacionModal({ punto, onClose }) {
   const [perimetro, setPerimetro] = useState(null);
   const [sitio, setSitio] = useState(null); // { lat, lng, nombre }
@@ -46,7 +53,8 @@ export default function MapaUbicacionModal({ punto, onClose }) {
   useEffect(() => {
     if (!punto.fincaUuid && !punto.lugarUuid) return undefined;
     let activo = true;
-    const conCoordenadas = (lat, lng, nombre) => (numero(lat) !== null && numero(lng) !== null ? { lat: numero(lat), lng: numero(lng), nombre } : null);
+    const conCoordenadas = (lat, lng, nombre, radioMetros = null) =>
+      numero(lat) !== null && numero(lng) !== null ? { lat: numero(lat), lng: numero(lng), nombre, radioMetros: numero(radioMetros) } : null;
     const pedir = punto.fincaUuid
       ? apiFetch(`/fincas/${punto.fincaUuid}`).then((f) => {
           if (!activo) return;
@@ -55,7 +63,7 @@ export default function MapaUbicacionModal({ punto, onClose }) {
         })
       : apiFetch("/asistencia/lugares").then((lista) => {
           const l = (lista || []).find((x) => x.uuid === punto.lugarUuid);
-          if (activo && l) setSitio(conCoordenadas(l.lat, l.lng, l.nombre));
+          if (activo && l) setSitio(conCoordenadas(l.lat, l.lng, l.nombre, l.radioMetros));
         });
     pedir.catch(() => {}).finally(() => activo && setCargando(false));
     return () => {
@@ -76,9 +84,12 @@ export default function MapaUbicacionModal({ punto, onClose }) {
             {(punto.fincaUuid || punto.lugarUuid) && !cargando && !sitio && " · sin latitud/longitud guardada del sitio"}
           </span>
           <span className="d-flex flex-wrap gap-3 align-items-center">
-            <span className="d-inline-flex align-items-center gap-1">
-              <span className="rounded-circle" style={{ width: 10, height: 10, background: "#dc2626" }} /> Marcación
-            </span>
+            {!punto.soloSitio && (
+              <span className="d-inline-flex align-items-center gap-1">
+                <span className="rounded-circle" style={{ width: 10, height: 10, background: "#dc2626" }} /> Marcación
+              </span>
+            )}
+            {sitio?.radioMetros > 0 && <span className="fw-medium">Radio: {sitio.radioMetros} m</span>}
             {sitio && (
               <span className="d-inline-flex align-items-center gap-1">
                 <span className="rounded-circle" style={{ width: 10, height: 10, background: "#16a34a" }} /> {sitio.nombre}
@@ -97,6 +108,7 @@ export default function MapaUbicacionModal({ punto, onClose }) {
           <MapContainer center={[lat, lng]} zoom={17} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
             <TileLayer url={SATELITE.url} attribution={SATELITE.attribution} maxZoom={19} />
             {conPerimetro && <Polygon positions={perimetro} pathOptions={{ color: "#facc15", weight: 3, fillOpacity: 0.08 }} />}
+            {sitio?.radioMetros > 0 && <Circle center={[sitio.lat, sitio.lng]} radius={sitio.radioMetros} pathOptions={{ color: "#facc15", weight: 3, fillOpacity: 0.12 }} />}
             {sitio && (
               <Marker position={[sitio.lat, sitio.lng]} icon={iconoSitio}>
                 <Tooltip direction="bottom" offset={[0, 8]} permanent>
@@ -104,11 +116,13 @@ export default function MapaUbicacionModal({ punto, onClose }) {
                 </Tooltip>
               </Marker>
             )}
-            <Marker position={[lat, lng]} icon={iconoMarcacion}>
-              <Tooltip direction="top" offset={[0, -8]} permanent>
-                {titulo}
-              </Tooltip>
-            </Marker>
+            {!punto.soloSitio && (
+              <Marker position={[lat, lng]} icon={iconoMarcacion}>
+                <Tooltip direction="top" offset={[0, -8]} permanent>
+                  {titulo}
+                </Tooltip>
+              </Marker>
+            )}
             <Encuadre marca={punto} perimetro={conPerimetro ? perimetro : null} sitio={sitio} />
           </MapContainer>
         </div>

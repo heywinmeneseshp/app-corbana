@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiEdit2, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiEdit2, FiMap, FiPlus, FiTrash2 } from "react-icons/fi";
 import ModalShell from "@/components/ModalShell";
 import { apiFetch } from "@/lib/api";
 import { TIPOS_LUGAR, nombreTipoLugar } from "./ubicaciones";
+import MapaUbicacionModal from "./MapaUbicacionModal";
 
 const VACIO = { nombre: "", tipo: "OFICINA", direccion: "", lat: "", lng: "", radioMetros: 150, estado: true };
 
@@ -14,6 +15,7 @@ export default function LugaresModal({ onClose, onCambio }) {
   const [lugares, setLugares] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [form, setForm] = useState(null); // null | { ...VACIO, uuid? }
+  const [mapa, setMapa] = useState(null); // lugar que se ve en el mapa
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
@@ -157,6 +159,15 @@ export default function LugaresModal({ onClose, onCambio }) {
                     <button
                       type="button"
                       className="btn btn-sm btn-link p-1 text-secondary"
+                      title={l.lat != null && l.lng != null ? "Ver en el mapa con su radio" : "Sin coordenadas"}
+                      disabled={l.lat == null || l.lng == null}
+                      onClick={() => setMapa(l)}
+                    >
+                      <FiMap />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-link p-1 text-secondary"
                       title="Editar"
                       onClick={() => setForm({ ...VACIO, ...l, direccion: l.direccion || "", lat: l.lat ?? "", lng: l.lng ?? "" })}
                     >
@@ -171,6 +182,12 @@ export default function LugaresModal({ onClose, onCambio }) {
             </tbody>
           </table>
         </div>
+      )}
+      {mapa && (
+        <MapaUbicacionModal
+          punto={{ lat: Number(mapa.lat), lng: Number(mapa.lng), titulo: mapa.nombre, detalle: `Radio de tolerancia: ${mapa.radioMetros} m`, lugarUuid: mapa.uuid, soloSitio: true }}
+          onClose={() => setMapa(null)}
+        />
       )}
     </ModalShell>
   );
