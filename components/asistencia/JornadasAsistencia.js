@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { FiAlertTriangle, FiChevronDown, FiChevronRight, FiDownload } from "react-icons/fi";
+import { FiAlertCircle, FiAlertTriangle, FiChevronDown, FiChevronRight, FiDownload } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { EtiquetaLugar, SelectorUbicacion, aParametros } from "./ubicaciones";
 import MapaUbicacionModal from "./MapaUbicacionModal";
@@ -29,7 +29,14 @@ const ESTADO = {
 // Hora de una marcación: si tiene GPS es un botón que abre el mapa con el punto donde se marcó.
 function HoraMapa({ iso, gps, titulo, detalle, ubicacion, onMapa }) {
   if (!iso) return "—";
-  if (!gps) return <span title="Sin ubicación GPS">{hora(iso)}</span>;
+  if (!gps) {
+    return (
+      <span title="Marcación sin GPS">
+        {hora(iso)}
+        <FiAlertCircle className="ms-1" style={{ color: "#6b7280" }} aria-label="Sin GPS" />
+      </span>
+    );
+  }
   return (
     <button
       type="button"

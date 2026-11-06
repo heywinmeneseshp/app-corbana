@@ -32,6 +32,10 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
   const [mensaje, setMensaje] = useState(null);
   const [recientes, setRecientes] = useState([]);
   const [gps, setGps] = useState(() => (typeof navigator !== "undefined" && navigator.geolocation ? "buscando" : "sin"));
+  const [intentosGps, setIntentosGps] = useState(0);
+  const [buscandoGps, setBuscandoGps] = useState(false);
+  const [gpsDenegado, setGpsDenegado] = useState(false);
+  const sinGpsPermitido = gps !== "ok" && !gpsDenegado && intentosGps >= 3; // 3 intentos fallidos: se puede marcar sin GPS
   const ubicacion = useRef(null);
 
   useEffect(() => {
@@ -54,11 +58,35 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
         ubicacion.current = { lat: p.coords.latitude, lng: p.coords.longitude };
         setGps("ok");
       },
-      () => setGps("sin"),
-      { enableHighAccuracy: true, maximumAge: 60000 },
+      (e) => {
+        setGps("sin");
+        if (e.code === e.PERMISSION_DENIED) setGpsDenegado(true);
+      },
+      { enableHighAccuracy: true, maximumAge: 10000 },
     );
     return () => navigator.geolocation.clearWatch(id);
   }, []);
+
+  function reintentarGps() {
+    if (!navigator.geolocation) {
+      setIntentosGps((n) => n + 1);
+      return;
+    }
+    setBuscandoGps(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        ubicacion.current = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setGps("ok");
+        setBuscandoGps(false);
+      },
+      (e) => {
+        if (e.code === e.PERMISSION_DENIED) setGpsDenegado(true);
+        else setIntentosGps((n) => n + 1);
+        setBuscandoGps(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  }
 
   const etiqueta = tipo === "ENTRADA" ? "Entrada" : "Salida";
   const agregarReciente = (texto, ok) => setRecientes((r) => [{ id: `${Date.now()}`, texto, ok }, ...r].slice(0, 8));
@@ -160,7 +188,12 @@ export default function MarcarAsistenciaModal({ onClose, onCambio }) {
         <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={onClose}>
           Cerrar
         </button>
-        <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" disabled={!listo || !sitio || procesando} onClick={marcar}>
+        {gps !== "ok" && !gpsDenegado && !sinGpsPermitido && (
+          <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" disabled={buscandoGps} onClick={reintentarGps}>
+            {buscandoGps ? "Buscando GPS..." : `Reintentar GPS (${intentosGps} de 3)`}
+          </button>
+        )}
+        <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" disabled={!listo || !sitio || procesando || (gps !== "ok" && !sinGpsPermitido)} title={gps !== "ok" && !sinGpsPermitido ? "Activa la ubicación del navegador para marcar" : undefined} onClick={marcar}>
           <FiCamera /> {procesando ? "Verificando..." : `Marcar ${etiqueta.toLowerCase()}`}
         </button>
       </div>

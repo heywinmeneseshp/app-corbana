@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   FiAlertTriangle,
   FiCamera,
+  FiAlertCircle,
   FiMapPin,
   FiShield,
   FiTrash2,
@@ -414,6 +415,9 @@ export default function AsistenciaVista({ modulo = null }) {
                         </td>
                         <td className="text-center text-nowrap">
                           {formatoFechaHora(m.fechaHora)}
+                          {(m.lat == null || m.lng == null) && (
+                            <FiAlertCircle className="ms-1" style={{ color: "#6b7280" }} title="Marcación sin GPS" aria-label="Sin GPS" />
+                          )}
                           {m.fueraDelArea && (
                             <FiAlertTriangle className="ms-1" style={{ color: "#d97706" }} title="Marcó fuera del perímetro de la finca o lugar" aria-label="Fuera del área" />
                           )}
