@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { FiChevronDown, FiChevronRight, FiDownload } from "react-icons/fi";
+import { FiAlertTriangle, FiChevronDown, FiChevronRight, FiDownload } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
 import { EtiquetaLugar, SelectorUbicacion, aParametros } from "./ubicaciones";
 import MapaUbicacionModal from "./MapaUbicacionModal";
@@ -19,7 +19,6 @@ export const duracion = (min) => {
   return h ? `${h} h ${String(m).padStart(2, "0")} min` : `${m} min`;
 };
 
-const etiquetaColaborador = (c) => `${c.nombre} ${c.apellido || ""}${c.documento ? ` · ${c.documento}` : ""}`.replace(/\s+·/, " ·").trim();
 
 const ESTADO = {
   SIN_SALIDA: { texto: "Sin salida", estilo: { backgroundColor: "#fef3c7", color: "#b45309" } },
@@ -45,6 +44,7 @@ function HoraMapa({ iso, gps, titulo, detalle, ubicacion, onMapa }) {
       }}
     >
       {hora(iso)}
+      {gps.fueraDelArea && <FiAlertTriangle className="ms-1" style={{ color: "#d97706" }} title="Marcó fuera del perímetro de la finca o lugar" aria-label="Fuera del área" />}
     </button>
   );
 }
@@ -85,11 +85,10 @@ function Tramos({ tramos, colaborador, onMapa }) {
 
 // Jornadas: por colaborador y día, cuánto estuvo en cada lugar (finca u oficina: ENTRADA → SALIDA) y cuánto tardó entre uno y otro.
 // `modulo`: solo las jornadas de los colaboradores de ese módulo (Sanidad Vegetal → Colaboradores).
-export default function JornadasAsistencia({ fincas, lugares = [], colaboradores, veTodo = true, modulo = null }) {
-  const vacios = () => ({ ubicacion: "", colaboradorUuid: "", desde: restarDias(hoyBogota(), 6), hasta: hoyBogota() });
+export default function JornadasAsistencia({ fincas, lugares = [], veTodo = true, modulo = null }) {
+  const vacios = () => ({ ubicacion: "", search: "", desde: restarDias(hoyBogota(), 6), hasta: hoyBogota() });
   const [filtros, setFiltros] = useState(vacios);
   const [aplicados, setAplicados] = useState(filtros);
-  const [textoColaborador, setTextoColaborador] = useState("");
   const [pagina, setPagina] = useState(1);
   const [datos, setDatos] = useState({ items: [], meta: null });
   const [abiertas, setAbiertas] = useState(() => new Set());
@@ -118,12 +117,19 @@ export default function JornadasAsistencia({ fincas, lugares = [], colaboradores
   }, [aplicados, pagina, qsDe]);
 
   const cambiar = (campo, valor) => setFiltros((f) => ({ ...f, [campo]: valor }));
-  const aplicar = () => {
-    setCargando(true);
-    setPagina(1);
-    setAbiertas(new Set());
-    setAplicados({ ...filtros });
-  };
+  // Filtra a medida que se escribe: espera a que deje de teclear para no consultar por cada letra.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setAplicados((a) => {
+        if (JSON.stringify(a) === JSON.stringify(filtros)) return a;
+        setCargando(true);
+        setPagina(1);
+        setAbiertas(new Set());
+        return { ...filtros };
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [filtros]);
   const alternar = (clave) =>
     setAbiertas((s) => {
       const n = new Set(s);
@@ -207,20 +213,12 @@ export default function JornadasAsistencia({ fincas, lugares = [], colaboradores
             <div className="col-6 col-md-3">
               <label className="form-label small fw-medium">Colaborador</label>
               <input
-                list="colaboradores-jornadas"
+                type="search"
                 className="form-control form-control-sm rounded-3"
                 placeholder="Todos (nombre, apellido o identificación)"
-                value={textoColaborador}
-                onChange={(e) => {
-                  setTextoColaborador(e.target.value);
-                  cambiar("colaboradorUuid", colaboradores.find((c) => etiquetaColaborador(c) === e.target.value)?.uuid || "");
-                }}
+                value={filtros.search}
+                onChange={(e) => cambiar("search", e.target.value)}
               />
-              <datalist id="colaboradores-jornadas">
-                {colaboradores.map((c) => (
-                  <option key={c.uuid} value={etiquetaColaborador(c)} />
-                ))}
-              </datalist>
             </div>
           )}
           <div className="col-6 col-md-2">
@@ -231,12 +229,7 @@ export default function JornadasAsistencia({ fincas, lugares = [], colaboradores
             <label className="form-label small fw-medium">Hasta</label>
             <input type="date" className="form-control form-control-sm rounded-3" value={filtros.hasta} onChange={(e) => cambiar("hasta", e.target.value)} />
           </div>
-          <div className="col-6 col-md-1 d-grid">
-            <button type="button" className="btn btn-brand btn-sm rounded-3" onClick={aplicar}>
-              Aplicar
-            </button>
-          </div>
-          <div className="col-6 col-md-2 d-flex justify-content-end">
+          <div className="col-6 col-md-3 d-flex justify-content-end">
             <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" disabled={exportando || !items.length} onClick={exportar}>
               <FiDownload /> {exportando ? "Generando..." : "Excel"}
             </button>

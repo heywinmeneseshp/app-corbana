@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  FiAlertTriangle,
   FiCamera,
   FiMapPin,
   FiShield,
@@ -27,7 +28,7 @@ import SolicitudesRostroModal from "@/components/asistencia/SolicitudesRostroMod
 // `ubicacion`: "f:<uuid>" (finca) o "l:<uuid>" (oficina u otro lugar).
 const FILTROS_VACIOS = {
   ubicacion: "",
-  colaboradorUuid: "",
+  search: "",
   tipo: "",
   desde: "",
   hasta: "",
@@ -40,11 +41,6 @@ const formatoFechaHora = (iso) =>
     timeZone: "America/Bogota",
   });
 
-const etiquetaColaborador = (c) =>
-  `${c.nombre} ${c.apellido || ""}${c.documento ? ` · ${c.documento}` : ""}`
-    .replace(/\s+·/, " ·")
-    .trim();
-
 // Asistencia: marcaciones de entrada/salida de los colaboradores, verificadas por reconocimiento facial desde la app de
 // campo o desde aquí con la webcam (no se guardan fotos). Misma estética de filtros y tabla que el resto de módulos.
 // `modulo`: "SANIDAD_VEGETAL" en Sanidad Vegetal → Colaboradores (solo la asistencia de esos colaboradores; con su permiso de ver).
@@ -55,8 +51,6 @@ export default function AsistenciaVista({ modulo = null }) {
   const [datos, setDatos] = useState({ items: [], meta: null });
   const [fincas, setFincas] = useState([]);
   const [lugares, setLugares] = useState([]);
-  const [colaboradores, setColaboradores] = useState([]);
-  const [textoColaborador, setTextoColaborador] = useState("");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [modal, setModal] = useState(null); // "marcar" | "probar" | "lugares" | "solicitudes"
@@ -75,10 +69,6 @@ export default function AsistenciaVista({ modulo = null }) {
     apiFetch("/fincas?limit=100")
       .then(({ items }) => setFincas(items))
       .catch(() => {});
-    if (veTodo)
-      apiFetch(`/colaboradores?limit=100${modulo ? `&modulo=${modulo}` : ""}`)
-        .then(({ items }) => setColaboradores(items))
-        .catch(() => {});
     cargarLugares();
     contarSolicitudes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -138,13 +128,19 @@ export default function AsistenciaVista({ modulo = null }) {
 
   const cambiar = (campo, valor) =>
     setFiltros((f) => ({ ...f, [campo]: valor }));
-  const aplicar = () => {
-    setPagina(1);
-    setAplicados(filtros);
-  };
+  // Filtra a medida que se escribe: espera a que deje de teclear para no consultar por cada letra.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setAplicados((a) => {
+        if (JSON.stringify(a) === JSON.stringify(filtros)) return a;
+        setPagina(1);
+        return filtros;
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [filtros]);
   const limpiar = () => {
     setFiltros(FILTROS_VACIOS);
-    setTextoColaborador("");
     setPagina(1);
     setAplicados(FILTROS_VACIOS);
   };
@@ -244,7 +240,6 @@ export default function AsistenciaVista({ modulo = null }) {
         <JornadasAsistencia
           fincas={fincas}
           lugares={lugares}
-          colaboradores={colaboradores}
           veTodo={veTodo}
           modulo={modulo}
         />
@@ -267,25 +262,12 @@ export default function AsistenciaVista({ modulo = null }) {
                     Colaborador
                   </label>
                   <input
-                    list="colaboradores-asistencia"
+                    type="search"
                     className="form-control form-control-sm rounded-3"
                     placeholder="Todos (nombre, apellido o identificación)"
-                    value={textoColaborador}
-                    onChange={(e) => {
-                      setTextoColaborador(e.target.value);
-                      cambiar(
-                        "colaboradorUuid",
-                        colaboradores.find(
-                          (c) => etiquetaColaborador(c) === e.target.value,
-                        )?.uuid || "",
-                      );
-                    }}
+                    value={filtros.search}
+                    onChange={(e) => cambiar("search", e.target.value)}
                   />
-                  <datalist id="colaboradores-asistencia">
-                    {colaboradores.map((c) => (
-                      <option key={c.uuid} value={etiquetaColaborador(c)} />
-                    ))}
-                  </datalist>
                 </div>
               )}
               <div className="col-6 col-md-2">
@@ -318,17 +300,8 @@ export default function AsistenciaVista({ modulo = null }) {
                   onChange={(e) => cambiar("hasta", e.target.value)}
                 />
               </div>
-              <div className="col-6 col-md-1 d-grid">
-                <button
-                  type="button"
-                  className="btn btn-brand btn-sm rounded-3"
-                  onClick={aplicar}
-                >
-                  Aplicar
-                </button>
-              </div>
             </div>
-            {Object.values(aplicados).some(Boolean) && (
+            {Object.values(filtros).some(Boolean) && (
               <div className="mt-2">
                 <button
                   type="button"
@@ -441,6 +414,9 @@ export default function AsistenciaVista({ modulo = null }) {
                         </td>
                         <td className="text-center text-nowrap">
                           {formatoFechaHora(m.fechaHora)}
+                          {m.fueraDelArea && (
+                            <FiAlertTriangle className="ms-1" style={{ color: "#d97706" }} title="Marcó fuera del perímetro de la finca o lugar" aria-label="Fuera del área" />
+                          )}
                         </td>
                         <td
                           className="text-center text-secondary"

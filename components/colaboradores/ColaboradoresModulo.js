@@ -153,9 +153,12 @@ const MODULO_LABEL = { GENERAL: "General", SANIDAD_VEGETAL: "Sanidad Vegetal" };
 
 // Colaboradores (Maestros → Colaboradores y Sanidad Vegetal → Colaboradores): misma tabla. `modulo`: null en Maestros (ve a todos,
 // con columna y filtro de módulo) o "SANIDAD_VEGETAL" (solo los de ese módulo, que es donde se crean).
+const FILTROS_VACIOS = { texto: "", lugar: "", cargo: "", estado: "", rostro: "", usuario: "" };
+
 export default function ColaboradoresModulo({ modulo = null }) {
   const P = PERMISOS[modulo || "GENERAL"];
   const [filtroModulo, setFiltroModulo] = useState("");
+  const [filtros, setFiltros] = useState(FILTROS_VACIOS);
   const [items, setItems] = useState([]);
   const [fincas, setFincas] = useState([]);
   const [labores, setLabores] = useState([]);
@@ -192,10 +195,16 @@ export default function ColaboradoresModulo({ modulo = null }) {
     setError("");
     try {
       const m = modulo || filtroModulo;
-      const { items: rows } = await apiFetch(
-        `/colaboradores?limit=100${m ? `&modulo=${m}` : ""}`,
-      );
-      setItems(rows);
+      // Se traen todos para filtrar en pantalla sin perder a los que pasen de la primera página.
+      const todos = [];
+      for (let page = 1; ; page += 1) {
+        const { items: rows } = await apiFetch(
+          `/colaboradores?limit=100&page=${page}${m ? `&modulo=${m}` : ""}`,
+        );
+        todos.push(...rows);
+        if (rows.length < 100) break;
+      }
+      setItems(todos);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -408,6 +417,27 @@ export default function ColaboradoresModulo({ modulo = null }) {
     }
   }
 
+
+  const filtrar = (campo, valor) => setFiltros((f) => ({ ...f, [campo]: valor }));
+  const hayFiltros = Object.values(filtros).some(Boolean);
+  const lugarDe = (c) => c.finca?.nombre || c.lugar?.nombre || "";
+  const unicos = (lista) => [...new Set(lista.filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+  const opcionesLugar = unicos(items.map(lugarDe));
+  const opcionesCargo = unicos(items.map((c) => c.cargo));
+  const texto = filtros.texto.trim().toLowerCase();
+  const visibles = items.filter((c) => {
+    if (texto && ![c.nombre, c.apellido, c.documento, c.telefono].some((v) => String(v || "").toLowerCase().includes(texto))) {
+      const completo = `${c.nombre} ${c.apellido || ""}`.toLowerCase();
+      if (!completo.includes(texto)) return false;
+    }
+    if (filtros.lugar && (filtros.lugar === "SIN" ? lugarDe(c) : lugarDe(c) !== filtros.lugar)) return false;
+    if (filtros.cargo && (filtros.cargo === "SIN" ? c.cargo : c.cargo !== filtros.cargo)) return false;
+    if (filtros.estado && c.estado !== (filtros.estado === "ACTIVO")) return false;
+    if (filtros.rostro && Boolean(c.rostroEnrolado) !== (filtros.rostro === "SI")) return false;
+    if (filtros.usuario && Boolean(c.usuario) !== (filtros.usuario === "SI")) return false;
+    return true;
+  });
+
   return (
     <div>
       <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
@@ -468,9 +498,78 @@ export default function ColaboradoresModulo({ modulo = null }) {
 
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
+      <div className="card border-0 rounded-2 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div className="card-body p-3">
+          <div className="row g-2 align-items-center">
+            <div className="col-12 col-md-3">
+              <input
+                type="search"
+                className="form-control form-control-sm rounded-3"
+                placeholder="Buscar nombre, identificación o teléfono"
+                value={filtros.texto}
+                onChange={(e) => filtrar("texto", e.target.value)}
+              />
+            </div>
+            <div className="col-6 col-md">
+              <select className="form-select form-select-sm rounded-3" value={filtros.lugar} onChange={(e) => filtrar("lugar", e.target.value)} title="Filtrar por lugar predeterminado">
+                <option value="">Todos los lugares</option>
+                <option value="SIN">Sin lugar</option>
+                {opcionesLugar.map((nombre) => (
+                  <option key={nombre} value={nombre}>
+                    {nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-6 col-md">
+              <select className="form-select form-select-sm rounded-3" value={filtros.cargo} onChange={(e) => filtrar("cargo", e.target.value)} title="Filtrar por cargo">
+                <option value="">Todos los cargos</option>
+                <option value="SIN">Sin cargo</option>
+                {opcionesCargo.map((nombre) => (
+                  <option key={nombre} value={nombre}>
+                    {nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-4 col-md">
+              <select className="form-select form-select-sm rounded-3" value={filtros.estado} onChange={(e) => filtrar("estado", e.target.value)} title="Filtrar por estado">
+                <option value="">Estado</option>
+                <option value="ACTIVO">Activos</option>
+                <option value="INACTIVO">Inactivos</option>
+              </select>
+            </div>
+            <div className="col-4 col-md">
+              <select className="form-select form-select-sm rounded-3" value={filtros.rostro} onChange={(e) => filtrar("rostro", e.target.value)} title="Filtrar por rostro">
+                <option value="">Rostro</option>
+                <option value="SI">Enrolado</option>
+                <option value="NO">Sin enrolar</option>
+              </select>
+            </div>
+            <div className="col-4 col-md">
+              <select className="form-select form-select-sm rounded-3" value={filtros.usuario} onChange={(e) => filtrar("usuario", e.target.value)} title="Filtrar por usuario">
+                <option value="">Usuario</option>
+                <option value="SI">Con usuario</option>
+                <option value="NO">Sin usuario</option>
+              </select>
+            </div>
+            <div className="col-12 col-md-auto d-flex align-items-center justify-content-between gap-2 small text-secondary text-nowrap">
+              <span>
+                {visibles.length} de {items.length}
+              </span>
+              {hayFiltros && (
+                <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => setFiltros(FILTROS_VACIOS)}>
+                  Limpiar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
         <div className="table-responsive">
-          <table className="table table-hover mb-0 align-middle">
+          <table className="table table-sm table-hover mb-0 align-middle" style={{ fontSize: "0.72rem" }}>
             <thead className="table-light">
               <tr>
                 <th>Nombre</th>
@@ -497,20 +596,20 @@ export default function ColaboradoresModulo({ modulo = null }) {
                   </td>
                 </tr>
               )}
-              {!loading && items.length === 0 && (
+              {!loading && visibles.length === 0 && (
                 <tr>
                   <td
                     colSpan={modulo ? 10 : 11}
                     className="text-center text-secondary py-4"
                   >
-                    No hay colaboradores registrados todavía.
+                    {items.length === 0 ? "No hay colaboradores registrados todavía." : "Ningún colaborador coincide con los filtros."}
                   </td>
                 </tr>
               )}
               {!loading &&
-                items.map((c) => (
+                visibles.map((c) => (
                   <tr key={c.uuid}>
-                    <td className="fw-medium">
+                    <td className="fw-medium text-nowrap">
                       {`${c.nombre} ${c.apellido || ""}`.trim()}
                     </td>
                     {!modulo && (
@@ -546,14 +645,22 @@ export default function ColaboradoresModulo({ modulo = null }) {
                         {(c.labores || []).length === 0 && (
                           <span className="text-secondary small">—</span>
                         )}
-                        {(c.labores || []).map((l) => (
+                        {(c.labores || []).slice(0, 2).map((l) => (
                           <span
                             key={l.uuid}
-                            className="badge rounded-pill bg-light text-dark border small"
+                            className="badge rounded-pill bg-light text-dark border fw-normal"
                           >
                             {l.labor.nombre} · {l.calificacion}★
                           </span>
                         ))}
+                        {(c.labores || []).length > 2 && (
+                          <span
+                            className="badge rounded-pill bg-light text-dark border fw-normal"
+                            title={c.labores.slice(2).map((l) => `${l.labor.nombre} · ${l.calificacion}★`).join(", ")}
+                          >
+                            +{c.labores.length - 2}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="small">
@@ -601,12 +708,12 @@ export default function ColaboradoresModulo({ modulo = null }) {
                       )}
                     </td>
                     <td>
-                      <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                      <div className="d-flex justify-content-end gap-1 flex-nowrap">
                         {(hasPermission(P.editar) ||
                           hasPermission(P.crear)) && (
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-success"
+                            className="btn btn-sm btn-link text-secondary p-1 d-inline-flex"
                             title="Registrar o reforzar rostro (asistencia)"
                             onClick={() => setRostroDe(c)}
                           >
@@ -636,7 +743,7 @@ export default function ColaboradoresModulo({ modulo = null }) {
                         {hasPermission(P.editar) && (
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-warning"
+                            className="btn btn-sm btn-link text-secondary p-1 d-inline-flex"
                             title="Editar"
                             onClick={() => openEdit(c)}
                           >
@@ -646,7 +753,7 @@ export default function ColaboradoresModulo({ modulo = null }) {
                         {hasPermission(P.eliminar) && (
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-danger"
+                            className="btn btn-sm btn-link text-danger p-1 d-inline-flex"
                             title="Eliminar"
                             onClick={() => handleDelete(c)}
                           >
