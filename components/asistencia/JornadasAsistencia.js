@@ -93,7 +93,7 @@ function Tramos({ tramos, colaborador, onMapa }) {
 // Jornadas: por colaborador y día, cuánto estuvo en cada lugar (finca u oficina: ENTRADA → SALIDA) y cuánto tardó entre uno y otro.
 // `modulo`: solo las jornadas de los colaboradores de ese módulo (Sanidad Vegetal → Colaboradores).
 export default function JornadasAsistencia({ fincas, lugares = [], veTodo = true, modulo = null }) {
-  const vacios = () => ({ ubicacion: "", search: "", desde: restarDias(hoyBogota(), 6), hasta: hoyBogota() });
+  const vacios = () => ({ ubicacion: "", search: "", alerta: "", desde: restarDias(hoyBogota(), 6), hasta: hoyBogota() });
   const [filtros, setFiltros] = useState(vacios);
   const [aplicados, setAplicados] = useState(filtros);
   const [pagina, setPagina] = useState(1);
@@ -229,6 +229,14 @@ export default function JornadasAsistencia({ fincas, lugares = [], veTodo = true
             </div>
           )}
           <div className="col-6 col-md-2">
+            <label className="form-label small fw-medium">Alerta</label>
+            <select className="form-select form-select-sm rounded-3" value={filtros.alerta} onChange={(e) => cambiar("alerta", e.target.value)}>
+              <option value="">Todas</option>
+              <option value="FUERA">Fuera del área</option>
+              <option value="SIN_GPS">Sin GPS</option>
+            </select>
+          </div>
+          <div className="col-6 col-md-2">
             <label className="form-label small fw-medium">Desde</label>
             <input type="date" className="form-control form-control-sm rounded-3" value={filtros.desde} onChange={(e) => cambiar("desde", e.target.value)} />
           </div>
@@ -236,7 +244,7 @@ export default function JornadasAsistencia({ fincas, lugares = [], veTodo = true
             <label className="form-label small fw-medium">Hasta</label>
             <input type="date" className="form-control form-control-sm rounded-3" value={filtros.hasta} onChange={(e) => cambiar("hasta", e.target.value)} />
           </div>
-          <div className="col-6 col-md-3 d-flex justify-content-end">
+          <div className="col-6 col-md-1 d-flex justify-content-end">
             <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" disabled={exportando || !items.length} onClick={exportar}>
               <FiDownload /> {exportando ? "Generando..." : "Excel"}
             </button>

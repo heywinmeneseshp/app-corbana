@@ -30,6 +30,7 @@ import SolicitudesRostroModal from "@/components/asistencia/SolicitudesRostroMod
 const FILTROS_VACIOS = {
   ubicacion: "",
   search: "",
+  alerta: "",
   tipo: "",
   desde: "",
   hasta: "",
@@ -258,7 +259,7 @@ export default function AsistenciaVista({ modulo = null }) {
                 />
               </div>
               {veTodo && (
-                <div className="col-6 col-md-3">
+                <div className="col-6 col-md-2">
                   <label className="form-label small fw-medium">
                     Colaborador
                   </label>
@@ -281,6 +282,18 @@ export default function AsistenciaVista({ modulo = null }) {
                   <option value="">Todos</option>
                   <option value="ENTRADA">Entrada</option>
                   <option value="SALIDA">Salida</option>
+                </select>
+              </div>
+              <div className="col-6 col-md-2">
+                <label className="form-label small fw-medium">Alerta</label>
+                <select
+                  className="form-select form-select-sm rounded-3"
+                  value={filtros.alerta}
+                  onChange={(e) => cambiar("alerta", e.target.value)}
+                >
+                  <option value="">Todas</option>
+                  <option value="FUERA">Fuera del área</option>
+                  <option value="SIN_GPS">Sin GPS</option>
                 </select>
               </div>
               <div className="col-6 col-md-2">
