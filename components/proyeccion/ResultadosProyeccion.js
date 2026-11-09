@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { FiChevronDown, FiChevronRight, FiColumns } from "react-icons/fi";
+import { FiChevronDown, FiChevronRight, FiColumns, FiDownload } from "react-icons/fi";
 import GraficasFincaModal from "./GraficasFincaModal";
 import PorProducto from "./PorProducto";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -360,6 +360,59 @@ function SelectorColumnas({ fincas, ocultas, onChange }) {
   );
 }
 
+// Descarga la tabla por semana (o mes) y finca tal como se ve: la métrica elegida y sin las fincas ocultas.
+async function exportarPivot({ resultado, metrica, metricaLabel, periodo, ocultas, nombreEscenario }) {
+  const { filas, porSemana, meta } = resultado;
+  const periodos = periodo === "semana" ? porSemana.map((s) => ({ clave: s.semanaCodigo, titulo: s.real ? `${s.semanaCodigo} *` : s.semanaCodigo })) : MESES.map((m, i) => ({ clave: i, titulo: m }));
+  const nombres = new Map();
+  const val = new Map();
+  for (const f of filas) {
+    if (ocultas.has(f.fincaUuid)) continue;
+    nombres.set(f.fincaUuid, f.fincaNombre);
+    const clave = periodo === "semana" ? f.semanaCodigo : mesDe(f.fechaInicio);
+    const k = `${f.fincaUuid}|${clave}`;
+    val.set(k, (val.get(k) || 0) + (f[metrica] || 0));
+  }
+  const fincas = [...nombres.entries()].map(([uuid, nombre]) => ({ uuid, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  const redondeo = (v) => Math.round(v * 100) / 100;
+
+  const ExcelJS = (await import("exceljs")).default;
+  const libro = new ExcelJS.Workbook();
+  const hoja = libro.addWorksheet(periodo === "semana" ? "Por semana y finca" : "Por mes y finca");
+  hoja.addRow([`Proyección ${meta.anio}${nombreEscenario ? ` · ${nombreEscenario}` : ""} · ${metricaLabel}`]).font = { bold: true, size: 12 };
+  if (periodo === "semana") hoja.addRow(["* Semana ya transcurrida: usa el dato real"]).font = { italic: true, color: { argb: "FF6B7280" } };
+  hoja.addRow([]);
+  const encabezado = hoja.addRow([periodo === "semana" ? "Semana" : "Mes", ...fincas.map((f) => f.nombre), "Total"]);
+  encabezado.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  encabezado.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } }));
+  const totalesFinca = new Map();
+  for (const per of periodos) {
+    let total = 0;
+    const valores = fincas.map((f) => {
+      const v = val.get(`${f.uuid}|${per.clave}`) || 0;
+      total += v;
+      totalesFinca.set(f.uuid, (totalesFinca.get(f.uuid) || 0) + v);
+      return redondeo(v);
+    });
+    hoja.addRow([per.titulo, ...valores, redondeo(total)]);
+  }
+  const pie = hoja.addRow(["Total", ...fincas.map((f) => redondeo(totalesFinca.get(f.uuid) || 0)), redondeo([...totalesFinca.values()].reduce((a, b) => a + b, 0))]);
+  pie.font = { bold: true };
+  hoja.getColumn(1).width = 14;
+  for (let i = 2; i <= fincas.length + 2; i += 1) {
+    hoja.getColumn(i).width = 14;
+    hoja.getColumn(i).numFmt = "#,##0.##";
+  }
+  hoja.views = [{ state: "frozen", xSplit: 1, ySplit: encabezado.number }];
+
+  const blob = new Blob([await libro.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `proyeccion-${meta.anio}-${periodo === "semana" ? "semana" : "mes"}-finca-${metrica}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 export default function ResultadosProyeccion({ resultado, productos = [], onProductosChange = () => {}, puedeEditar = false, nombreEscenario = "" }) {
   const METRICAS = metricas(resultado.meta.tasaConversion ?? 18.6);
   const [vista, setVista] = useState("semanal");
@@ -411,6 +464,25 @@ export default function ResultadosProyeccion({ resultado, productos = [], onProd
         {vista !== "comparativo" && (
           <div className="d-flex align-items-center gap-2">
             {(vista === "semanal" || vista === "mensual" || vista === "producto") && <SelectorColumnas fincas={fincasLista} ocultas={ocultas} onChange={setOcultas} />}
+            {(vista === "semanal" || vista === "mensual") && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+                title="Descargar esta tabla en Excel"
+                onClick={() =>
+                  exportarPivot({
+                    resultado,
+                    metrica,
+                    metricaLabel: METRICAS.find((m) => m.id === metrica)?.label || metrica,
+                    periodo: vista === "semanal" ? "semana" : "mes",
+                    ocultas,
+                    nombreEscenario,
+                  })
+                }
+              >
+                <FiDownload /> Excel
+              </button>
+            )}
             <select className="form-select form-select-sm" style={{ width: "auto" }} value={metrica} onChange={(e) => setMetrica(e.target.value)}>
               {METRICAS.map((m) => (
                 <option key={m.id} value={m.id}>
