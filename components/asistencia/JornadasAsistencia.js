@@ -5,6 +5,7 @@ import { FiAlertCircle, FiAlertTriangle, FiChevronDown, FiChevronRight, FiDownlo
 import { apiFetch } from "@/lib/api";
 import { EtiquetaLugar, SelectorUbicacion, aParametros } from "./ubicaciones";
 import MapaUbicacionModal from "./MapaUbicacionModal";
+import { EtiquetaNovedad } from "./NovedadesAsistencia";
 
 const ZONA = "America/Bogota";
 const hoyBogota = () => new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
@@ -290,7 +291,12 @@ export default function JornadasAsistencia({ fincas, lugares = [], veTodo = true
                               En curso
                             </span>
                           )}
-                          {j.incompleta && (
+                          {j.novedad && (
+                            <span className="ms-2">
+                              <EtiquetaNovedad tipo={j.novedad} />
+                            </span>
+                          )}
+                          {j.incompleta && !j.novedad && (
                             <span className="badge rounded-pill ms-2" style={ESTADO.SIN_SALIDA.estilo} title="Falta una entrada o una salida">
                               Incompleta
                             </span>

@@ -31,6 +31,8 @@ function emptyForm() {
     apellido: "",
     documento: "",
     telefono: "",
+    fechaIngreso: "",
+    vacacionesPrevias: "",
     email: "",
     cargo: "",
     ubicacion: "",
@@ -247,6 +249,8 @@ export default function ColaboradoresModulo({ modulo = null }) {
       apellido: colaborador.apellido || "",
       documento: colaborador.documento || "",
       telefono: colaborador.telefono || "",
+      fechaIngreso: colaborador.fechaIngreso ? String(colaborador.fechaIngreso).slice(0, 10) : "",
+      vacacionesPrevias: colaborador.vacacionesPrevias ? String(Number(colaborador.vacacionesPrevias)) : "",
       email: colaborador.email || "",
       cargo: colaborador.cargo || "",
       modulo: colaborador.modulo || "GENERAL",
@@ -275,6 +279,8 @@ export default function ColaboradoresModulo({ modulo = null }) {
         apellido: form.apellido || null,
         documento: form.documento || null,
         telefono: form.telefono || null,
+        fechaIngreso: form.fechaIngreso || null,
+        vacacionesPrevias: form.vacacionesPrevias === "" ? 0 : Number(form.vacacionesPrevias),
         email: form.email || null,
         cargo: form.cargo || null,
         ...(!editing && form.userUuid ? { userUuid: form.userUuid } : {}),
@@ -855,6 +861,29 @@ export default function ColaboradoresModulo({ modulo = null }) {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, telefono: e.target.value }))
                   }
+                />
+              </div>
+              <div className="col-6">
+                <label className="form-label small fw-medium">Fecha de ingreso</label>
+                <input
+                  type="date"
+                  className="form-control rounded-3"
+                  value={form.fechaIngreso}
+                  onChange={(e) => setForm((f) => ({ ...f, fechaIngreso: e.target.value }))}
+                />
+              </div>
+              <div className="col-6">
+                <label className="form-label small fw-medium" title="Días hábiles de vacaciones ya disfrutados antes de registrarlas en el sistema">
+                  Vacaciones ya tomadas (días)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  className="form-control rounded-3"
+                  placeholder="0"
+                  value={form.vacacionesPrevias}
+                  onChange={(e) => setForm((f) => ({ ...f, vacacionesPrevias: e.target.value }))}
                 />
               </div>
               <div className="col-6">
