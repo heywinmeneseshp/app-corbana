@@ -74,10 +74,11 @@ export function useSelecciones({ fincas: fincasExternas } = {}) {
 // Barra de filtros (misma que Reportes > Producción): fincas/grupos, años y el
 // botón verde «Comparar con otra selección» al extremo derecho.
 // `compararTodas`: también el botón «Comparar todas las fincas» (una serie por finca).
-export function BarraSelecciones({ sel, compararTodas = false }) {
+export function BarraSelecciones({ sel, compararTodas = false, children = null }) {
   return (
     <div className="mb-3 d-flex flex-wrap align-items-end gap-2">
       <SelectorCanastas fincas={sel.fincas} anioOpciones={sel.anioOpciones} canastas={sel.canastas} onChange={sel.setCanastas} compararTodas={compararTodas} />
+      {children}
     </div>
   );
 }

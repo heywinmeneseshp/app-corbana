@@ -11,6 +11,7 @@ import BotonConfiguracion from "@/components/BotonConfiguracion";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
 import GraficoSemanalComparable from "@/components/reportes/GraficoSemanalComparable";
 import { BarraSelecciones, useSelecciones } from "@/components/reportes/SeleccionesEvaluacion";
+import SelectorSemanaDias from "@/components/reportes/SelectorSemanaDias";
 import { ClimaGraficos, ConteoGraficos, InfeccionGraficos } from "@/components/reportes/SanidadGraficosTabs";
 
 const LIMITES_SB_SEMANA = [{ valor: 1200, color: "#dc2626" }];
@@ -202,6 +203,9 @@ export default function SanidadGraficosPage() {
   // entera exigía ese permiso; ahora alguien sin permisos de Sanidad Vegetal
   // puede entrar (por Clima) y ese tab ya no existiría para él.
   const [tab, setTab] = useState(() => tabsVisibles[0]?.key);
+  // Clima: periodo (semanal/diario) y rango de días; el filtro de semana vive en la barra de filtros, después de Años.
+  const [climaDiario, setClimaDiario] = useState(false);
+  const [rangoDias, setRangoDias] = useState(null);
 
   // El gate de página ahora es el submenú de navegación
   // (menu.sanidad_vegetal.graficos), no un permiso granular de Sanidad
@@ -229,7 +233,9 @@ export default function SanidadGraficosPage() {
           ))}
         </ul>
 
-        <BarraSelecciones sel={sel} compararTodas />
+        <BarraSelecciones sel={sel} compararTodas>
+          {tab === "Clima" && climaDiario && sel.series[0]?.anio && <SelectorSemanaDias anio={sel.series[0].anio} rango={rangoDias} onChange={setRangoDias} />}
+        </BarraSelecciones>
 
         {tab === "Índice de infección" ? (
           <InfeccionGraficos sel={sel} />
@@ -238,7 +244,7 @@ export default function SanidadGraficosPage() {
         ) : tab === "Suma Bruta" ? (
           <SumaBrutaGraficos sel={sel} />
         ) : tab === "Clima" ? (
-          <ClimaGraficos sel={sel} />
+          <ClimaGraficos sel={sel} diario={climaDiario} onDiarioChange={setClimaDiario} rangoDias={rangoDias} onRangoDias={setRangoDias} />
         ) : null}
       </div>
     </RequirePermission>

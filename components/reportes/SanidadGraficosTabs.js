@@ -93,11 +93,14 @@ export function ConteoGraficos({ sel }) {
 // Temperatura, humedad relativa y precipitación en la MISMA gráfica: las tres
 // tienen escalas muy distintas, así que cada una va en su propio eje (°C a la
 // izquierda; % y mm a la derecha). Solo con una selección.
-function ClimaCombinado({ serie, diario }) {
+function ClimaCombinado({ serie, diario, rangoExterno, onRangoExterno }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [rango, setRango] = useState(null);
+  const [rangoInterno, setRangoInterno] = useState(null);
+  const controlado = onRangoExterno !== undefined;
+  const rango = controlado ? rangoExterno ?? null : rangoInterno;
+  const setRango = controlado ? onRangoExterno : setRangoInterno;
   const claveSerie = JSON.stringify([serie.anio, serie.fincaUuids, diario]);
   const campoX = diario ? "numeroDia" : "numeroSemana";
 
@@ -139,7 +142,8 @@ function ClimaCombinado({ serie, diario }) {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRango(null);
+    if (!controlado) setRangoInterno(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diario]);
   const [mm, temp, hum] = [METRICAS[0], METRICAS[1], METRICAS[2]];
   const fmt = (v, u) => `${Number(v).toLocaleString("es")} ${u}`;
@@ -180,9 +184,12 @@ function ClimaCombinado({ serie, diario }) {
 
 // Pestaña "Clima": precipitación, temperatura y humedad por semana. Con una
 // sola selección, un clic en un punto muestra el aporte de cada finca.
-export function ClimaGraficos({ sel }) {
+export function ClimaGraficos({ sel, diario, onDiarioChange, rangoDias, onRangoDias }) {
   const [combinado, setCombinado] = useState(false);
-  const [diario, setDiario] = useState(false);
+  const setDiario = (v) => {
+    onDiarioChange(v);
+    onRangoDias(null); // días y semanas tienen escalas distintas
+  };
   const [detalle, setDetalle] = useState(null); // { semanaCodigo, fincas, metrica }
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [errorDetalle, setErrorDetalle] = useState("");
@@ -221,7 +228,7 @@ export function ClimaGraficos({ sel }) {
         {combinado && sel.series.length > 1 && <span className="text-secondary">(la vista combinada es para una sola selección; con varias se muestran por separado)</span>}
       </div>
 
-      {vistaCombinada && <ClimaCombinado serie={sel.series[0]} diario={diario} />}
+      {vistaCombinada && <ClimaCombinado serie={sel.series[0]} diario={diario} rangoExterno={rangoDias} onRangoExterno={onRangoDias} />}
 
       {!vistaCombinada && METRICAS.map((m, i) => (
         <GraficoSemanalComparable
@@ -236,6 +243,8 @@ export function ClimaGraficos({ sel }) {
           formato={(v) => `${Number(v).toLocaleString("es")} ${m.unidad}`}
           mensajeVacio="No hay registros de clima para mostrar."
           precipitacion={false}
+          rangoExterno={rangoDias}
+          onRangoExterno={onRangoDias}
           onPuntoClick={diario ? undefined : verDetalle(m)}
           ayuda={!diario && sel.series.length === 1 ? "Haz clic en un punto para ver el detalle por finca de esa semana." : undefined}
         />

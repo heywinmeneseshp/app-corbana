@@ -79,6 +79,8 @@ export default function GraficoSemanalComparable({
   errorExterno = "",
   yDomain,
   ejeAjustado = false, // eje Y del punto más bajo al más alto de lo visible
+  rangoExterno, // rango de días/semanas controlado por el padre (con onRangoExterno); sin él, la gráfica lo maneja sola
+  onRangoExterno,
 }) {
   const [resultadosInt, setResultados] = useState([]); // [{ serie, items }]
   const [loadingInt, setLoading] = useState(true);
@@ -86,7 +88,10 @@ export default function GraficoSemanalComparable({
   const resultados = datos ?? resultadosInt;
   const loading = datos ? cargandoExterno : loadingInt;
   const error = datos ? errorExterno : errorInt;
-  const [rangoSemanas, setRangoSemanas] = useState(null);
+  const [rangoInterno, setRangoInterno] = useState(null);
+  const controlado = onRangoExterno !== undefined;
+  const rangoSemanas = controlado ? rangoExterno ?? null : rangoInterno;
+  const setRangoSemanas = controlado ? onRangoExterno : setRangoInterno;
 
   const claveSeries = JSON.stringify(series.map((s) => [s.key, s.anio, s.fincaUuids]));
 
@@ -121,7 +126,8 @@ export default function GraficoSemanalComparable({
   // Semanas y días tienen escalas distintas: al cambiar de modo se reinicia el rango.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRangoSemanas(null);
+    if (!controlado) setRangoInterno(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diario]);
 
   const lineasEfectivas = useMemo(() => (typeof lineas === "function" ? lineas(resultados.flatMap((r) => r.items)) : lineas), [lineas, resultados]);

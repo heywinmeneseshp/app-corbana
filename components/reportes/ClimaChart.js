@@ -15,10 +15,19 @@ export const INFO_CLIMA = (
       de su rango real de captura cuentan como 0 mm). El valor mostrado es el promedio de esos acumulados
       entre las fincas del filtro (con una sola finca, es el acumulado de esa finca).
     </p>
+    <p className="mb-2 text-secondary">
+      <strong>Origen:</strong> la lluvia sale de <strong>Precipitación Diaria</strong> (lo que registra cada finca); si un día no tiene
+      registro ahí, se usa la lluvia cargada en Clima.
+    </p>
     <p className="fw-semibold mb-1">Temperatura y humedad relativa</p>
-    <p className="mb-0">Promedio simple de los días con dato real de esa semana (no se rellenan con 0).</p>
+    <p className="mb-2">Promedio simple de los días con dato de esa semana (no se rellenan con 0).</p>
+    <p className="mb-0 text-secondary">
+      <strong>Origen:</strong> <strong>Open-Meteo</strong> en todas las fincas, excepto <strong>San Francisco y Pantoja</strong>, que usan su
+      propia <strong>estación meteorológica</strong> (WeatherLink).
+    </p>
   </>
 );
+
 
 // Precipitación (mm), temperatura (°C) y humedad relativa (%) tienen escalas
 // muy distintas — en vez de una sola gráfica con tres líneas ilegibles, se
