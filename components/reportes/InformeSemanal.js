@@ -16,7 +16,7 @@ const pct = (v) => (v === null || v === undefined ? "—" : `${Number(v).toLocal
 
 // Fondo de una fila de indicadores: Total cortados en gris claro con línea verde arriba (fila de total); Cajas y Ratio con verde muy suave.
 const fondoFila = (op) =>
-  op.total ? FILA_TOTAL : op.fuerte ? { backgroundColor: "#f0fdf4" } : undefined;
+  op.total ? FILA_TOTAL : undefined;
 
 // Estilo de las filas de total (Total cortados, total de repicados).
 const FILA_TOTAL = { backgroundColor: "#f1f5f9", color: "#0f172a", borderTop: "2px solid #14532d" };
@@ -550,10 +550,10 @@ export default function InformeSemanal() {
                   </tr>
                   {filasAnioDe(data.anio).map(([etiqueta, valor, fuerte]) => (
                     <tr key={`anio-${etiqueta}`}>
-                      <td className={fuerte ? "fw-semibold" : ""} style={{ backgroundColor: "#f7fdf9" }}>
+                      <td className={fuerte ? "fw-semibold" : ""} style={{ backgroundColor: "#fff" }}>
                         {etiqueta}
                       </td>
-                      <td className={`text-end ${fuerte ? "fw-bold" : "fw-medium"}`} style={{ backgroundColor: "#f7fdf9" }}>
+                      <td className={`text-end ${fuerte ? "fw-bold" : "fw-medium"}`} style={{ backgroundColor: "#fff" }}>
                         {valor}
                       </td>
                     </tr>

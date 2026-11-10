@@ -17,6 +17,7 @@ import { esAdministrador } from "@/lib/laborEstados";
 // estadísticas e informes). Mismo patrón que PrecipitacionDiariaModal.
 export default function AreaLoteModal() {
   const [pendientes, setPendientes] = useState(null); // null = todavía no se sabe
+  const [totalInicial, setTotalInicial] = useState(null); // cuántas fincas había pendientes al empezar
   const [valores, setValores] = useState({}); // `${loteUuid}|total|produccion` -> string
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -35,6 +36,7 @@ export default function AreaLoteModal() {
     apiFetch("/lote-area-config/pendientes")
       .then((data) => {
         setPendientes(data);
+        setTotalInicial((t) => (t === null ? data.length : Math.max(t, data.length)));
         // Precarga el área total con el valor actual del lote (rara vez
         // cambia, alcanza con confirmarla) — sin esto, un campo que el
         // usuario nunca toca queda "sin completar" aunque se vea prellenado.
@@ -56,9 +58,12 @@ export default function AreaLoteModal() {
 
   if (cerrado || !pendientes || pendientes.length === 0) return null;
 
-  const totalCampos = pendientes.reduce((acc, f) => acc + f.lotes.length * 2, 0);
-  const completos = Object.values(valores).filter((v) => v !== undefined && v !== "" && !isNaN(Number(v))).length;
-  const listo = completos === totalCampos;
+  // Una finca a la vez: se confirma la primera y, al guardar, el modal pide la siguiente.
+  const actual = pendientes[0];
+  const camposActual = actual.lotes.flatMap((l) => [`${l.uuid}|total`, `${l.uuid}|produccion`]);
+  const listo = camposActual.every((k) => valores[k] !== undefined && valores[k] !== "" && !isNaN(Number(valores[k])));
+  const totalFincas = (totalInicial ?? pendientes.length);
+  const numeroFinca = Math.max(1, totalFincas - pendientes.length + 1);
 
   const setValor = (loteUuid, campo, valor) => {
     setValores((prev) => ({ ...prev, [`${loteUuid}|${campo}`]: valor }));
@@ -113,7 +118,7 @@ export default function AreaLoteModal() {
     e.preventDefault();
     if (!listo) return;
     // El área bruta siempre es mayor que el área en producción (ni inferior ni igual).
-    for (const f of pendientes) {
+    for (const f of [actual]) {
       for (const l of f.lotes) {
         const bruta = Number(valores[`${l.uuid}|total`]);
         const prod = Number(valores[`${l.uuid}|produccion`]);
@@ -126,7 +131,7 @@ export default function AreaLoteModal() {
     setError("");
     setSaving(true);
     try {
-      const registros = pendientes.flatMap((f) =>
+      const registros = [actual].flatMap((f) =>
         f.lotes.map((l) => ({
           loteUuid: l.uuid,
           areaTotal: Number(valores[`${l.uuid}|total`]),
@@ -172,10 +177,15 @@ export default function AreaLoteModal() {
         </div>
         <p className="text-secondary small mb-4">
           Confirma el área bruta y el área en producción de cada lote para poder continuar.
+          {totalFincas > 1 && (
+            <span className="d-block mt-1 fw-medium">
+              Finca {numeroFinca} de {totalFincas}: al guardar esta, te pedimos la siguiente.
+            </span>
+          )}
         </p>
 
         <form onSubmit={handleSubmit}>
-          {pendientes.map((f) => (
+          {[actual].map((f) => (
             <div key={f.fincaUuid} className="mb-4">
               <h3 className="h6 fw-semibold mb-2">
                 {f.fincaNombre} <span className="text-secondary fw-normal small">(desde {f.fechaObjetivo})</span>
@@ -290,7 +300,7 @@ export default function AreaLoteModal() {
           )}
 
           <button type="submit" className="btn btn-brand btn-sm w-100 rounded-3" disabled={!listo || saving}>
-            {saving ? "Guardando..." : "Guardar y continuar"}
+            {saving ? "Guardando..." : pendientes.length > 1 ? "Guardar y pasar a la siguiente finca" : "Guardar y continuar"}
           </button>
         </form>
       </div>
