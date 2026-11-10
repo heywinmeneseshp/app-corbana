@@ -87,6 +87,8 @@ export default function MetricaAnualChart({
   rankingMetricKey,
   rankingUnit,
   rankingMostrarParticipacion = false,
+  // Columna extra «por hectárea del año» (ej. cajasPorHaAnio): total del año ÷ promedio de hectáreas en producción.
+  rankingPorHectareaKey = null,
   rankingSemanalKey,
 }) {
   // Rango visible del eje X (barra inferior de la gráfica): null = todo el año.
@@ -268,13 +270,14 @@ export default function MetricaAnualChart({
       nombre: (f) => f.nombre,
       metrica: (f) => f[rankingMetricKey],
       participacion: (f) => (totalRanking > 0 ? f[rankingMetricKey] / totalRanking : null),
+      porHectarea: (f) => (rankingPorHectareaKey ? f[rankingPorHectareaKey] ?? null : null),
       actual: (f) => variacionSemanalPorFinca.get(f.fincaId)?.actual ?? null,
       anterior: (f) => variacionSemanalPorFinca.get(f.fincaId)?.anterior ?? null,
       variacion: (f) => variacionSemanalPorFinca.get(f.fincaId)?.variacionPct ?? null,
     };
     const getValue = accesores[sortRanking.field] || accesores.metrica;
     return ordenarFilas(rankingSinOrdenar, sortRanking, getValue);
-  }, [rankingSinOrdenar, sortRanking, totalRanking, variacionSemanalPorFinca, rankingMetricKey]);
+  }, [rankingSinOrdenar, sortRanking, totalRanking, variacionSemanalPorFinca, rankingMetricKey, rankingPorHectareaKey]);
 
   // --- Modo comparación: mezcla las series por numeroSemana ---
   const { chartDataComparacion, semanaCodigoPorNumero } = useMemo(() => {
@@ -498,6 +501,7 @@ export default function MetricaAnualChart({
                     <SortableTh label="Finca" field="nombre" sort={sortRanking} onSort={handleSortRanking} align="start" />
                     <SortableTh label={`${titulo} (${seriesList[0]?.anio})`} field="metrica" sort={sortRanking} onSort={handleSortRanking} />
                     {rankingMostrarParticipacion && <SortableTh label="Participación" field="participacion" sort={sortRanking} onSort={handleSortRanking} />}
+                    {rankingPorHectareaKey && <SortableTh label={`${titulo} por ha (${seriesList[0]?.anio})`} field="porHectarea" sort={sortRanking} onSort={handleSortRanking} />}
                     {data.rankingSemanal && (
                       <>
                         <SortableTh label="Semana actual" field="actual" sort={sortRanking} onSort={handleSortRanking} />
@@ -524,6 +528,13 @@ export default function MetricaAnualChart({
                         {rankingMostrarParticipacion && (
                           <td className="text-end text-secondary">
                             {totalRanking > 0 ? `${((f[rankingMetricKey] / totalRanking) * 100).toFixed(1)}%` : "—"}
+                          </td>
+                        )}
+                        {rankingPorHectareaKey && (
+                          <td className="text-end fw-medium" title="Total del año ÷ promedio de hectáreas en producción">
+                            {f[rankingPorHectareaKey] === null || f[rankingPorHectareaKey] === undefined
+                              ? "—"
+                              : Number(f[rankingPorHectareaKey]).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
                           </td>
                         )}
                         {data.rankingSemanal && (

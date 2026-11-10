@@ -8,6 +8,14 @@ import { FiCheck, FiMail, FiCheckCircle, FiDownload } from "react-icons/fi";
 import ModalShell from "@/components/ModalShell";
 import { descargarDetalleAspersionPdf } from "@/lib/aspersionDetallePdf";
 
+
+// El ACONDICIONADOR se muestra siempre en kilogramos aunque se haya guardado en gramos.
+const enKg = (c) => {
+  const simbolo = (c.unidad?.simbolo || "").trim();
+  const factor = /^acondicionador$/i.test((c.articulo?.nombre || "").trim()) ? { g: 0.001, gr: 0.001, mg: 0.000001 }[simbolo.toLowerCase()] : null;
+  return factor ? { cantidad: Number(c.cantidad) * factor, simbolo: "Kg" } : { cantidad: c.cantidad, simbolo: c.unidad?.simbolo || "" };
+};
+
 const MEDIO_LABEL = { AVION: "Avión", DRON: "Dron" };
 const TIPO_LABEL = {
   SIGATOKA_NEGRA: "Sigatoka Negra",
@@ -63,6 +71,8 @@ export default function DetalleAspersionModal({
   onRevisar,
   revisando = false,
   onReprogramar,
+  onRevertir,
+  revirtiendo = false,
 }) {
   const hectareas = Number(a?.hectareas) || 0;
   const revisada = Boolean(a?.revisadoPor || a?.revisadoPorId);
@@ -235,12 +245,12 @@ export default function DetalleAspersionModal({
                       </td>
                       <td className="text-secondary text-end">
                         {c.cantidad != null && hectareas > 0
-                          ? `${num(Number(c.cantidad) / hectareas, 2)} ${c.unidad?.simbolo || ""}/ha`
+                          ? `${num(Number(enKg(c).cantidad) / hectareas, 3)} ${enKg(c).simbolo}/ha`
                           : "—"}
                       </td>
                       <td className="text-end fw-semibold">
                         {c.cantidad != null
-                          ? `${num(c.cantidad, /^agua$/i.test((c.articulo?.nombre || "").trim()) ? 0 : 4)} ${c.unidad?.simbolo || ""}`
+                          ? `${num(enKg(c).cantidad, /^agua$/i.test((c.articulo?.nombre || "").trim()) ? 0 : 4)} ${enKg(c).simbolo}`
                           : "—"}
                       </td>
                     </tr>
@@ -346,6 +356,17 @@ export default function DetalleAspersionModal({
                     : a.correoEnviadoEn
                       ? "Reenviar aviso"
                       : "Enviar aviso"}
+                </button>
+              )}
+              {a.estado === "EJECUTADA" && onRevertir && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-danger rounded-3"
+                  disabled={revirtiendo}
+                  onClick={onRevertir}
+                  title="Devuelve los insumos al inventario, anula el comprobante en borrador y la deja lista para ejecutar otra vez"
+                >
+                  {revirtiendo ? "Revirtiendo..." : "Revertir ejecución"}
                 </button>
               )}
               {a.estado === "PROGRAMADA" && onReprogramar && (

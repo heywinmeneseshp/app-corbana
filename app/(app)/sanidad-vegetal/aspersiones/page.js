@@ -200,6 +200,8 @@ export default function AspersionesPage() {
   const [textosDosisEditada, setTextosDosisEditada] = useState({});
   // La columna "Cambiar dosis" solo se ve si se habilita con el botón sobre la tabla.
   const [mostrarCambiarDosis, setMostrarCambiarDosis] = useState(false);
+  // Cambiar dosis: la dosis escrita se multiplica por el % de aumento (dosis × hectáreas × aumento).
+  const [dosisConAumento, setDosisConAumento] = useState(true);
   // Insumos ADICIONALES: artículos que se agregan a esta aspersión y no están en la receta de la mezcla. [{ key, articuloUuid, cantidad, unidadUuid }]
   const [insumosAdicionales, setInsumosAdicionales] = useState([]);
   // Programación parcial: [{ key, fecha, hectareas }] por día; null = total (por defecto). La primera fila usa la fecha de la aspersión.
@@ -1619,6 +1621,34 @@ export default function AspersionesPage() {
   // usuario mire de nuevo la tabla).
   function actualizarFila(actualizada) {
     setItems((prev) => prev.map((it) => (it.uuid === actualizada.uuid ? actualizada : it)));
+  }
+
+  // Revertir ejecución (permiso propio): devuelve los insumos, anula el comprobante en borrador y la deja programada otra vez.
+  const [revirtiendoUuid, setRevirtiendoUuid] = useState(null);
+  async function revertirEjecucion(fila) {
+    const motivo = window.prompt(
+      `Revertir la ejecución de ${fila.numero}: los insumos vuelven al inventario y el comprobante en borrador se anula.\n\nEscribe el motivo:`,
+    );
+    if (motivo === null) return;
+    if (motivo.trim().length < 3) {
+      alert("Escribe el motivo de la reversión.");
+      return;
+    }
+    setRevirtiendoUuid(fila.uuid);
+    try {
+      const r = await apiFetch(`/aspersiones/${fila.uuid}/revertir-ejecucion`, { method: "POST", body: JSON.stringify({ motivo: motivo.trim() }) });
+      setDetalleModal(null);
+      await load();
+      recargarCalendario();
+      alert(
+        `Ejecución de ${fila.numero} revertida: ${r.devoluciones} insumo(s) devueltos al inventario` +
+          (r.comprobanteAnulado ? ` y comprobante ${r.comprobanteAnulado} anulado.` : "."),
+      );
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setRevirtiendoUuid(null);
+    }
   }
 
   // Reprogramar: cambia la fecha y anuncia el cambio por correo (a la finca y la pista solo si el aviso ya se había enviado).
@@ -3150,12 +3180,11 @@ export default function AspersionesPage() {
                     galonAgua && unidadRecetaUuid && convertirCantidad(grafoUnidades, unidadRecetaUuid, galonAgua.uuid, 1) !== null
                       ? galonAgua.uuid
                       : null;
-                  // El ACONDICIONADOR se dosifica en GRAMOS por litro de agua: por defecto su cantidad se muestra (y se digita) en gramos, no en
-                  // la unidad propia del artículo (Kg), para que "1000" sea 1000 g y no 1000 Kg.
-                  const gramoFila = c === componenteRegulador ? unidadesPeso.find((u) => u.nombre === "Gramo") : null;
+                  // El ACONDICIONADOR se dosifica en gramos por litro de agua, pero su cantidad se muestra siempre en KILOGRAMOS.
+                  const kiloFila = c === componenteRegulador ? unidadesPeso.find((u) => u.nombre === "Kilogramo") : null;
                   const gramosEnFila =
-                    gramoFila && unidadRecetaUuid && (unidadRecetaUuid === gramoFila.uuid || convertirCantidad(grafoUnidades, unidadRecetaUuid, gramoFila.uuid, 1) !== null)
-                      ? gramoFila.uuid
+                    kiloFila && unidadRecetaUuid && (unidadRecetaUuid === kiloFila.uuid || convertirCantidad(grafoUnidades, unidadRecetaUuid, kiloFila.uuid, 1) !== null)
+                      ? kiloFila.uuid
                       : null;
                   const unidadFilaUuid = unidadesPorFila[articuloUuid] || aguaEnGalones || gramosEnFila || unidadPropiaDe(c) || unidadRecetaUuid;
                   // Convierte a la unidad elegida para esta fila SIN redondear —
@@ -3275,7 +3304,7 @@ export default function AspersionesPage() {
                   setTextosDosisEditada((t) => ({ ...t, [uuid]: escrito }));
                   const dosisNueva = Number(escrito.replace(",", "."));
                   if (Number.isNaN(dosisNueva) || !(hectareasNum > 0)) return;
-                  const enUnidadDosis = dosisNueva * hectareasNum;
+                  const enUnidadDosis = dosisNueva * hectareasNum * (dosisConAumento ? 1 + (porcentajeAumentoEfectivo || 0) / 100 : 1);
                   const nativo =
                     uDosis && uRec && uDosis !== uRec
                       ? convertirCantidad(grafoUnidades, uDosis, uRec, enUnidadDosis) ?? enUnidadDosis
@@ -3368,6 +3397,23 @@ export default function AspersionesPage() {
                         >
                           Cambiar dosis
                         </button>
+                        {mostrarCambiarDosis && (
+                          <div className="form-check form-check-inline small mb-0 ms-1" title="La dosis que escribas se multiplica por el % de aumento">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id="dosis-con-aumento"
+                              checked={dosisConAumento}
+                              onChange={(e) => {
+                                setDosisConAumento(e.target.checked);
+                                setTextosDosisEditada({});
+                              }}
+                            />
+                            <label className="form-check-label" htmlFor="dosis-con-aumento">
+                              Incluir aumento ({Number(porcentajeAumentoEfectivo || 0).toFixed(2)}%)
+                            </label>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="table-responsive rounded-3 overflow-hidden">
@@ -3688,7 +3734,10 @@ export default function AspersionesPage() {
                                       inputMode="decimal"
                                       className="form-control rounded-start-3 px-1"
                                       title="Escribe la dosis por hectárea que quieres aplicar; la cantidad necesaria se recalcula (dosis x hectáreas)"
-                                      value={textosDosisEditada[articuloUuid] ?? Number(dosisAplicada.toFixed(3))}
+                                      value={
+                                        textosDosisEditada[articuloUuid] ??
+                                        Number((dosisAplicada / (dosisConAumento ? 1 + (porcentajeAumentoEfectivo || 0) / 100 : 1)).toFixed(3))
+                                      }
                                       onChange={(e) =>
                                         cambiarDosis({ articuloUuid, c, unidadRecetaUuid, unidadDosisMaximaUuid }, e.target.value)
                                       }
@@ -4214,6 +4263,41 @@ export default function AspersionesPage() {
           />
         )}
 
+
+        {detalleModal && (
+          <DetalleAspersionModal
+            aspersion={detalleModal.aspersion}
+            cargando={detalleModal.cargando}
+            onClose={() => setDetalleModal(null)}
+            onReprogramar={
+              hasPermission("sanidad_vegetal.aspersiones.editar")
+                ? () => setReprogramar({ aspersion: detalleModal.fila, fecha: String(detalleModal.fila.fecha).slice(0, 10), motivo: "" })
+                : undefined
+            }
+            onRevertir={hasPermission("sanidad_vegetal.aspersiones.revertir") ? () => revertirEjecucion(detalleModal.fila) : undefined}
+            revirtiendo={revirtiendoUuid === detalleModal.fila.uuid}
+            onEnviar={
+              hasPermission("sanidad_vegetal.aspersiones.enviar_correo")
+                ? async () => {
+                    const fila = detalleModal.fila;
+                    if (await handleEnviarCorreo(fila)) await refrescarDetalle(fila);
+                  }
+                : undefined
+            }
+            enviando={enviandoCorreoUuid === detalleModal.fila.uuid}
+            onRevisar={hasPermission("sanidad_vegetal.aspersiones.revisar") ? (quitar) => handleRevisar(detalleModal.fila, quitar) : undefined}
+            revisando={revisandoUuid === detalleModal.fila.uuid}
+            onEjecutar={
+              hasPermission("sanidad_vegetal.aspersiones.ejecutar")
+                ? () => {
+                    const fila = detalleModal.fila;
+                    setDetalleModal(null);
+                    abrirEjecutar(fila);
+                  }
+                : undefined
+            }
+          />
+        )}
         {reprogramar && (
           <ModalShell title={`Reprogramar ${reprogramar.aspersion.numero}`} onClose={() => setReprogramar(null)} height="auto">
             <form onSubmit={confirmarReprogramar}>
@@ -4248,39 +4332,6 @@ export default function AspersionesPage() {
               </div>
             </form>
           </ModalShell>
-        )}
-
-        {detalleModal && (
-          <DetalleAspersionModal
-            aspersion={detalleModal.aspersion}
-            cargando={detalleModal.cargando}
-            onClose={() => setDetalleModal(null)}
-            onReprogramar={
-              hasPermission("sanidad_vegetal.aspersiones.editar")
-                ? () => setReprogramar({ aspersion: detalleModal.fila, fecha: String(detalleModal.fila.fecha).slice(0, 10), motivo: "" })
-                : undefined
-            }
-            onEnviar={
-              hasPermission("sanidad_vegetal.aspersiones.enviar_correo")
-                ? async () => {
-                    const fila = detalleModal.fila;
-                    if (await handleEnviarCorreo(fila)) await refrescarDetalle(fila);
-                  }
-                : undefined
-            }
-            enviando={enviandoCorreoUuid === detalleModal.fila.uuid}
-            onRevisar={hasPermission("sanidad_vegetal.aspersiones.revisar") ? (quitar) => handleRevisar(detalleModal.fila, quitar) : undefined}
-            revisando={revisandoUuid === detalleModal.fila.uuid}
-            onEjecutar={
-              hasPermission("sanidad_vegetal.aspersiones.ejecutar")
-                ? () => {
-                    const fila = detalleModal.fila;
-                    setDetalleModal(null);
-                    abrirEjecutar(fila);
-                  }
-                : undefined
-            }
-          />
         )}
 
         {ejecutarModal && (

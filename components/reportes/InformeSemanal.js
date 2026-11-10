@@ -96,6 +96,19 @@ function Tabla({ columnas, titulo = null, subtitulo = null, llenar = false, chil
   );
 }
 
+// Indicadores del año (semana 1 a la elegida): totales y por hectárea sobre el promedio de hectáreas en producción.
+function filasAnioDe(anio) {
+  if (!anio) return [];
+  return [
+    ["Hectáreas en producción (promedio)", n2(anio.hectareasPromedioAnio)],
+    ["Embolses acumulados", n0(anio.embolsesAcumulados)],
+    ["Embolses por hectárea", n0(anio.embolsesPorHectareaAnio)],
+    ["Cajas acumuladas (18,6)", n0(anio.cajasAcumuladas)],
+    ["Cajas por hectárea", n0(anio.cajasPorHectareaAnio)],
+    ["Ratio anual", anio.ratioAnual === null || anio.ratioAnual === undefined ? "—" : Number(anio.ratioAnual).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })],
+  ];
+}
+
 function filasIndicadoresDe(ind) {
   return [
     ["Racimos procesados", n0(ind.racimosProcesados)],
@@ -106,10 +119,6 @@ function filasIndicadoresDe(ind) {
     ["Cajas producidas 20 kg", n0(ind.cajas), true],
     ["Cajas por hectárea", n2(ind.cajasPorHectarea)],
     ["Ratio", ind.ratio === null ? "—" : Number(ind.ratio).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true],
-    ["Peso neto racimo", "Sin dato"],
-    ["Peso vástago", "Sin dato"],
-    ["Peso bruto racimo", "Sin dato"],
-    ["Merma", "Sin dato"],
   ];
 }
 
@@ -133,6 +142,13 @@ function agregarHojaInforme(wb, data, movimientos, nombreHoja = null) {
   ws.addRow([]);
   cabecera(["Indicador", "Valor"]);
   filasIndicadoresDe(data.indicadores).forEach(([l, v]) => ws.addRow([l, v]));
+  if (data.anio) {
+    const sep = ws.addRow([`Indicadores anuales ${data.semana.anio}`]);
+    sep.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sep.getCell(1).fill = verde;
+    sep.getCell(2).fill = verde;
+    filasAnioDe(data.anio).forEach(([l, v]) => ws.addRow([l, v]));
+  }
   ws.addRow([]);
   titulo(`Repicados ${data.semana.codigo}`);
   cabecera(["Cinta", "Edad", "Motivo", "Cantidad"]);
@@ -525,14 +541,25 @@ export default function InformeSemanal() {
                   </td>
                 </tr>
               ))}
-              {["Peso neto racimo", "Peso vástago", "Peso bruto racimo", "Merma"].map((l) => (
-                <tr key={l}>
-                  <td className="text-secondary">{l}</td>
-                  <td className="text-end text-secondary fst-italic">
-                    Sin dato en el sistema
-                  </td>
-                </tr>
-              ))}
+              {data.anio && (
+                <>
+                  <tr>
+                    <td colSpan={2} className="fw-semibold py-2 text-center" style={{ backgroundColor: "#14532d", color: "#fff" }}>
+                      Indicadores anuales {data.semana.anio}
+                    </td>
+                  </tr>
+                  {filasAnioDe(data.anio).map(([etiqueta, valor, fuerte]) => (
+                    <tr key={`anio-${etiqueta}`}>
+                      <td className={fuerte ? "fw-semibold" : ""} style={{ backgroundColor: "#f7fdf9" }}>
+                        {etiqueta}
+                      </td>
+                      <td className={`text-end ${fuerte ? "fw-bold" : "fw-medium"}`} style={{ backgroundColor: "#f7fdf9" }}>
+                        {valor}
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
             </Tabla>
             </div>
 

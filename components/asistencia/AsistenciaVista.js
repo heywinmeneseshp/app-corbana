@@ -17,6 +17,7 @@ import { esAdministrador } from "@/lib/laborEstados";
 import AlertasConfigModal from "@/components/asistencia/AlertasConfigModal";
 import NovedadesAsistencia from "@/components/asistencia/NovedadesAsistencia";
 import HorasSemanales from "@/components/asistencia/HorasSemanales";
+import RegistrarColaboradorModal from "@/components/asistencia/RegistrarColaboradorModal";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
 import MarcarAsistenciaModal from "@/components/asistencia/MarcarAsistenciaModal";
 import ProbarRostroModal from "@/components/asistencia/ProbarRostroModal";
@@ -68,7 +69,10 @@ export default function AsistenciaVista({ modulo = null }) {
     Boolean(modulo && hasPermission("sanidad_vegetal.colaboradores.ver"));
   const puedeMarcar =
     hasPermission("asistencia.marcar") ||
-    hasPermission("asistencia.marcar_cuadrilla");
+    hasPermission("asistencia.marcar_cuadrilla") ||
+    hasPermission("asistencia.registrar");
+  // «Registrar asistencia» sin «Ver asistencia» ni marcar lo propio: solo la pantalla para marcar y para colaboradores nuevos.
+  const soloRegistra = hasPermission("asistencia.registrar") && !veTodo && !hasPermission("asistencia.marcar") && !hasPermission("asistencia.marcar_cuadrilla");
   const puedeAprobar = hasPermission("asistencia.aprobar_rostro");
   const [tab, setTab] = useState("marcaciones"); // "marcaciones" | "jornadas"
 
@@ -95,6 +99,7 @@ export default function AsistenciaVista({ modulo = null }) {
   }
 
   const cargar = useCallback(async () => {
+    if (soloRegistra) return; // solo marca: no consulta marcaciones
     setCargando(true);
     setError("");
     try {
@@ -112,7 +117,7 @@ export default function AsistenciaVista({ modulo = null }) {
     } finally {
       setCargando(false);
     }
-  }, [aplicados, pagina, modulo]);
+  }, [aplicados, pagina, modulo, soloRegistra]);
 
   useEffect(() => {
     cargar();
@@ -217,6 +222,16 @@ export default function AsistenciaVista({ modulo = null }) {
               <FiUserCheck /> Probar rostro
             </button>
           )}
+          {hasPermission("asistencia.registrar") && (
+            <>
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setModal("nuevoColaborador")}>
+                <FiUserCheck /> Nuevo colaborador
+              </button>
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setModal("rostroNuevo")}>
+                <FiCamera /> Registrar rostro
+              </button>
+            </>
+          )}
           {puedeMarcar && (
             <button
               type="button"
@@ -229,10 +244,17 @@ export default function AsistenciaVista({ modulo = null }) {
         </div>
       </div>
 
-      {puedeMarcar && !modulo && (
+      {puedeMarcar && !modulo && !soloRegistra && (
         <MiRegistro fincas={fincas} lugares={lugares} />
       )}
 
+      {soloRegistra ? (
+        <div className="card border-0 shadow-sm rounded-4 p-4 text-center text-secondary small">
+          Usa <strong>Marcar asistencia</strong> para registrar entradas y salidas. Para un colaborador que llega por primera vez, usa{" "}
+          <strong>Nuevo colaborador</strong>; si ya existe pero no tiene rostro, <strong>Registrar rostro</strong>.
+        </div>
+      ) : (
+      <>
       <ul className="nav nav-tabs mb-3">
         <li className="nav-item">
           <button
@@ -544,6 +566,12 @@ export default function AsistenciaVista({ modulo = null }) {
         </>
       )}
 
+      </>
+      )}
+
+      {(modal === "nuevoColaborador" || modal === "rostroNuevo") && (
+        <RegistrarColaboradorModal modo={modal === "nuevoColaborador" ? "nuevo" : "rostro"} onClose={() => setModal(null)} />
+      )}
       {modal === "marcar" && (
         <MarcarAsistenciaModal
           onClose={() => setModal(null)}

@@ -18,6 +18,7 @@ export default function CajasProducidasPage() {
       rankingMetricKey="cajas"
       rankingMostrarParticipacion
       rankingSemanalKey="cajas"
+      rankingPorHectareaKey="cajasPorHaAnio"
     />
   );
 }

@@ -56,14 +56,19 @@ export default function HorasSemanales({ fincas, lugares = [], veTodo = true, mo
       { header: "Cargo", key: "cargo", width: 22 },
       ...semanas.map((s) => ({ header: `${s.codigo} (h)`, key: s.codigo, width: 12 })),
       { header: "Total (h)", key: "total", width: 12 },
+      ...semanas.map((s) => ({ header: `Tránsito ${s.codigo} (h)`, key: `t_${s.codigo}`, width: 16 })),
+      { header: "Tránsito total (h)", key: "transito", width: 16 },
       { header: "Días trabajados", key: "dias", width: 14 },
       { header: "Jornadas incompletas", key: "incompletas", width: 18 },
       { header: "Días con novedad", key: "novedades", width: 16 },
     ];
     hoja.getRow(1).font = { bold: true };
     for (const x of items) {
-      const fila = { nombre: x.colaborador.nombre, documento: x.colaborador.documento || "", cargo: x.colaborador.cargo || "", total: horasDecimal(x.minutos), dias: x.dias, incompletas: x.incompletas, novedades: x.novedades };
-      for (const s of semanas) fila[s.codigo] = horasDecimal(x.semanas[s.codigo] || 0);
+      const fila = { nombre: x.colaborador.nombre, documento: x.colaborador.documento || "", cargo: x.colaborador.cargo || "", total: horasDecimal(x.minutos), transito: horasDecimal(x.transito || 0), dias: x.dias, incompletas: x.incompletas, novedades: x.novedades };
+      for (const s of semanas) {
+        fila[s.codigo] = horasDecimal(x.semanas[s.codigo] || 0);
+        fila[`t_${s.codigo}`] = horasDecimal(x.transitoSemanas?.[s.codigo] || 0);
+      }
       hoja.addRow(fila);
     }
     const blob = new Blob([await libro.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -103,7 +108,7 @@ export default function HorasSemanales({ fincas, lugares = [], veTodo = true, mo
               </button>
             </div>
           </div>
-          <div className="small text-secondary mt-2">Horas en formato h:mm, por semana del calendario. Una jornada incompleta (sin entrada o sin salida) no suma horas. Rango máximo: 62 días.</div>
+          <div className="small text-secondary mt-2">Horas en formato h:mm, por semana del calendario. En morado, el tránsito entre lugares (no se suma al total). Una jornada incompleta (sin entrada o sin salida) no suma horas. Rango máximo: 62 días.</div>
         </div>
       </div>
 
@@ -122,6 +127,7 @@ export default function HorasSemanales({ fincas, lugares = [], veTodo = true, mo
                   </th>
                 ))}
                 <th className="fw-medium text-center">Total</th>
+                <th className="fw-medium text-center" title="Tiempo entre la salida de un lugar y la entrada al siguiente">Tránsito</th>
                 <th className="fw-medium text-center">Días</th>
                 <th className="fw-medium text-center" title="Jornadas sin entrada o sin salida: no suman horas">Incompletas</th>
                 <th className="fw-medium text-center" title="Días con vacaciones, incapacidad, permiso...">Novedades</th>
@@ -130,13 +136,13 @@ export default function HorasSemanales({ fincas, lugares = [], veTodo = true, mo
             <tbody>
               {cargando ? (
                 <tr>
-                  <td colSpan={semanas.length + 6} className="text-center text-secondary py-4">
+                  <td colSpan={semanas.length + 7} className="text-center text-secondary py-4">
                     Cargando...
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={semanas.length + 6} className="text-center text-secondary py-4">
+                  <td colSpan={semanas.length + 7} className="text-center text-secondary py-4">
                     No hay jornadas en este rango.
                   </td>
                 </tr>
@@ -149,9 +155,17 @@ export default function HorasSemanales({ fincas, lugares = [], veTodo = true, mo
                       {semanas.map((s) => (
                         <td key={s.codigo} className="text-center">
                           {horas(x.semanas[s.codigo])}
+                          {x.transitoSemanas?.[s.codigo] > 0 && (
+                            <div style={{ color: "#7c3aed", fontSize: "0.66rem" }} title="Tránsito">
+                              +{horas(x.transitoSemanas[s.codigo])}
+                            </div>
+                          )}
                         </td>
                       ))}
                       <td className="text-center fw-semibold">{horas(x.minutos)}</td>
+                      <td className="text-center" style={{ color: x.transito ? "#7c3aed" : undefined }}>
+                        {horas(x.transito)}
+                      </td>
                       <td className="text-center">{x.dias}</td>
                       <td className="text-center" style={{ color: x.incompletas ? "#b45309" : undefined }}>
                         {x.incompletas || "—"}
@@ -167,6 +181,9 @@ export default function HorasSemanales({ fincas, lugares = [], veTodo = true, mo
                       </td>
                     ))}
                     <td className="text-center">{horas(items.reduce((s, x) => s + x.minutos, 0))}</td>
+                    <td className="text-center" style={{ color: "#7c3aed" }}>
+                      {horas(items.reduce((s, x) => s + (x.transito || 0), 0))}
+                    </td>
                     <td colSpan={3} />
                   </tr>
                 </>
