@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { dominioDeVariable } from "@/lib/dominioY";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { FiX, FiPlus, FiCloudRain, FiUsers, FiSliders } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
@@ -542,7 +543,7 @@ export default function ClimaCompareModal({
                       height={ticksXAxis ? 50 : 30}
                       tickFormatter={(v) => (granularidad === "dia" ? fechaDeDiaDelAnio(v, anioBase) : v)}
                     />
-                    <YAxis tick={{ fontSize: 12 }} width={50} unit={metricaUnidad || ""} />
+                    <YAxis tick={{ fontSize: 12 }} width={50} unit={metricaUnidad || ""} domain={dominioDeVariable(metricaKey)} />
                     <Tooltip
                       formatter={(value, name) => [value != null ? `${Number(value).toLocaleString("es")} ${metricaUnidad}` : "—", nombreSerie(name)]}
                       labelFormatter={(l) => (granularidad === "dia" ? fechaDeDiaDelAnio(l, anioBase) : `${granularidadActual.etiqueta} ${l}`)}

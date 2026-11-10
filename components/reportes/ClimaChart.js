@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { dominioDeVariable } from "@/lib/dominioY";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { FiMaximize2 } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
@@ -211,7 +212,7 @@ export default function ClimaChart({ mensajeVacio = "No hay registros de clima p
                   return cercano?.semanaCodigo || "";
                 }}
               />
-              <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals />
+              <YAxis tick={{ fontSize: 10 }} width={40} allowDecimals domain={dominioDeVariable(metricaActual.key)} />
               <Tooltip
                 formatter={(value) => [`${Number(value).toLocaleString("es")} ${metricaActual.unidad}`, metricaActual.label]}
                 labelFormatter={(ts) => {

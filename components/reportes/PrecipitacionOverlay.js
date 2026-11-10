@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { dominioConTecho, TECHO_LLUVIA_MM } from "@/lib/dominioY";
 import { YAxis, Bar } from "recharts";
 import { FiCloudRain } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
@@ -129,7 +130,7 @@ export function PrecipitacionSerie({ activo }) {
 }
 
 function YAxisPrecip() {
-  return <YAxis yAxisId="precip" orientation="right" tick={{ fontSize: 10 }} width={40} allowDecimals unit=" mm" />;
+  return <YAxis yAxisId="precip" orientation="right" tick={{ fontSize: 10 }} width={40} allowDecimals unit=" mm" domain={dominioConTecho(TECHO_LLUVIA_MM, 0)} />;
 }
 
 function BarPrecip() {

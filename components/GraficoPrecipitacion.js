@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { dominioConTecho, TECHO_LLUVIA_MM } from "@/lib/dominioY";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiFetch } from "@/lib/api";
 
@@ -78,7 +79,7 @@ export default function GraficoPrecipitacion({ filtros, fincaFiltrada }) {
             <BarChart data={datos} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="fecha" tick={{ fontSize: 11 }} tickFormatter={(f) => f.slice(5)} />
-              <YAxis tick={{ fontSize: 11 }} width={40} unit=" mm" />
+              <YAxis tick={{ fontSize: 11 }} width={40} unit=" mm" domain={dominioConTecho(TECHO_LLUVIA_MM, 0)} />
               <Tooltip formatter={(v) => [`${v} mm`, "Precipitación"]} labelFormatter={(f) => f} />
               <Bar dataKey="mm" fill="#2563eb" radius={[3, 3, 0, 0]} />
             </BarChart>

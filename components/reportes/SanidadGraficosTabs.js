@@ -10,6 +10,7 @@ import RangoSemanasSlider, { filtrarSemanas } from "@/components/reportes/RangoS
 import { INFO_HOJAS_TOTALES, INFO_INDICE, INFO_YLI_YLS } from "@/components/reportes/PromedioInfeccionChart";
 import { COLORES_EDAD, INFO_CONTEO } from "@/components/reportes/PromedioPorEdadChart";
 import { INFO_CLIMA, METRICAS } from "@/components/reportes/ClimaChart";
+import { dominioConTecho, dominioDeVariable, TECHO_LLUVIA_MM, TECHO_TEMPERATURA_C } from "@/lib/dominioY";
 
 const COLOR_YLI = "#dc2626";
 const COLOR_YLS = "#2563eb";
@@ -160,9 +161,9 @@ function ClimaCombinado({ serie, diario, rangoExterno, onRangoExterno }) {
               <ComposedChart data={visibles} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={!diario && rango && rango[1] - rango[0] < 20 ? 0 : "preserveStartEnd"} minTickGap={diario ? 28 : 12} />
-                <YAxis yAxisId="temp" orientation="left" tick={{ fontSize: 10, fill: temp.color }} width={42} unit="°" domain={["auto", "auto"]} stroke={temp.color} />
+                <YAxis yAxisId="temp" orientation="left" tick={{ fontSize: 10, fill: temp.color }} width={42} unit="°" domain={dominioConTecho(TECHO_TEMPERATURA_C)} stroke={temp.color} />
                 <YAxis yAxisId="hum" orientation="right" tick={{ fontSize: 10, fill: hum.color }} width={42} unit="%" domain={["auto", "auto"]} stroke={hum.color} />
-                <YAxis yAxisId="mm" orientation="right" tick={{ fontSize: 10, fill: mm.color }} width={46} unit=" mm" stroke={mm.color} />
+                <YAxis yAxisId="mm" orientation="right" tick={{ fontSize: 10, fill: mm.color }} width={46} unit=" mm" domain={dominioConTecho(TECHO_LLUVIA_MM, 0)} stroke={mm.color} />
                 <Tooltip
                   cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }}
                   labelFormatter={(_, p) => (diario ? `Día ${p?.[0]?.payload?.fecha}` : `Semana ${p?.[0]?.payload?.numeroSemana}${p?.[0]?.payload?.semanaCodigo ? ` (${p[0].payload.semanaCodigo})` : ""}`)}
@@ -175,7 +176,7 @@ function ClimaCombinado({ serie, diario, rangoExterno, onRangoExterno }) {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <RangoSemanasSlider value={rango} onChange={setRango} max={diario ? 366 : 53} rotulo={diario ? "Días" : "Semanas"} />
+          <RangoSemanasSlider value={rango} onChange={setRango} max={diario ? 366 : 53} rotulo={diario ? "Días" : "Semanas"} anioFechas={diario ? serie.anio : null} />
         </>
       )}
     </CollapsibleCard>
@@ -243,6 +244,8 @@ export function ClimaGraficos({ sel, diario, onDiarioChange, rangoDias, onRangoD
           formato={(v) => `${Number(v).toLocaleString("es")} ${m.unidad}`}
           mensajeVacio="No hay registros de clima para mostrar."
           precipitacion={false}
+          techoMinimo={m.key === "mm" ? TECHO_LLUVIA_MM : m.key === "temperatura" ? TECHO_TEMPERATURA_C : undefined}
+          pisoEje={m.key === "mm" ? 0 : "auto"}
           rangoExterno={rangoDias}
           onRangoExterno={onRangoDias}
           onPuntoClick={diario ? undefined : verDetalle(m)}

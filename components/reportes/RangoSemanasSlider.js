@@ -24,7 +24,14 @@ export function recortarUltimasSemanas(items, n, valor, campo = "numeroSemana") 
 // `rotulo`/`max`: semanas (1-53) por defecto, o días del año (1-366).
 // `onExcluirChange` (opcional): muestra, en la misma fila de las casillas, "Excluir últimas semanas de <anioExcluir>" con
 // `excluirUltimas` (texto) — el padre aplica el recorte con recortarUltimasSemanas.
-export default function RangoSemanasSlider({ value, onChange, min = 1, max = 53, rotulo = "Semanas", excluirUltimas = "", onExcluirChange, anioExcluir }) {
+// `anioFechas`: en el rango por días del año (1–366), las casillas son fechas (desde / hasta) de ese año en lugar de números.
+const fechaDeDia = (anio, n) => new Date(Date.UTC(anio, 0, n)).toISOString().slice(0, 10);
+const diaDeFecha = (fecha) => {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  return Math.floor((d - Date.UTC(d.getUTCFullYear(), 0, 0)) / 86400000);
+};
+
+export default function RangoSemanasSlider({ value, onChange, min = 1, max = 53, rotulo = "Semanas", excluirUltimas = "", onExcluirChange, anioExcluir, anioFechas = null }) {
   const pista = useRef(null);
   // Texto en edición de las casillas (null = muestra el valor actual).
   const [editA, setEditA] = useState(null);
@@ -100,6 +107,37 @@ export default function RangoSemanasSlider({ value, onChange, min = 1, max = 53,
         <div style={manija(b)} onPointerDown={iniciar} onPointerMove={moverB} />
       </div>
       <div className="d-flex flex-wrap align-items-center justify-content-center gap-2 mt-3 small text-secondary">
+        {anioFechas ? (
+          <>
+            <span>Rango de fechas: desde</span>
+            <input
+              type="date"
+              className="form-control form-control-sm bg-white text-center"
+              style={{ width: "9.5rem" }}
+              min={fechaDeDia(anioFechas, min)}
+              max={fechaDeDia(anioFechas, max)}
+              value={fechaDeDia(anioFechas, a)}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                emitir(Math.max(min, Math.min(diaDeFecha(e.target.value), b)), b);
+              }}
+            />
+            <span>hasta</span>
+            <input
+              type="date"
+              className="form-control form-control-sm bg-white text-center"
+              style={{ width: "9.5rem" }}
+              min={fechaDeDia(anioFechas, min)}
+              max={fechaDeDia(anioFechas, max)}
+              value={fechaDeDia(anioFechas, b)}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                emitir(a, Math.min(max, Math.max(diaDeFecha(e.target.value), a)));
+              }}
+            />
+          </>
+        ) : (
+        <>
         <span>{rotulo}: desde</span>
         <input
           type="number"
@@ -124,6 +162,8 @@ export default function RangoSemanasSlider({ value, onChange, min = 1, max = 53,
           onBlur={() => confirmar("b")}
           onKeyDown={tecla("b")}
         />
+        </>
+        )}
         {onExcluirChange && (
           <>
             <span className="ms-4">Excluir últimas semanas de {anioExcluir}</span>

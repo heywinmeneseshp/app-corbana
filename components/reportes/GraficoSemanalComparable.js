@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiFetch } from "@/lib/api";
 import CollapsibleCard from "@/components/reportes/CollapsibleCard";
-import { ejeAjustado as calcularEje } from "@/lib/dominioY";
+import { ejeAjustado as calcularEje, dominioConTecho } from "@/lib/dominioY";
 import RangoSemanasSlider, { filtrarSemanas } from "@/components/reportes/RangoSemanasSlider";
 import { PrecipitacionControls, PrecipitacionSerie, conPrecipitacion, usePrecipitacionOverlay } from "@/components/reportes/PrecipitacionOverlay";
 
@@ -79,6 +79,8 @@ export default function GraficoSemanalComparable({
   errorExterno = "",
   yDomain,
   ejeAjustado = false, // eje Y del punto más bajo al más alto de lo visible
+  techoMinimo, // el eje Y nunca queda por debajo de este valor (ej. 80 mm de lluvia, 35 °C de temperatura)
+  pisoEje = "auto",
   rangoExterno, // rango de días/semanas controlado por el padre (con onRangoExterno); sin él, la gráfica lo maneja sola
   onRangoExterno,
 }) {
@@ -205,7 +207,7 @@ export default function GraficoSemanalComparable({
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={!diario && rangoSemanas && rangoSemanas[1] - rangoSemanas[0] < 20 ? 0 : "preserveStartEnd"} minTickGap={diario ? 28 : 12} />
-                <YAxis tick={{ fontSize: 10 }} width={44} allowDecimals unit={yUnit} domain={eje ? eje.domain : yDomain || ["auto", "auto"]} ticks={eje?.ticks} />
+                <YAxis tick={{ fontSize: 10 }} width={44} allowDecimals unit={yUnit} domain={eje ? eje.domain : techoMinimo ? dominioConTecho(techoMinimo, pisoEje) : yDomain || ["auto", "auto"]} ticks={eje?.ticks} />
                 <Tooltip cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }} content={<TooltipSemanal formato={formato} diario={diario} />} />
                 {limites.map((l) => (
                   <ReferenceLine
@@ -242,7 +244,7 @@ export default function GraficoSemanalComparable({
               </span>
             ))}
           </div>
-          <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} max={diario ? 366 : 53} rotulo={diario ? "Días" : "Semanas"} />
+          <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} max={diario ? 366 : 53} rotulo={diario ? "Días" : "Semanas"} anioFechas={diario ? series[0]?.anio : null} />
           {ayuda && <p className="text-secondary mb-0" style={{ fontSize: "0.7rem" }}>{ayuda}</p>}
         </>
       )}
