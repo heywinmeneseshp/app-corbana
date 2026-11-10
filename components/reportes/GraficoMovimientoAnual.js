@@ -646,8 +646,8 @@ export default function GraficoMovimientoAnual({
                                 {totalRanking > 0 ? `${((f.totalEmbolsado / totalRanking) * 100).toFixed(1)}%` : "—"}
                               </td>
                               {data.anios.map((a) => (
-                                <td key={a.anio} className="text-end" title="Promedio semanal del año: embolsado de la semana ÷ hectáreas en producción vigentes, hasta la última semana con registros">
-                                  {f.porHectareaAnual?.[a.anio] != null ? Number(f.porHectareaAnual[a.anio]).toLocaleString("es", { maximumFractionDigits: 1 }) : "—"}
+                                <td key={a.anio} className="text-end" title="Total del año ÷ promedio de hectáreas en producción de las semanas con registro">
+                                  {f.porHectareaAnual?.[a.anio] != null ? Number(f.porHectareaAnual[a.anio]).toLocaleString("es", { maximumFractionDigits: 0 }) : "—"}
                                 </td>
                               ))}
                               {data.rankingSemanal && (

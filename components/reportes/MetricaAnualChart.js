@@ -518,8 +518,7 @@ export default function MetricaAnualChart({
                       <tr key={f.fincaId} style={{ borderTop: "1px solid #e2e8f0" }}>
                         <td className="text-secondary fw-medium">{i + 1}</td>
                         <td>
-                          <span className="fw-medium">{f.codigo}</span>
-                          <span className="text-secondary ms-1">— {f.nombre}</span>
+                          <span className="fw-medium">{f.nombre}</span>
                         </td>
                         <td className="text-end fw-bold" style={{ color }}>
                           {decimal ? f[rankingMetricKey] : f[rankingMetricKey].toLocaleString("es")}
@@ -534,7 +533,7 @@ export default function MetricaAnualChart({
                           <td className="text-end fw-medium" title="Total del año ÷ promedio de hectáreas en producción">
                             {f[rankingPorHectareaKey] === null || f[rankingPorHectareaKey] === undefined
                               ? "—"
-                              : Number(f[rankingPorHectareaKey]).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
+                              : Number(f[rankingPorHectareaKey]).toLocaleString("es-CO", { maximumFractionDigits: 0 })}
                           </td>
                         )}
                         {data.rankingSemanal && (
