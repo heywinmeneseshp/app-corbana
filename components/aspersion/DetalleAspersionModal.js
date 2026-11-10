@@ -312,7 +312,8 @@ export default function DetalleAspersionModal({
 
           {/* Acciones al final (sin «Cerrar»: el modal se cierra con la X de arriba). Solo se muestra si hay alguna. */}
           {((puedeEnviar && onEnviar) ||
-            (a.estado === "PROGRAMADA" && onRevisar) ||
+            (a.estado === "PROGRAMADA" && (onRevisar || onReprogramar)) ||
+            (a.estado === "EJECUTADA" && onRevertir) ||
             (puedeEjecutar && onEjecutar)) && (
             <div className="d-flex flex-wrap align-items-center justify-content-end gap-2 border-top pt-3 mt-3">
               {a.estado === "PROGRAMADA" &&
