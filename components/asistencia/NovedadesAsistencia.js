@@ -34,9 +34,10 @@ const fecha = (f) => (f ? new Date(`${f}T12:00:00Z`).toLocaleDateString("es-CO",
 
 // Novedades de asistencia: vacaciones, compensatorios (en horas), incapacidades, permisos y licencias. `modulo`: solo los
 // colaboradores de ese módulo.
-export default function NovedadesAsistencia({ modulo = null }) {
+export default function NovedadesAsistencia({ modulo = null, vistaFija = null }) {
   const puedeGestionar = hasPermission("asistencia.novedades.gestionar");
-  const [vista, setVista] = useState("registro"); // registro | saldos
+  const [vistaInterna, setVista] = useState("registro"); // registro | saldos
+  const vista = vistaFija || vistaInterna; // `vistaFija`: la pestaña de la página elige si se ve el registro o los saldos
   const [filtros, setFiltros] = useState(FILTROS_VACIOS);
   const [aplicados, setAplicados] = useState(FILTROS_VACIOS);
   const [pagina, setPagina] = useState(1);
@@ -204,6 +205,7 @@ export default function NovedadesAsistencia({ modulo = null }) {
   return (
     <>
       <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        {vistaFija ? <span /> : (
         <div className="btn-group btn-group-sm">
           <button type="button" className={`btn ${vista === "registro" ? "btn-brand" : "btn-outline-secondary"}`} onClick={() => setVista("registro")}>
             Registro
@@ -212,6 +214,7 @@ export default function NovedadesAsistencia({ modulo = null }) {
             Saldos
           </button>
         </div>
+        )}
         <div className="d-flex gap-2">
           {vista === "saldos" && (
             <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" disabled={!saldos.length} onClick={exportarSaldos}>

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { FiBarChart2, FiClock, FiMap, FiUsers } from "react-icons/fi";
+import { FiBarChart2, FiClock, FiFileText, FiMap, FiUsers } from "react-icons/fi";
 import RequirePermission from "@/components/RequirePermission";
 import ColaboradoresModulo from "@/components/colaboradores/ColaboradoresModulo";
+import NovedadesAsistencia from "@/components/asistencia/NovedadesAsistencia";
+import { hasPermission } from "@/lib/auth";
 import AsistenciaVista from "@/components/asistencia/AsistenciaVista";
 import HectareasAsperjadas from "@/components/colaboradores/HectareasAsperjadas";
 
@@ -12,6 +14,7 @@ import HectareasAsperjadas from "@/components/colaboradores/HectareasAsperjadas"
 // (se les paga por hectárea): historial por día y gráficos.
 export default function ColaboradoresSanidadPage() {
   const [tab, setTab] = useState("colaboradores");
+  const veNovedades = hasPermission("asistencia.novedades.ver") || hasPermission("asistencia.novedades.gestionar");
   return (
     <RequirePermission code="menu.sanidad_vegetal.colaboradores">
       <div className="p-3 p-md-4">
@@ -20,6 +23,7 @@ export default function ColaboradoresSanidadPage() {
           {[
             ["colaboradores", "Colaboradores", FiUsers],
             ["asistencia", "Asistencia y jornadas", FiClock],
+            ...(veNovedades ? [["novedades", "Ausencias y permisos", FiFileText], ["saldos", "Vacaciones y compensatorios", FiClock]] : []),
             ["hectareas", "Hectáreas asperjadas", FiMap],
             ["graficos", "Gráficos", FiBarChart2],
           ].map(([key, label, Icono]) => (
@@ -36,6 +40,7 @@ export default function ColaboradoresSanidadPage() {
         </ul>
         {tab === "colaboradores" && <ColaboradoresModulo modulo="SANIDAD_VEGETAL" />}
         {tab === "asistencia" && <AsistenciaVista modulo="SANIDAD_VEGETAL" />}
+        {(tab === "novedades" || tab === "saldos") && <NovedadesAsistencia key={tab} modulo="SANIDAD_VEGETAL" vistaFija={tab === "saldos" ? "saldos" : "registro"} />}
         {tab === "hectareas" && <HectareasAsperjadas vista="tabla" />}
         {tab === "graficos" && <HectareasAsperjadas vista="graficos" />}
       </div>

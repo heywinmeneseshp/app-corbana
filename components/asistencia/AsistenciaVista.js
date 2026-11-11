@@ -15,7 +15,6 @@ import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import AlertasConfigModal from "@/components/asistencia/AlertasConfigModal";
-import NovedadesAsistencia from "@/components/asistencia/NovedadesAsistencia";
 import HorasSemanales from "@/components/asistencia/HorasSemanales";
 import RegistrarColaboradorModal from "@/components/asistencia/RegistrarColaboradorModal";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
@@ -280,26 +279,13 @@ export default function AsistenciaVista({ modulo = null }) {
             className={`nav-link btn-sm py-1 ${tab === "horas" ? "active" : ""}`}
             onClick={() => setTab("horas")}
           >
-            Horas por semana
+            Promedio de horas
           </button>
         </li>
-        {(hasPermission("asistencia.novedades.ver") || hasPermission("asistencia.novedades.gestionar")) && (
-          <li className="nav-item">
-            <button
-              type="button"
-              className={`nav-link btn-sm py-1 ${tab === "novedades" ? "active" : ""}`}
-              onClick={() => setTab("novedades")}
-            >
-              Novedades
-            </button>
-          </li>
-        )}
       </ul>
 
       {tab === "horas" ? (
         <HorasSemanales fincas={fincas} lugares={lugares} veTodo={veTodo} modulo={modulo} />
-      ) : tab === "novedades" ? (
-        <NovedadesAsistencia modulo={modulo} />
       ) : tab === "jornadas" ? (
         <JornadasAsistencia
           fincas={fincas}
