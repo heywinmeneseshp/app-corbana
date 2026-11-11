@@ -175,11 +175,11 @@ export default function AsistenciaVista({ modulo = null }) {
                 : "Tus entradas y salidas. En este equipo cualquier persona con rostro registrado puede marcar la suya."}
           </p>
         </div>
-        <div className="d-flex flex-wrap gap-2">
+        <div className="d-flex flex-wrap align-items-center gap-2">
           {puedeAprobar && (
             <button
               type="button"
-              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-outline-secondary btn-sm rounded-1 d-flex align-items-center gap-2"
               onClick={() => setModal("solicitudes")}
               title="Nuevos registros de rostro por aprobar"
             >
@@ -191,21 +191,10 @@ export default function AsistenciaVista({ modulo = null }) {
               )}
             </button>
           )}
-          {esAdministrador() && (
-            <button
-              type="button"
-              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center"
-              title="Roles en copia de las alertas por correo"
-              aria-label="Configurar alertas"
-              onClick={() => setModal("alertas")}
-            >
-              <FiSettings />
-            </button>
-          )}
           {hasPermission("asistencia.lugares") && (
             <button
               type="button"
-              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-outline-secondary btn-sm rounded-1 d-flex align-items-center gap-2"
               onClick={() => setModal("lugares")}
               title="Oficinas y otros lugares donde se marca"
             >
@@ -215,7 +204,7 @@ export default function AsistenciaVista({ modulo = null }) {
           {hasPermission("asistencia.marcar_cuadrilla") && (
             <button
               type="button"
-              className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-outline-secondary btn-sm rounded-1 d-flex align-items-center gap-2"
               onClick={() => setModal("probar")}
             >
               <FiUserCheck /> Probar rostro
@@ -223,10 +212,10 @@ export default function AsistenciaVista({ modulo = null }) {
           )}
           {hasPermission("asistencia.registrar") && (
             <>
-              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setModal("nuevoColaborador")}>
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-1 d-flex align-items-center gap-2" onClick={() => setModal("nuevoColaborador")}>
                 <FiUserCheck /> Nuevo colaborador
               </button>
-              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setModal("rostroNuevo")}>
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-1 d-flex align-items-center gap-2" onClick={() => setModal("rostroNuevo")}>
                 <FiCamera /> Registrar rostro
               </button>
             </>
@@ -234,10 +223,21 @@ export default function AsistenciaVista({ modulo = null }) {
           {puedeMarcar && (
             <button
               type="button"
-              className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2"
+              className="btn btn-brand btn-sm rounded-1 d-flex align-items-center gap-2"
               onClick={() => setModal("marcar")}
             >
               <FiCamera /> Marcar asistencia
+            </button>
+          )}
+          {esAdministrador() && (
+            <button
+              type="button"
+              className="btn btn-link btn-sm text-secondary p-1 d-flex align-items-center border-0"
+              title="Roles en copia de las alertas por correo"
+              aria-label="Configurar alertas"
+              onClick={() => setModal("alertas")}
+            >
+              <FiSettings size={18} />
             </button>
           )}
         </div>

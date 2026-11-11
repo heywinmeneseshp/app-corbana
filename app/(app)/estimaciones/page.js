@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ExcelJS from "exceljs";
-import { FiTarget, FiSave, FiEye, FiList, FiAlertTriangle, FiBarChart2, FiDownload, FiChevronDown, FiChevronUp, FiMaximize2, FiX } from "react-icons/fi";
+import { FiTarget, FiSave, FiEye, FiList, FiAlertTriangle, FiBarChart2, FiDownload, FiChevronDown, FiChevronUp, FiMaximize2, FiX, FiSettings, FiCheckCircle } from "react-icons/fi";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, LabelList } from "recharts";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
@@ -10,6 +10,9 @@ import { calcularColorSemana, COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 import RequirePermission from "@/components/RequirePermission";
 import InfoTooltip from "@/components/reportes/InfoTooltip";
 import ModalShell from "@/components/ModalShell";
+import ConfigEstimacionModal from "@/components/estimaciones/ConfigEstimacionModal";
+import CambiosPendientes from "@/components/estimaciones/CambiosPendientes";
+import { esAdministrador } from "@/lib/laborEstados";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 
 const SEMANAS_DEFAULT = 8;
@@ -72,6 +75,17 @@ function SortableTh({ label, sortKey, orden, onSort, align }) {
 
 export default function EstimacionesPage() {
   const [vista, setVista] = useState("cargar");
+  const [configAbierta, setConfigAbierta] = useState(false);
+  const [pendientesN, setPendientesN] = useState(0);
+  const [avisoEnvio, setAvisoEnvio] = useState("");
+  const contarPendientes = useCallback(() => {
+    apiFetch("/estimaciones/cambios?estado=PENDIENTE")
+      .then((d) => setPendientesN(d.items?.length || 0))
+      .catch(() => setPendientesN(0));
+  }, []);
+  useEffect(() => {
+    contarPendientes();
+  }, [contarPendientes]);
 
   // Datos del formulario (próximas semanas + fincas habilitadas + tasa)
   const [semanasAEstimar, setSemanasAEstimar] = useState([]);
@@ -989,6 +1003,7 @@ export default function EstimacionesPage() {
 
     setGuardando(true);
     setMsgError("");
+    setAvisoEnvio("");
     try {
       const res = await apiFetch("/estimaciones", {
         method: "POST",
@@ -1001,6 +1016,15 @@ export default function EstimacionesPage() {
           .join("\n")}`);
       } else {
         setGuardado(true);
+        const avisos = [];
+        if (res.pendientesAprobacion > 0) avisos.push(`${res.pendientesAprobacion} estimación(es) ya existían para esta semana: el cambio quedó pendiente de aprobación y sigue vigente la anterior. Te llegó un correo.`);
+        if (res.fueraDePlazo) avisos.push("Se envió después del límite de la semana: se avisó por correo.");
+        setAvisoEnvio(avisos.join(" "));
+        if (res.pendientesAprobacion > 0) {
+          contarPendientes();
+          setVista("pendientes");
+          return;
+        }
         // Guardado sin errores — pedido explícito: llevar directo a "Ver
         // estimaciones" para confirmar visualmente lo que se acaba de
         // cargar, en vez de quedarse en el formulario.
@@ -1081,6 +1105,12 @@ export default function EstimacionesPage() {
 
         {msgError && <div className="alert alert-danger py-2 small" style={{ whiteSpace: "pre-line" }}>{msgError}</div>}
         {guardado && <div className="alert alert-success py-2 small">Estimaciones guardadas correctamente.</div>}
+        {avisoEnvio && (
+          <div className="alert alert-warning py-2 small d-flex align-items-start gap-2">
+            <FiAlertTriangle className="flex-shrink-0 mt-1" />
+            <span>{avisoEnvio}</span>
+          </div>
+        )}
 
         <ul className="nav nav-pills mb-3">
           <li className="nav-item">
@@ -1110,7 +1140,33 @@ export default function EstimacionesPage() {
               <FiBarChart2 className="me-1" /> Comparativo vs. real
             </button>
           </li>
+          <li className="nav-item">
+            <button
+              type="button"
+              className={`nav-link rounded-3 ${vista === "pendientes" ? "active" : ""}`}
+              onClick={() => setVista("pendientes")}
+            >
+              <FiCheckCircle className="me-1" /> Aprobaciones
+              {pendientesN > 0 && <span className="badge rounded-pill text-bg-warning ms-1">{pendientesN}</span>}
+            </button>
+          </li>
+          {esAdministrador() && (
+            <li className="nav-item ms-auto">
+              <button
+                type="button"
+                className="btn btn-link text-secondary p-2 border-0 d-flex align-items-center"
+                title="Configuración: límite de envío y copias de correo"
+                aria-label="Configuración de estimaciones"
+                onClick={() => setConfigAbierta(true)}
+              >
+                <FiSettings size={18} />
+              </button>
+            </li>
+          )}
         </ul>
+
+        {vista === "pendientes" && <CambiosPendientes alCambiar={contarPendientes} />}
+        {configAbierta && <ConfigEstimacionModal onClose={() => setConfigAbierta(false)} />}
 
         {vista === "cargar" && (
           <div>
