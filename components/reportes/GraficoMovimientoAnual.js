@@ -49,6 +49,19 @@ function pivotData(anios, campo = "totalEmbolsado") {
   });
 }
 
+// Una fila por semana con una columna por lote (clave = uuid del lote), para la vista por lotes.
+function pivotLotes(lotes) {
+  const semanas = new Set();
+  for (const l of lotes) for (const p of l.puntos) semanas.add(p.numeroSemana);
+  return [...semanas]
+    .sort((a, b) => a - b)
+    .map((numeroSemana) => {
+      const fila = { numeroSemana };
+      for (const l of lotes) fila[l.uuid] = l.puntos.find((p) => p.numeroSemana === numeroSemana)?.total ?? null;
+      return fila;
+    });
+}
+
 // Igual que pivotData, pero mezclando N series (objetivo × año) en vez de
 // solo años — usado en modo comparación (2+ fincas/grupos elegidos).
 // Quita las últimas `n` semanas CON REGISTROS de una serie (las del año en curso suelen estar incompletas). Se
@@ -121,6 +134,7 @@ export default function GraficoMovimientoAnual({
   // Cuántas de las últimas semanas del año en curso se dejan fuera de la gráfica.
   const [excluirUltimas, setExcluirUltimas] = useState("");
   const [verPorHa, setVerPorHa] = useState(false);
+  const [verPorLotes, setVerPorLotes] = useState(false); // una línea por lote cuando hay una sola finca elegida
   const nExcluir = parseInt(excluirUltimas, 10) || 0;
   const [fincas, setFincas] = useState([]);
   const [canastas, setCanastas] = useState([{ id: "c0", nombre: "", objetivos: [], anios: [new Date().getFullYear()] }]);
@@ -190,6 +204,8 @@ export default function GraficoMovimientoAnual({
   }, [canastas, anioActual]);
 
   const modoComparacion = objetivosEfectivos.length > 1;
+  const fincaUnica = !modoComparacion && (objetivosEfectivos[0]?.fincaUuids?.length || 0) === 1;
+  const pedirPorLotes = verPorLotes && fincaUnica;
 
   async function handleConsultar() {
     setError("");
@@ -202,6 +218,7 @@ export default function GraficoMovimientoAnual({
         if (semanaUuid) params.set("semanaUuid", semanaUuid);
         if (motivosUuids.length > 0) params.set("motivoUuids", motivosUuids.join(","));
         if (edadesSeleccionadas.length > 0) params.set("edades", edadesSeleccionadas.join(","));
+        if (pedirPorLotes) params.set("porLote", "1");
         const res = await apiFetch(`/racimo-movimientos/reporte-embolses?${params.toString()}`);
         setData(res);
         setSeriesResultado(null);
@@ -237,7 +254,7 @@ export default function GraficoMovimientoAnual({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     handleConsultar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [objetivosKey, semanaUuid, motivosKey, edadesKey, tipo]);
+  }, [objetivosKey, semanaUuid, motivosKey, edadesKey, tipo, pedirPorLotes]);
 
   // Al cambiar de finca/grupo/año, los motivos y edades elegidos pueden ya
   // no existir en el nuevo alcance — se limpian para no dejar un filtro
@@ -362,6 +379,14 @@ export default function GraficoMovimientoAnual({
 
         <div className="mb-4 d-flex flex-wrap align-items-end gap-2">
           <SelectorCanastas fincas={fincas} anioOpciones={anioOpciones} canastas={canastas} onChange={setCanastas} />
+          {fincaUnica && (
+            <div className="form-check mb-2 ms-2">
+              <input type="checkbox" className="form-check-input" id="ver-por-lotes" checked={verPorLotes} onChange={(e) => setVerPorLotes(e.target.checked)} />
+              <label className="form-check-label small" htmlFor="ver-por-lotes">
+                Ver por lotes
+              </label>
+            </div>
+          )}
           {permitirPorHectarea && (
             <div className="form-check mb-2 ms-2">
               <input type="checkbox" className="form-check-input" id="ver-por-ha" checked={verPorHa} onChange={(e) => setVerPorHa(e.target.checked)} />
@@ -495,6 +520,56 @@ export default function GraficoMovimientoAnual({
               </ResponsiveContainer>
               <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} excluirUltimas={excluirUltimas} onExcluirChange={setExcluirUltimas} anioExcluir={anioActual} />
             </CollapsibleCard>
+
+            {pedirPorLotes && data.porLote && (() => {
+              const lotes = data.porLote.lotes;
+              const colorLote = (i) => (i < YEAR_COLORS.length ? YEAR_COLORS[i] : `hsl(${Math.round((i * 137.508) % 360)}, 62%, ${i % 2 ? 38 : 48}%)`);
+              const filas = pivotLotes(lotes);
+              const totalLotes = lotes.reduce((t, l) => t + l.total, 0);
+              const porTotal = [...lotes].sort((a, b) => b.total - a.total);
+              return (
+                <CollapsibleCard titulo={`${etiquetaMetrica} por lote`} subtitulo={`${data.finca?.nombre || ""} · ${data.porLote.anio}${data.anios.length > 1 ? " (se muestra el primer año seleccionado)" : ""}`} expandible className="mt-3">
+                  {lotes.length === 0 ? (
+                    <p className="text-secondary small mb-0">No hay registros por lote para esta selección.</p>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={380}>
+                        <LineChart data={filtrarSemanas(filas, rangoSemanas)} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="numeroSemana" tickFormatter={(v) => `S${v}`} tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} width={60} domain={["auto", "auto"]} />
+                          <Tooltip formatter={(v, nombre) => [v === null || v === undefined ? "—" : Number(v).toLocaleString("es"), `Lote ${nombre}`]} labelFormatter={(l) => `Semana ${l}`} />
+                          <Legend formatter={(v) => `Lote ${v}`} />
+                          {lotes.map((l, i) => (
+                            <Line key={l.uuid} type="monotone" dataKey={l.uuid} name={l.nombre} stroke={colorLote(i)} strokeWidth={2} dot={{ r: 2.5 }} connectNulls={false} />
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                      <div className="table-responsive mt-2">
+                        <table className="table table-sm table-borderless mb-0" style={{ fontSize: "0.8125rem" }}>
+                          <thead>
+                            <tr className="text-secondary" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                              <th>Lote</th>
+                              <th className="text-end">{etiquetaMetrica} ({data.porLote.anio})</th>
+                              <th className="text-end">Participación</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {porTotal.map((l) => (
+                              <tr key={l.uuid} style={{ borderTop: "1px solid #e2e8f0" }}>
+                                <td className="fw-medium">Lote {l.nombre}</td>
+                                <td className="text-end fw-bold" style={{ color: colorPrincipal }}>{l.total.toLocaleString("es")}</td>
+                                <td className="text-end text-secondary">{totalLotes > 0 ? `${((l.total / totalLotes) * 100).toFixed(1)}%` : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </CollapsibleCard>
+              );
+            })()}
 
             {permitirPorHectarea && verPorHa && (
               <CollapsibleCard titulo={`${etiquetaMetrica} por hectárea`} subtitulo="Por semana, con los mismos filtros" expandible className="mt-3">
