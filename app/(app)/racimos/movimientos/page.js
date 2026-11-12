@@ -192,7 +192,11 @@ export default function MovimientosPage() {
     }
   }
 
-  const motivoDe = (item) => item.motivoRepique?.nombre || item.motivoRecuse?.nombre || "—";
+  const motivoDe = (item) => {
+    const m = item.motivoRepique || item.motivoRecuse;
+    if (!m) return "—";
+    return m.codigoExterno ? `${m.codigoExterno} · ${m.nombre}` : m.nombre;
+  };
 
   async function exportToExcel() {
     const tieneSemanaRegistro = semanaRegistroDesdeUuid && semanaRegistroHastaUuid;

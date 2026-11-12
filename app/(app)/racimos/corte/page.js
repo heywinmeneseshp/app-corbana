@@ -516,7 +516,7 @@ export default function RegistrarCortePage() {
                               <option value="">Seleccione</option>
                               {motivos.map((m) => (
                                 <option key={m.uuid} value={m.uuid}>
-                                  {m.nombre}
+                                  {m.codigoExterno ? `${m.codigoExterno} · ${m.nombre}` : m.nombre}
                                 </option>
                               ))}
                             </select>
