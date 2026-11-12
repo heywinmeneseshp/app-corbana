@@ -2,8 +2,11 @@
 
 import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2, FiTarget, FiSave, FiX } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import { FiPlus, FiEdit2, FiTrash2, FiTarget, FiSave, FiX, FiSettings } from "react-icons/fi";
+import { apiFetch, apiFetchTodos } from "@/lib/api";
+import MatrizObjetivos from "@/components/objetivos/MatrizObjetivos";
+import DestinatariosInformeModal from "@/components/reportes/DestinatariosInformeModal";
+import { esAdministrador } from "@/lib/laborEstados";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
@@ -22,6 +25,8 @@ export default function ObjetivosEvaluacionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [vista, setVista] = useState("matriz"); // matriz | lista
+  const [configAbierta, setConfigAbierta] = useState(false);
   const [creando, setCreando] = useState(false);
   const [editModal, setEditModal] = useState(null); // null | objetivo
 
@@ -95,8 +100,8 @@ export default function ObjetivosEvaluacionPage() {
     setLoading(true);
     setError("");
     try {
-      const { items: rows } = await apiFetch("/evaluaciones/objetivos?limit=100");
-      setItems(rows);
+      const todos = await apiFetchTodos("/evaluaciones/objetivos?limit=100");
+      setItems(todos?.items || todos || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -138,11 +143,7 @@ export default function ObjetivosEvaluacionPage() {
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
             <h1 className="fw-medium h4 mb-1">Objetivos de Evaluación <InfoModulo titulo={"Objetivos de Evaluación"} secciones={[{"titulo": "Qué son", "texto": "La meta semanal de cantidad de evaluaciones por finca o por lote."}, {"titulo": "Conteo de hojas", "texto": "Además se define un rango de edad de la planta (semanas desde su embolse). La cantidad se exige por cada edad del rango, no como un total combinado."}, {"titulo": "Dónde se ve el avance", "texto": "En la app móvil, arriba de cada evaluación (llevas X de Y, faltan Z), y al subir pendientes."}]} /></h1>
-            <p className="text-secondary small mb-0">
-              Meta semanal de cantidad de evaluaciones por finca o lote. Para Conteo de Hojas, además se define un
-              rango de edad de la planta (semanas desde su embolse) — la cantidad se exige por cada edad del
-              rango, no como un total combinado.
-            </p>
+            <p className="text-secondary small mb-0">Meta semanal de evaluaciones por finca o lote.</p>
           </div>
           {hasPermission("objetivo_evaluacion.crear") && (
             <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setCreando(true)}>
@@ -152,6 +153,40 @@ export default function ObjetivosEvaluacionPage() {
         </div>
 
         {error && <div className="alert alert-danger py-2 small border-0 rounded-3">{error}</div>}
+        <ul className="nav nav-tabs mb-3">
+          {[["matriz", "Matriz"], ["lista", "Lista"]].map(([key, label]) => (
+            <li key={key} className="nav-item">
+              <button type="button" className={`nav-link ${vista === key ? "active fw-semibold" : "text-secondary"}`} onClick={() => setVista(key)}>
+                {label}
+              </button>
+            </li>
+          ))}
+          {esAdministrador() && (
+            <li className="nav-item ms-auto">
+              <button type="button" className="btn btn-link text-secondary p-2 border-0 d-flex align-items-center" title="Configuración: a quién le llega el correo semanal de objetivos sin cumplir" aria-label="Configuración de objetivos" onClick={() => setConfigAbierta(true)}>
+                <FiSettings size={18} />
+              </button>
+            </li>
+          )}
+        </ul>
+
+        {vista === "matriz" && <MatrizObjetivos alGuardar={loadObjetivos} />}
+        {configAbierta && (
+          <DestinatariosInformeModal
+            onClose={() => setConfigAbierta(false)}
+            ruta="/evaluaciones/objetivos/destinatarios"
+            titulo="Correo semanal de objetivos sin cumplir"
+            descripcion={
+              <>
+                Los domingos desde las 8:00 p. m. (hora de Bogotá) llega un correo con las fincas que <strong>no cumplieron los objetivos de evaluación de la
+                semana</strong>, con lo que les falta por tipo. Lo reciben los correos, roles y usuarios que elijas aquí; sin ninguno, no se envía.
+              </>
+            }
+          />
+        )}
+
+        {vista === "lista" && (
+          <>
 
         <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
           <select
@@ -340,6 +375,9 @@ export default function ObjetivosEvaluacionPage() {
             </table>
           </div>
         </div>
+
+          </>
+        )}
 
         {creando && (
           <CrearObjetivosModal

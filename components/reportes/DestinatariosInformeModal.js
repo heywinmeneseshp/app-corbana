@@ -9,7 +9,12 @@ const nombreUsuario = (u) => `${u.nombre || ""} ${u.apellido || ""}`.trim() || u
 
 // Quién recibe el Informe semanal cuando se pulsa «Enviar»: correos sueltos, roles y usuarios (solo Administrador).
 // Guarda en GET/PUT /dashboard/informe-semanal/destinatarios.
-export default function DestinatariosInformeModal({ onClose }) {
+export default function DestinatariosInformeModal({
+  onClose,
+  ruta = "/dashboard/informe-semanal/destinatarios",
+  titulo = "Destinatarios del informe semanal",
+  descripcion = null,
+}) {
   const [roles, setRoles] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [correosTexto, setCorreosTexto] = useState("");
@@ -24,7 +29,7 @@ export default function DestinatariosInformeModal({ onClose }) {
     Promise.all([
       apiFetch("/roles?limit=100").catch(() => ({ items: [] })),
       apiFetch("/users?limit=100").catch(() => ({ items: [] })),
-      apiFetch("/dashboard/informe-semanal/destinatarios"),
+      apiFetch(ruta),
     ])
       .then(([r, u, d]) => {
         const rolesItems = r.items || [];
@@ -47,7 +52,7 @@ export default function DestinatariosInformeModal({ onClose }) {
     setError("");
     setGuardado(false);
     try {
-      await apiFetch("/dashboard/informe-semanal/destinatarios", {
+      await apiFetch(ruta, {
         method: "PUT",
         body: JSON.stringify({
           correos: correosTexto
@@ -67,12 +72,16 @@ export default function DestinatariosInformeModal({ onClose }) {
   }
 
   return (
-    <ModalShell title="Destinatarios del informe semanal" onClose={onClose} size="lg">
+    <ModalShell title={titulo} onClose={onClose} size="lg">
+      {descripcion ? (
+        <p className="small text-secondary mb-3">{descripcion}</p>
+      ) : (
       <p className="small text-secondary mb-3">
         Reciben el informe cuando alguien pulsa <strong>Enviar finca</strong> o <strong>Enviar todas</strong> en el Resumen semanal; no se envía solo.
         Cada usuario (por rol o elegido uno a uno) recibe solo el informe de <strong>sus fincas asignadas</strong>; el Administrador y quien no tiene
         fincas asignadas reciben todas. Los correos sueltos reciben todas las fincas.
       </p>
+      )}
       {loading ? (
         <p className="text-secondary small mb-0">Cargando...</p>
       ) : (

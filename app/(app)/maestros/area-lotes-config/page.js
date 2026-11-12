@@ -77,6 +77,24 @@ export default function AreaLotesConfigPage() {
     }
   };
 
+  // Aprueba una por una todas las solicitudes pendientes (cada una con la misma validación del servidor). Informa las que fallen.
+  const aprobarTodas = async () => {
+    if (!confirm(`¿Aprobar las ${solicitudes.length} solicitudes pendientes? Se aplicarán a sus lotes.`)) return;
+    setResolviendo("todas");
+    setError("");
+    const fallos = [];
+    for (const sol of solicitudes) {
+      try {
+        await apiFetch(`/lote-area-config/solicitudes/${sol.uuid}/aprobar`, { method: "POST", body: JSON.stringify({}) });
+      } catch (err) {
+        fallos.push(`${sol.finca?.nombre || ""} · ${sol.lote?.nombre || ""}: ${err.message}`);
+      }
+    }
+    await cargarSolicitudes();
+    if (fallos.length) setError(["No se pudieron aprobar " + fallos.length + " solicitud(es):", ...fallos].join("\n"));
+    setResolviendo("");
+  };
+
   const cargarTodo = async () => {
     setLoading(true);
     setError("");
@@ -195,12 +213,17 @@ export default function AreaLotesConfigPage() {
           </p>
         </div>
 
-        {error && <div className="alert alert-danger py-2 small">{error}</div>}
+        {error && <div className="alert alert-danger py-2 small" style={{ whiteSpace: "pre-line" }}>{error}</div>}
 
         {puedeAprobar && solicitudes.length > 0 && (
           <div className="card border-0 shadow-sm rounded-4 mb-4">
             <div className="card-body p-4">
-              <h2 className="h6 fw-semibold mb-3">Cambios pendientes de aprobación ({solicitudes.length})</h2>
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                <h2 className="h6 fw-semibold mb-0">Cambios pendientes de aprobación ({solicitudes.length})</h2>
+                <button type="button" className="btn btn-brand btn-sm d-flex align-items-center gap-1" disabled={Boolean(resolviendo)} onClick={aprobarTodas}>
+                  <FiCheck /> {resolviendo === "todas" ? "Aprobando..." : "Aprobar todas"}
+                </button>
+              </div>
               <div className="table-responsive">
                 <table className="table table-sm align-middle mb-0">
                   <thead>
