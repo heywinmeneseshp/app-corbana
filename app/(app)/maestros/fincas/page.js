@@ -431,6 +431,7 @@ function FincaModal({ finca, onClose, onSaved }) {
   const [codigo, setCodigo] = useState(finca?.codigo || "");
   const [estado, setEstado] = useState(finca ? finca.estado : true);
   const [esExterna, setEsExterna] = useState(finca?.esExterna || false);
+  const [permiteAsistencia, setPermiteAsistencia] = useState(finca?.permiteAsistencia ?? true);
   const [grupoFincaUuid, setGrupoFincaUuid] = useState(finca?.grupoFinca?.uuid || "");
   // Coordenadas de la finca (grados decimales) — las usa Open-Meteo.
   const [latitud, setLatitud] = useState(finca?.latitud != null ? String(finca.latitud) : "");
@@ -476,7 +477,7 @@ function FincaModal({ finca, onClose, onSaved }) {
         setSaving(false);
         return;
       }
-      const payload = { nombre, codigo, estado, esExterna, grupoFincaUuid: grupoFincaUuid || null, latitud: lat, longitud: lng };
+      const payload = { nombre, codigo, estado, esExterna, permiteAsistencia, grupoFincaUuid: grupoFincaUuid || null, latitud: lat, longitud: lng };
       await apiFetch(finca ? `/fincas/${finca.uuid}` : "/fincas", {
         method: finca ? "PUT" : "POST",
         body: JSON.stringify(payload),
@@ -595,6 +596,13 @@ function FincaModal({ finca, onClose, onSaved }) {
             No es propia — exporta cajas a través nuestro (aparece en Programación de Corte) pero no le hacemos
             seguimiento de labores, racimos, precipitación, etc. Se oculta de esos selectores.
           </div>
+        </div>
+        <div className="form-check mb-3">
+          <input type="checkbox" className="form-check-input" id="fincaPermiteAsistencia" checked={permiteAsistencia} onChange={(e) => setPermiteAsistencia(e.target.checked)} />
+          <label className="form-check-label small" htmlFor="fincaPermiteAsistencia">
+            Permite tomar asistencia
+          </label>
+          <div className="form-text">Si la desmarcas, la finca no aparece en la app para marcar asistencia y se rechazan las marcaciones nuevas.</div>
         </div>
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
         <div className="d-flex gap-2">
