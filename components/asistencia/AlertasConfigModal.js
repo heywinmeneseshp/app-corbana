@@ -12,13 +12,15 @@ export default function AlertasConfigModal({ onClose }) {
   const [selected, setSelected] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [usuariosSel, setUsuariosSel] = useState([]);
+  const [radio, setRadio] = useState("500");
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    Promise.all([apiFetch("/roles?limit=100"), apiFetchTodos("/users?limit=100"), apiFetch("/asistencia/alertas/destinatarios")])
-      .then(([{ items }, us, cfg]) => {
+    Promise.all([apiFetch("/roles?limit=100"), apiFetchTodos("/users?limit=100"), apiFetch("/asistencia/alertas/destinatarios"), apiFetch("/asistencia/radio-finca")])
+      .then(([{ items }, us, cfg, rad]) => {
+        setRadio(String(rad?.radioMetros ?? 500));
         const lista = (items || []).map((r) => ({ uuid: r.uuid, label: r.nombre }));
         setRoles(lista);
         setSelected(lista.filter((r) => (cfg?.jornadaIncompleta?.rolesUuids || []).includes(r.uuid)));
@@ -36,6 +38,7 @@ export default function AlertasConfigModal({ onClose }) {
     setGuardando(true);
     setError("");
     try {
+      await apiFetch("/asistencia/radio-finca", { method: "PUT", body: JSON.stringify({ radioMetros: Number(radio) }) });
       await apiFetch("/asistencia/alertas/destinatarios", {
         method: "PUT",
         body: JSON.stringify({ jornadaIncompleta: { rolesUuids: selected.map((r) => r.uuid), usuariosUuids: usuariosSel.map((u) => u.uuid) } }),
@@ -49,8 +52,16 @@ export default function AlertasConfigModal({ onClose }) {
   }
 
   return (
-    <ModalShell title="Copias de las alertas" onClose={onClose}>
+    <ModalShell title="Configuración de asistencia" onClose={onClose}>
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
+      <div className="fw-semibold small mb-1">Radio de las fincas sin perímetro</div>
+      <p className="small text-secondary mb-2">
+        Si una finca no tiene perímetro (KML) cargado, se usa su latitud y longitud: una marcación a más metros que esto queda fuera de la finca.
+      </p>
+      <div className="d-flex align-items-center gap-2 mb-3">
+        <input type="number" min="10" max="50000" step="10" className="form-control form-control-sm" style={{ maxWidth: 120 }} value={radio} onChange={(e) => setRadio(e.target.value)} />
+        <span className="small text-secondary">metros a la redonda</span>
+      </div>
       <div className="fw-semibold small mb-1">Jornada incompleta</div>
       <p className="small text-secondary mb-2">
         Los usuarios de estos roles y los usuarios elegidos reciben copia del correo que le llega a cada colaborador con la jornada incompleta, según sus fincas y

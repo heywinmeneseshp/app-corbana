@@ -56,10 +56,12 @@ export default function MapaUbicacionModal({ punto, onClose }) {
     const conCoordenadas = (lat, lng, nombre, radioMetros = null) =>
       numero(lat) !== null && numero(lng) !== null ? { lat: numero(lat), lng: numero(lng), nombre, radioMetros: numero(radioMetros) } : null;
     const pedir = punto.fincaUuid
-      ? apiFetch(`/fincas/${punto.fincaUuid}`).then((f) => {
+      ? Promise.all([apiFetch(`/fincas/${punto.fincaUuid}`), apiFetch("/asistencia/radio-finca").catch(() => null)]).then(([f, rad]) => {
           if (!activo) return;
-          setPerimetro(normalizarPerimetro(f.perimetro));
-          setSitio(conCoordenadas(f.latitud, f.longitud, f.nombre));
+          const per = normalizarPerimetro(f.perimetro);
+          setPerimetro(per);
+          // Sin perímetro, el área es el radio configurado alrededor de las coordenadas de la finca.
+          setSitio(conCoordenadas(f.latitud, f.longitud, f.nombre, per && per.length > 2 ? null : rad?.radioMetros));
         })
       : apiFetch("/asistencia/lugares").then((lista) => {
           const l = (lista || []).find((x) => x.uuid === punto.lugarUuid);
