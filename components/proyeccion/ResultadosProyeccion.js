@@ -12,7 +12,7 @@ const metricas = (tasa) => [
   { id: "cajas", label: `Cajas ${tasa}`, bajo: "cajasBajo", alto: "cajasAlto" },
   { id: "embolses", label: "Embolses", bajo: "embolsesBajo", alto: "embolsesAlto" },
   { id: "racimos", label: "Racimos cosechados" },
-  { id: "juntos", label: "Embolses, racimos, ratio y cajas" }, // solo en las tablas por semana y por mes
+  { id: "juntos", label: "Embolses, aprovechamiento, racimos, ratio y cajas" }, // solo en las tablas por semana y por mes
 ];
 const COLORES = { proyeccion: "#16a34a", bajo: "#d97706", alto: "#2563eb", a1: "#64748b", a2: "#a8a29e" };
 
@@ -121,19 +121,34 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
 
   // El ratio no se suma: es cajas / racimos de lo que se muestra (finca, periodo o total).
   const ratioDe = (caj, rac) => (rac > 0 ? fmtD(caj / rac, 4) : "—");
+  // Aprovechamiento: % aplicado a cada finca (Parámetros). Es fijo por finca; el total es el promedio de las fincas ponderado por sus embolses.
+  const aprovDe = useMemo(() => new Map((resultado.aprovechamiento || []).map((a) => [a.fincaUuid, a.aprovechamientoAplicado || 0])), [resultado]);
+  const pct = (v) => (v === null || v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
+  const ponderado = (pesoDe) => {
+    let num = 0;
+    let den = 0;
+    for (const f of fincas) {
+      const w = pesoDe(f.uuid);
+      num += (aprovDe.get(f.uuid) || 0) * w;
+      den += w;
+    }
+    return den > 0 ? num / den : null;
+  };
   const celda = (campo, uuid, clave) => {
     const k = `${uuid}|${clave}`;
+    if (campo === "aprov") return pct(aprovDe.get(uuid));
     if (campo === "ratio") return ratioDe(vals.cajas.get(k), vals.racimos.get(k));
     return fmt(vals[campo].get(k));
   };
   const totalPeriodo = (campo, clave) => {
     const c = String(clave);
+    if (campo === "aprov") return pct(ponderado((u) => vals.embolses.get(`${u}|${clave}`) || 0));
     return campo === "ratio" ? ratioDe(totales.cajas.porPeriodo.get(c), totales.racimos.porPeriodo.get(c)) : fmt(totales[campo].porPeriodo.get(c));
   };
-  const totalFinca = (campo, uuid) => (campo === "ratio" ? ratioDe(totales.cajas.porFinca.get(uuid), totales.racimos.porFinca.get(uuid)) : fmt(totales[campo].porFinca.get(uuid)));
-  const totalGeneral = (campo) => (campo === "ratio" ? ratioDe(totales.cajas.general, totales.racimos.general) : fmt(totales[campo].general));
+  const totalFinca = (campo, uuid) => (campo === "aprov" ? pct(aprovDe.get(uuid)) : campo === "ratio" ? ratioDe(totales.cajas.porFinca.get(uuid), totales.racimos.porFinca.get(uuid)) : fmt(totales[campo].porFinca.get(uuid)));
+  const totalGeneral = (campo) => (campo === "aprov" ? pct(ponderado((u) => totales.embolses.porFinca.get(u) || 0)) : campo === "ratio" ? ratioDe(totales.cajas.general, totales.racimos.general) : fmt(totales[campo].general));
   const datos = juntos
-    ? [["embolses", "Embolses"], ["racimos", "Racimos"], ["ratio", "Ratio"], ["cajas", "Cajas"]]
+    ? [["embolses", "Embolses"], ["aprov", "Aprovech."], ["racimos", "Racimos"], ["ratio", "Ratio"], ["cajas", "Cajas"]]
     : [[metrica, null]];
   const anchoPrimera = periodo === "semana" ? 90 : 70;
 
@@ -440,7 +455,7 @@ async function exportarPivot({ resultado, metrica, metricaLabel, periodo, oculta
   encabezado.font = { bold: true, color: { argb: "FFFFFFFF" } };
   encabezado.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } }));
   if (metrica === "juntos") {
-    // Cuatro filas por periodo (embolses, racimos, ratio y cajas); el ratio es cajas / racimos.
+    // Cinco filas por periodo (embolses, aprovechamiento, racimos, ratio y cajas); el ratio es cajas / racimos.
     hoja.spliceRows(encabezado.number, 1, ["", "Dato", ...fincas.map((f) => f.nombre), "Total"]);
     const enc = hoja.getRow(encabezado.number);
     enc.getCell(1).value = periodo === "semana" ? "Semana" : "Mes";
@@ -448,20 +463,36 @@ async function exportarPivot({ resultado, metrica, metricaLabel, periodo, oculta
     enc.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } }));
     const suma = (c, uuid, clave) => (uuid ? extra[c].get(`${uuid}|${clave}`) || 0 : fincas.reduce((a2, f) => a2 + (extra[c].get(`${f.uuid}|${clave}`) || 0), 0));
     const sumaFinca = (c, uuid) => periodos.reduce((a2, per) => a2 + suma(c, uuid, per.clave), 0);
+    const aprovF = new Map((resultado.aprovechamiento || []).map((a) => [a.fincaUuid, a.aprovechamientoAplicado || 0]));
+    const pondera = (pesoDe) => {
+      let num = 0;
+      let den = 0;
+      for (const f of fincas) {
+        const w = pesoDe(f.uuid);
+        num += (aprovF.get(f.uuid) || 0) * w;
+        den += w;
+      }
+      return den > 0 ? Math.round((num / den) * 10000) / 10000 : null;
+    };
     const ratio = (caj, rac) => (rac > 0 ? Math.round((caj / rac) * 10000) / 10000 : null);
     for (const per of periodos) {
-      for (const [c, etiqueta] of [["embolses", "Embolses"], ["racimos", "Racimos"], ["ratio", "Ratio"], ["cajas", "Cajas"]]) {
-        const v = (uuid) => (c === "ratio" ? ratio(suma("cajas", uuid, per.clave), suma("racimos", uuid, per.clave)) : redondeo(suma(c, uuid, per.clave)));
+      for (const [c, etiqueta] of [["embolses", "Embolses"], ["aprov", "Aprovechamiento"], ["racimos", "Racimos"], ["ratio", "Ratio"], ["cajas", "Cajas"]]) {
+        const v = (uuid) => {
+          if (c === "aprov") return uuid ? aprovF.get(uuid) ?? null : pondera((u) => suma("embolses", u, per.clave));
+          return c === "ratio" ? ratio(suma("cajas", uuid, per.clave), suma("racimos", uuid, per.clave)) : redondeo(suma(c, uuid, per.clave));
+        };
         const fila = hoja.addRow([etiqueta === "Embolses" ? per.titulo : "", etiqueta, ...fincas.map((f) => v(f.uuid)), v(null)]);
         if (c === "ratio") fila.eachCell({ includeEmpty: false }, (cell, n) => n > 2 && (cell.numFmt = "0.0000"));
+        if (c === "aprov") fila.eachCell({ includeEmpty: false }, (cell, n) => n > 2 && (cell.numFmt = "0.0%"));
       }
     }
-    for (const [c, etiqueta] of [["embolses", "Embolses"], ["racimos", "Racimos"], ["ratio", "Ratio"], ["cajas", "Cajas"]]) {
-      const v = (uuid) => (c === "ratio" ? ratio(sumaFinca("cajas", uuid), sumaFinca("racimos", uuid)) : redondeo(sumaFinca(c, uuid)));
-      const total = c === "ratio" ? ratio(fincas.reduce((a2, f) => a2 + sumaFinca("cajas", f.uuid), 0), fincas.reduce((a2, f) => a2 + sumaFinca("racimos", f.uuid), 0)) : redondeo(fincas.reduce((a2, f) => a2 + sumaFinca(c, f.uuid), 0));
+    for (const [c, etiqueta] of [["embolses", "Embolses"], ["aprov", "Aprovechamiento"], ["racimos", "Racimos"], ["ratio", "Ratio"], ["cajas", "Cajas"]]) {
+      const v = (uuid) => (c === "aprov" ? aprovF.get(uuid) ?? null : c === "ratio" ? ratio(sumaFinca("cajas", uuid), sumaFinca("racimos", uuid)) : redondeo(sumaFinca(c, uuid)));
+      const total = c === "aprov" ? pondera((u) => sumaFinca("embolses", u)) : c === "ratio" ? ratio(fincas.reduce((a2, f) => a2 + sumaFinca("cajas", f.uuid), 0), fincas.reduce((a2, f) => a2 + sumaFinca("racimos", f.uuid), 0)) : redondeo(fincas.reduce((a2, f) => a2 + sumaFinca(c, f.uuid), 0));
       const fila = hoja.addRow([etiqueta === "Embolses" ? "Total" : "", etiqueta, ...fincas.map((f) => v(f.uuid)), total]);
       fila.font = { bold: true };
       if (c === "ratio") fila.eachCell({ includeEmpty: false }, (cell, n) => n > 2 && (cell.numFmt = "0.0000"));
+      if (c === "aprov") fila.eachCell({ includeEmpty: false }, (cell, n) => n > 2 && (cell.numFmt = "0.0%"));
     }
     hoja.getColumn(1).width = 14;
     hoja.getColumn(2).width = 11;
