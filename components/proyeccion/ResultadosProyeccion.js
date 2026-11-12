@@ -12,6 +12,7 @@ const metricas = (tasa) => [
   { id: "cajas", label: `Cajas ${tasa}`, bajo: "cajasBajo", alto: "cajasAlto" },
   { id: "embolses", label: "Embolses", bajo: "embolsesBajo", alto: "embolsesAlto" },
   { id: "racimos", label: "Racimos cosechados" },
+  { id: "juntos", label: "Embolses, racimos, ratio y cajas" }, // solo en las tablas por semana y por mes
 ];
 const COLORES = { proyeccion: "#16a34a", bajo: "#d97706", alto: "#2563eb", a1: "#64748b", a2: "#a8a29e" };
 
@@ -90,28 +91,52 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
   // Filas = semanas (o meses); columnas = fincas.
   const periodos = periodo === "semana" ? porSemana.map((s) => ({ clave: s.semanaCodigo, titulo: s.semanaCodigo, real: s.real })) : MESES.map((m, i) => ({ clave: i, titulo: m }));
 
-  const { fincas, valores, totalesFinca, totalesPeriodo } = useMemo(() => {
+  const juntos = metrica === "juntos";
+  // Valores por finca y periodo de cada campo (embolses, racimos y cajas): la vista "juntos" los muestra a la vez y el ratio sale de cajas / racimos.
+  const { fincas, vals, totales } = useMemo(() => {
     const nombres = new Map(); // fincaUuid -> nombre
-    const val = new Map(); // `${fincaUuid}|${clave}` -> valor
+    const campos = ["embolses", "racimos", "cajas"];
+    const v = Object.fromEntries(campos.map((c) => [c, new Map()])); // `${fincaUuid}|${clave}` -> valor
     for (const f of filas) {
       if (ocultas.has(f.fincaUuid)) continue; // columnas ocultas: no se muestran ni suman
       nombres.set(f.fincaUuid, f.fincaNombre);
       const clave = periodo === "semana" ? f.semanaCodigo : mesDe(f.fechaInicio);
       const k = `${f.fincaUuid}|${clave}`;
-      val.set(k, (val.get(k) || 0) + (f[metrica] || 0));
+      for (const c of campos) v[c].set(k, (v[c].get(k) || 0) + (f[c] || 0));
     }
-    const lista = [...nombres.entries()].map(([uuid, nombre]) => ({ uuid, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-    const totF = new Map();
-    const totP = new Map();
-    for (const [k, v] of val) {
-      const [uuid, clave] = k.split("|");
-      totF.set(uuid, (totF.get(uuid) || 0) + v);
-      totP.set(clave, (totP.get(clave) || 0) + v);
+    const lista = [...nombres.entries()].map(([uuid, nombre]) => ({ uuid, nombre })).sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
+    const t = {};
+    for (const c of campos) {
+      const porFinca = new Map();
+      const porPeriodo = new Map();
+      for (const [k, val] of v[c]) {
+        const [uuid, clave] = k.split("|");
+        porFinca.set(uuid, (porFinca.get(uuid) || 0) + val);
+        porPeriodo.set(clave, (porPeriodo.get(clave) || 0) + val);
+      }
+      t[c] = { porFinca, porPeriodo, general: [...porFinca.values()].reduce((x, y) => x + y, 0) };
     }
-    return { fincas: lista, valores: val, totalesFinca: totF, totalesPeriodo: totP };
-  }, [filas, metrica, periodo, ocultas]);
+    return { fincas: lista, vals: v, totales: t };
+  }, [filas, periodo, ocultas]);
 
-  const totalGeneral = [...totalesFinca.values()].reduce((a, b) => a + b, 0);
+  // El ratio no se suma: es cajas / racimos de lo que se muestra (finca, periodo o total).
+  const ratioDe = (caj, rac) => (rac > 0 ? fmtD(caj / rac, 4) : "—");
+  const celda = (campo, uuid, clave) => {
+    const k = `${uuid}|${clave}`;
+    if (campo === "ratio") return ratioDe(vals.cajas.get(k), vals.racimos.get(k));
+    return fmt(vals[campo].get(k));
+  };
+  const totalPeriodo = (campo, clave) => {
+    const c = String(clave);
+    return campo === "ratio" ? ratioDe(totales.cajas.porPeriodo.get(c), totales.racimos.porPeriodo.get(c)) : fmt(totales[campo].porPeriodo.get(c));
+  };
+  const totalFinca = (campo, uuid) => (campo === "ratio" ? ratioDe(totales.cajas.porFinca.get(uuid), totales.racimos.porFinca.get(uuid)) : fmt(totales[campo].porFinca.get(uuid)));
+  const totalGeneral = (campo) => (campo === "ratio" ? ratioDe(totales.cajas.general, totales.racimos.general) : fmt(totales[campo].general));
+  const datos = juntos
+    ? [["embolses", "Embolses"], ["racimos", "Racimos"], ["ratio", "Ratio"], ["cajas", "Cajas"]]
+    : [[metrica, null]];
+  const anchoPrimera = periodo === "semana" ? 90 : 70;
+
   // Encabezados y columna de semana/mes con color propio para distinguirlos de los datos.
   const encabezado = { background: "#166534", color: "#fff" };
   const primeraCol = "#e8f6ee";
@@ -122,7 +147,8 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
       <table className="table table-sm table-hover table-bordered align-middle mb-0 small" style={{ whiteSpace: "nowrap", "--bs-table-border-color": "#b9c9be" }}>
         <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
           <tr>
-            <th style={{ position: "sticky", left: 0, ...encabezado, zIndex: 3, minWidth: periodo === "semana" ? 90 : 70 }}>{periodo === "semana" ? "Semana" : "Mes"}</th>
+            <th style={{ position: "sticky", left: 0, ...encabezado, zIndex: 3, minWidth: anchoPrimera }}>{periodo === "semana" ? "Semana" : "Mes"}</th>
+            {juntos && <th style={{ position: "sticky", left: anchoPrimera, ...encabezado, zIndex: 3, minWidth: 70 }}>Dato</th>}
             {fincas.map((f) => (
               <th
                 key={f.uuid}
@@ -151,36 +177,46 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
             const desplegable = periodo === "semana";
             const abierta = desplegable && abiertas.has(pr.clave);
             // Filas del cálculo de esta semana: cada una trae su valor por finca y el total de las fincas visibles.
-            const detalle = abierta ? filasCalculo(pr.clave, fincas, filaDe, tasa, metrica) : [];
+            const detalle = abierta ? filasCalculo(pr.clave, fincas, filaDe, tasa, juntos ? "cajas" : metrica) : [];
             // Semana desplegada: borde grueso y oscuro arriba de la semana y debajo de su última fila, para separar el bloque.
             const bordeArriba = abierta ? { borderTop: "3px solid #14532d" } : {};
             return (
               <Fragment key={pr.clave}>
-                <tr
-                  role={desplegable ? "button" : undefined}
-                  style={desplegable ? { cursor: "pointer" } : undefined}
-                  title={desplegable ? "Clic para ver cómo se calcularon las cajas de esta semana" : undefined}
-                  onClick={desplegable ? () => alternar(pr.clave) : undefined}
-                >
-                  <td className="fw-semibold" style={{ position: "sticky", left: 0, background: primeraCol, color: "#14532d", zIndex: 1, ...bordeArriba }} title={pr.real ? "Semana real" : undefined}>
-                    {desplegable && (abierta ? <FiChevronDown className="me-1" /> : <FiChevronRight className="me-1" />)}
-                    {pr.titulo}
-                    {pr.real ? "*" : ""}
-                  </td>
-                  {fincas.map((f) => (
-                    <td key={f.uuid} className="text-center" style={bordeArriba}>
-                      {fmt(valores.get(`${f.uuid}|${pr.clave}`))}
+                {datos.map(([campo, etiqueta], di) => (
+                  <tr
+                    key={campo}
+                    role={desplegable ? "button" : undefined}
+                    style={desplegable ? { cursor: "pointer" } : undefined}
+                    title={desplegable ? "Clic para ver cómo se calcularon las cajas de esta semana" : undefined}
+                    onClick={desplegable ? () => alternar(pr.clave) : undefined}
+                  >
+                    {di === 0 && (
+                      <td rowSpan={datos.length} className="fw-semibold" style={{ position: "sticky", left: 0, background: primeraCol, color: "#14532d", zIndex: 1, ...bordeArriba }} title={pr.real ? "Semana real" : undefined}>
+                        {desplegable && (abierta ? <FiChevronDown className="me-1" /> : <FiChevronRight className="me-1" />)}
+                        {pr.titulo}
+                        {pr.real ? "*" : ""}
+                      </td>
+                    )}
+                    {etiqueta && (
+                      <td className="small fw-medium" style={{ position: "sticky", left: anchoPrimera, background: primeraCol, color: "#14532d", zIndex: 1, ...(di === 0 ? bordeArriba : {}) }}>
+                        {etiqueta}
+                      </td>
+                    )}
+                    {fincas.map((f) => (
+                      <td key={f.uuid} className="text-center" style={di === 0 ? bordeArriba : undefined}>
+                        {celda(campo, f.uuid, pr.clave)}
+                      </td>
+                    ))}
+                    <td className="text-center fw-semibold" style={{ background: pie, ...(di === 0 ? bordeArriba : {}) }}>
+                      {totalPeriodo(campo, pr.clave)}
                     </td>
-                  ))}
-                  <td className="text-center fw-semibold" style={{ background: pie, ...bordeArriba }}>
-                    {fmt(totalesPeriodo.get(String(pr.clave)))}
-                  </td>
-                </tr>
+                  </tr>
+                ))}
                 {detalle.map((d, di) => {
                   const bordeAbajo = di === detalle.length - 1 ? { borderBottom: "3px solid #14532d" } : {};
                   return (
                   <tr key={d.clave} style={{ background: d.resalta ? "#e3eee7" : "#eff5f1" }}>
-                    <td style={{ position: "sticky", left: 0, background: d.resalta ? "#d3e2d8" : "#dfeae3", color: "#14532d", zIndex: 1, paddingLeft: "1.6rem", whiteSpace: "nowrap", ...bordeAbajo }} className={d.resalta ? "fw-semibold small" : "small"}>
+                    <td colSpan={juntos ? 2 : 1} style={{ position: "sticky", left: 0, background: d.resalta ? "#d3e2d8" : "#dfeae3", color: "#14532d", zIndex: 1, paddingLeft: "1.6rem", whiteSpace: "nowrap", ...bordeAbajo }} className={d.resalta ? "fw-semibold small" : "small"}>
                       {d.titulo}
                     </td>
                     {fincas.map((f) => (
@@ -199,15 +235,28 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
           })}
         </tbody>
         <tfoot style={{ position: "sticky", bottom: 0 }}>
-          <tr className="fw-bold" style={{ background: pie }}>
-            <td style={{ position: "sticky", left: 0, ...encabezado }}>Total</td>
-            {fincas.map((f) => (
-              <td key={f.uuid} className="text-center" style={{ background: pie }}>
-                {fmt(totalesFinca.get(f.uuid))}
+          {datos.map(([campo, etiqueta], di) => (
+            <tr key={campo} className="fw-bold" style={{ background: pie }}>
+              {di === 0 && (
+                <td rowSpan={datos.length} style={{ position: "sticky", left: 0, ...encabezado }}>
+                  Total
+                </td>
+              )}
+              {etiqueta && (
+                <td className="small" style={{ position: "sticky", left: anchoPrimera, background: pie }}>
+                  {etiqueta}
+                </td>
+              )}
+              {fincas.map((f) => (
+                <td key={f.uuid} className="text-center" style={{ background: pie }}>
+                  {totalFinca(campo, f.uuid)}
+                </td>
+              ))}
+              <td className="text-center" style={{ ...encabezado }}>
+                {totalGeneral(campo)}
               </td>
-            ))}
-            <td className="text-center" style={{ ...encabezado }}>{fmt(totalGeneral)}</td>
-          </tr>
+            </tr>
+          ))}
         </tfoot>
       </table>
     </div>
@@ -366,12 +415,17 @@ async function exportarPivot({ resultado, metrica, metricaLabel, periodo, oculta
   const periodos = periodo === "semana" ? porSemana.map((s) => ({ clave: s.semanaCodigo, titulo: s.real ? `${s.semanaCodigo} *` : s.semanaCodigo })) : MESES.map((m, i) => ({ clave: i, titulo: m }));
   const nombres = new Map();
   const val = new Map();
+  const extra = { embolses: new Map(), racimos: new Map(), cajas: new Map() }; // para la vista "Embolses, racimos, ratio y cajas"
   for (const f of filas) {
     if (ocultas.has(f.fincaUuid)) continue;
     nombres.set(f.fincaUuid, f.fincaNombre);
     const clave = periodo === "semana" ? f.semanaCodigo : mesDe(f.fechaInicio);
     const k = `${f.fincaUuid}|${clave}`;
     val.set(k, (val.get(k) || 0) + (f[metrica] || 0));
+    for (const c of ["embolses", "racimos", "cajas"]) {
+      const m = extra[c];
+      m.set(k, (m.get(k) || 0) + (f[c] || 0));
+    }
   }
   const fincas = [...nombres.entries()].map(([uuid, nombre]) => ({ uuid, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
   const redondeo = (v) => Math.round(v * 100) / 100;
@@ -385,6 +439,42 @@ async function exportarPivot({ resultado, metrica, metricaLabel, periodo, oculta
   const encabezado = hoja.addRow([periodo === "semana" ? "Semana" : "Mes", ...fincas.map((f) => f.nombre), "Total"]);
   encabezado.font = { bold: true, color: { argb: "FFFFFFFF" } };
   encabezado.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } }));
+  if (metrica === "juntos") {
+    // Cuatro filas por periodo (embolses, racimos, ratio y cajas); el ratio es cajas / racimos.
+    hoja.spliceRows(encabezado.number, 1, ["", "Dato", ...fincas.map((f) => f.nombre), "Total"]);
+    const enc = hoja.getRow(encabezado.number);
+    enc.getCell(1).value = periodo === "semana" ? "Semana" : "Mes";
+    enc.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    enc.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } }));
+    const suma = (c, uuid, clave) => (uuid ? extra[c].get(`${uuid}|${clave}`) || 0 : fincas.reduce((a2, f) => a2 + (extra[c].get(`${f.uuid}|${clave}`) || 0), 0));
+    const sumaFinca = (c, uuid) => periodos.reduce((a2, per) => a2 + suma(c, uuid, per.clave), 0);
+    const ratio = (caj, rac) => (rac > 0 ? Math.round((caj / rac) * 10000) / 10000 : null);
+    for (const per of periodos) {
+      for (const [c, etiqueta] of [["embolses", "Embolses"], ["racimos", "Racimos"], ["ratio", "Ratio"], ["cajas", "Cajas"]]) {
+        const v = (uuid) => (c === "ratio" ? ratio(suma("cajas", uuid, per.clave), suma("racimos", uuid, per.clave)) : redondeo(suma(c, uuid, per.clave)));
+        const fila = hoja.addRow([etiqueta === "Embolses" ? per.titulo : "", etiqueta, ...fincas.map((f) => v(f.uuid)), v(null)]);
+        if (c === "ratio") fila.eachCell({ includeEmpty: false }, (cell, n) => n > 2 && (cell.numFmt = "0.0000"));
+      }
+    }
+    for (const [c, etiqueta] of [["embolses", "Embolses"], ["racimos", "Racimos"], ["ratio", "Ratio"], ["cajas", "Cajas"]]) {
+      const v = (uuid) => (c === "ratio" ? ratio(sumaFinca("cajas", uuid), sumaFinca("racimos", uuid)) : redondeo(sumaFinca(c, uuid)));
+      const total = c === "ratio" ? ratio(fincas.reduce((a2, f) => a2 + sumaFinca("cajas", f.uuid), 0), fincas.reduce((a2, f) => a2 + sumaFinca("racimos", f.uuid), 0)) : redondeo(fincas.reduce((a2, f) => a2 + sumaFinca(c, f.uuid), 0));
+      const fila = hoja.addRow([etiqueta === "Embolses" ? "Total" : "", etiqueta, ...fincas.map((f) => v(f.uuid)), total]);
+      fila.font = { bold: true };
+      if (c === "ratio") fila.eachCell({ includeEmpty: false }, (cell, n) => n > 2 && (cell.numFmt = "0.0000"));
+    }
+    hoja.getColumn(1).width = 14;
+    hoja.getColumn(2).width = 11;
+    for (let i = 3; i <= fincas.length + 3; i += 1) hoja.getColumn(i).width = 14;
+    hoja.views = [{ state: "frozen", xSplit: 2, ySplit: encabezado.number }];
+    const blobJ = new Blob([await libro.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const aJ = document.createElement("a");
+    aJ.href = URL.createObjectURL(blobJ);
+    aJ.download = `proyeccion-${meta.anio}-${periodo === "semana" ? "semana" : "mes"}-finca-juntos.xlsx`;
+    aJ.click();
+    URL.revokeObjectURL(aJ.href);
+    return;
+  }
   const totalesFinca = new Map();
   for (const per of periodos) {
     let total = 0;
@@ -497,7 +587,7 @@ export default function ResultadosProyeccion({ resultado, productos = [], onProd
       {vista === "semanal" && <Pivot resultado={resultado} metrica={metrica} periodo="semana" ocultas={ocultas} onGraficas={setGraficas} />}
       {vista === "mensual" && <Pivot resultado={resultado} metrica={metrica} periodo="mes" ocultas={ocultas} onGraficas={setGraficas} />}
       {vista === "producto" && <PorProducto resultado={resultado} ocultas={ocultas} productos={productos} onChange={onProductosChange} puedeEditar={puedeEditar} nombreEscenario={nombreEscenario} />}
-      {vista === "grafico" && <Grafico resultado={resultado} metrica={metrica} />}
+      {vista === "grafico" && <Grafico resultado={resultado} metrica={metrica === "juntos" ? "cajas" : metrica} />}
       {vista === "comparativo" && <Comparativo resultado={resultado} />}
       {vista === "semanal" && <p className="small text-secondary mt-2 mb-0">* Semana ya transcurrida: usa el dato real. Haz clic en el nombre de una finca para ver sus gráficas, y en una semana para desplegar el cálculo de sus cajas (hectáreas, embolses, racimos por edad y ratio) debajo de ella.</p>}
 
