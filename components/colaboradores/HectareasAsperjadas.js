@@ -97,31 +97,68 @@ export default function HectareasAsperjadas({ vista = "tabla" }) {
       return n;
     });
 
+  // Excel de pago: una pestaña para los pilotos y otra para los asistentes, agrupado por colaborador con su «TOTAL HAS ASPERJADAS».
   async function exportar() {
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Hectáreas asperjadas", { views: [{ state: "frozen", ySplit: 1 }] });
-    ws.columns = [
-      { header: "Fecha", key: "fecha", width: 12 },
-      { header: "Colaborador", key: "colaborador", width: 28 },
-      { header: "Cargo", key: "cargo", width: 22 },
-      { header: "Rol", key: "rol", width: 11 },
-      { header: "Finca", key: "finca", width: 22 },
-      { header: "Aspersión", key: "aspersion", width: 12 },
-      { header: "Comprobante", key: "comprobante", width: 13 },
-      { header: "Estado", key: "estado", width: 11 },
-      { header: "Hectáreas", key: "hectareas", width: 11 },
+    const borde = { style: "thin", color: { argb: "FF9CA3AF" } };
+    const bordes = { top: borde, left: borde, bottom: borde, right: borde };
+    const fmtFecha = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+    const COLS = [
+      ["FECHA", 13],
+      ["SEMANA", 9],
+      ["FINCA", 22],
+      ["CODIGO FINCA", 14],
+      ["CÓDIGO TRABAJADOR", 15],
+      ["NOMBRE DEL TRABAJADOR", 40],
+      ["C.C.", 14],
+      ["HA FINCAS", 12],
     ];
-    ws.getRow(1).font = { bold: true };
-    for (const d of detalle) ws.addRow({ ...d, colaborador: d.colaborador.nombre, rol: d.rol === "PILOTO" ? "Piloto" : "Asistente" });
-    const tot = wb.addWorksheet("Totales por colaborador");
-    tot.columns = [
-      { header: "Colaborador", key: "colaborador", width: 28 },
-      { header: "Cargo", key: "cargo", width: 22 },
-      { header: "Aplicaciones", key: "aplicaciones", width: 13 },
-      { header: "Hectáreas", key: "hectareas", width: 12 },
-    ];
-    tot.getRow(1).font = { bold: true };
-    for (const c of porColaborador) tot.addRow({ ...c, hectareas: Math.round(c.hectareas * 100) / 100 });
+    const hoja = (nombre, rol) => {
+      const ws = wb.addWorksheet(nombre, { views: [{ state: "frozen", ySplit: 1 }] });
+      ws.columns = COLS.map(([header, width]) => ({ header, width }));
+      const enc = ws.getRow(1);
+      enc.height = 30;
+      enc.eachCell((c) => {
+        c.font = { bold: true, size: 12 };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFF00" } };
+        c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        c.border = bordes;
+      });
+      const filas = detalle.filter((d) => d.rol === rol);
+      const porPersona = new Map();
+      for (const d of filas) {
+        const x = porPersona.get(d.colaborador.uuid) || { nombre: d.colaborador.nombre, filas: [] };
+        x.filas.push(d);
+        porPersona.set(d.colaborador.uuid, x);
+      }
+      const personas = [...porPersona.values()].sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
+      for (const persona of personas) {
+        let suma = 0;
+        for (const d of [...persona.filas].sort((x, y) => (x.fecha === y.fecha ? x.finca.localeCompare(y.finca, "es") : x.fecha < y.fecha ? -1 : 1))) {
+          const fila = ws.addRow([fmtFecha(d.fecha), d.semana ?? "", d.finca.toUpperCase(), d.fincaCodigo, "", persona.nombre.toUpperCase(), d.documento, Math.round(d.hectareas * 100) / 100]);
+          suma += d.hectareas;
+          fila.eachCell((c, n) => {
+            c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE7E6E6" } };
+            c.border = bordes;
+            c.alignment = { horizontal: n === 6 ? "left" : "center", vertical: "middle" };
+          });
+          fila.getCell(8).numFmt = "#,##0.00";
+        }
+        const tot = ws.addRow(["", "", "", "", "", "", "TOTAL HAS ASPERJADAS:", Math.round(suma * 100) / 100]);
+        ws.mergeCells(tot.number, 1, tot.number, 7);
+        tot.getCell(1).value = "TOTAL HAS ASPERJADAS:";
+        tot.getCell(1).alignment = { horizontal: "right", vertical: "middle" };
+        tot.eachCell((c) => {
+          c.font = { bold: true };
+          c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFA9D08E" } };
+          c.border = bordes;
+        });
+        tot.getCell(8).alignment = { horizontal: "center" };
+        tot.getCell(8).numFmt = "#,##0.00";
+      }
+    };
+    hoja("Pilotos", "PILOTO");
+    hoja("Asistentes", "ASISTENTE");
     const buf = await wb.xlsx.writeBuffer();
     const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
     const a = document.createElement("a");
