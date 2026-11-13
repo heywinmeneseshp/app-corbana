@@ -33,6 +33,7 @@ function emptyForm() {
     telefono: "",
     fechaIngreso: "",
     vacacionesPrevias: "",
+    pilotoCertificado: false,
     email: "",
     cargo: "",
     ubicacion: "",
@@ -251,6 +252,7 @@ export default function ColaboradoresModulo({ modulo = null }) {
       telefono: colaborador.telefono || "",
       fechaIngreso: colaborador.fechaIngreso ? String(colaborador.fechaIngreso).slice(0, 10) : "",
       vacacionesPrevias: colaborador.vacacionesPrevias ? String(Number(colaborador.vacacionesPrevias)) : "",
+      pilotoCertificado: Boolean(colaborador.pilotoCertificado),
       email: colaborador.email || "",
       cargo: colaborador.cargo || "",
       modulo: colaborador.modulo || "GENERAL",
@@ -281,6 +283,7 @@ export default function ColaboradoresModulo({ modulo = null }) {
         telefono: form.telefono || null,
         fechaIngreso: form.fechaIngreso || null,
         vacacionesPrevias: form.vacacionesPrevias === "" ? 0 : Number(form.vacacionesPrevias),
+        pilotoCertificado: Boolean(form.pilotoCertificado),
         email: form.email || null,
         cargo: form.cargo || null,
         ...(!editing && form.userUuid ? { userUuid: form.userUuid } : {}),
@@ -582,6 +585,7 @@ export default function ColaboradoresModulo({ modulo = null }) {
                 {!modulo && <th>Módulo</th>}
                 <th>Identificación</th>
                 <th>Cargo</th>
+                <th>Piloto certificado</th>
                 <th>Teléfono</th>
                 <th>Lugar predeterminado</th>
                 <th>Labores</th>
@@ -639,6 +643,15 @@ export default function ColaboradoresModulo({ modulo = null }) {
                       {c.documento || "—"}
                     </td>
                     <td className="small text-secondary">{c.cargo || "—"}</td>
+                    <td className="small">
+                      {c.pilotoCertificado ? (
+                        <span className="badge rounded-1 fw-medium" style={{ background: "#dcfce7", color: "#166534", fontSize: "0.66rem" }}>Sí</span>
+                      ) : /piloto/i.test(c.cargo || "") ? (
+                        <span className="badge rounded-1 fw-medium" style={{ background: "#fee2e2", color: "#b91c1c", fontSize: "0.66rem" }}>No</span>
+                      ) : (
+                        <span className="text-secondary">—</span>
+                      )}
+                    </td>
                     <td className="small text-secondary">
                       {c.telefono || "—"}
                     </td>
@@ -971,6 +984,18 @@ export default function ColaboradoresModulo({ modulo = null }) {
                 htmlFor="colaborador-estado"
               >
                 Activo
+              </label>
+            </div>
+            <div className="form-check mb-3">
+              <input
+                type="checkbox"
+                className="form-check-input"
+                id="colaborador-piloto-certificado"
+                checked={Boolean(form.pilotoCertificado)}
+                onChange={(e) => setForm((f) => ({ ...f, pilotoCertificado: e.target.checked }))}
+              />
+              <label className="form-check-label small" htmlFor="colaborador-piloto-certificado">
+                Certificado como piloto de dron
               </label>
             </div>
 
