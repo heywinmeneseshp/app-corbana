@@ -92,7 +92,7 @@ export default function CargueMasivoArticulosModal({ endpoint, onClose, onListo 
 
         <div className="col-12 col-lg-7">
           <div className="border rounded-1 p-3 mb-3">
-            {paso(2, "Elige el archivo y revísalo")}
+            {paso(2, resultado ? "Cargue terminado" : "Elige el archivo, revísalo y carga")}
             <input
               ref={inputRef}
               type="file"
@@ -109,10 +109,7 @@ export default function CargueMasivoArticulosModal({ endpoint, onClose, onListo 
               {trabajando && !revision ? "Revisando..." : "Revisar archivo"}
             </button>
             <span className="small text-secondary ms-2">No guarda nada todavía.</span>
-          </div>
-
-          <div className="border rounded-1 p-3">
-            {paso(3, resultado ? "Cargue terminado" : "Revisa y carga")}
+            <hr className="my-3" />
             {!r ? (
               <p className="small text-secondary mb-0">Aquí verás cuántas filas son nuevas, cuántas se actualizan y los errores.</p>
             ) : (
