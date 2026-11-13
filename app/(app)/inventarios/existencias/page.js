@@ -229,7 +229,8 @@ export default function ExistenciasPage() {
 
         <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
-            <table className="table table-hover mb-0 align-middle">
+            <style>{`.link-existencia:hover { text-decoration: underline !important; }`}</style>
+            <table className="table table-sm table-hover mb-0 align-middle" style={{ fontSize: "0.74rem" }}>
               <thead className="table-light">
                 <tr>
                   <th>Almacén</th>
@@ -263,13 +264,13 @@ export default function ExistenciasPage() {
                     const opciones = baseUuid ? [...unidadesAlcanzables(grafo, baseUuid)].map((u) => unidadPorUuid.get(u)).filter(Boolean) : [];
                     return (
                       <tr key={clave}>
-                        <td className="small text-secondary">{e.almacen?.nombre || "—"}</td>
-                        <td className="small text-secondary">{e.articulo?.codigo || "—"}</td>
+                        <td className="text-secondary">{e.almacen?.nombre || "—"}</td>
+                        <td className="text-secondary">{e.articulo?.codigo || "—"}</td>
                         <td className="fw-medium">
                           {e.articulo?.uuid ? (
                             <Link
                               href={`/inventarios/kardex?articuloUuid=${e.articulo.uuid}${e.almacen?.uuid ? `&almacenUuid=${e.almacen.uuid}` : ""}`}
-                              className="text-decoration-none"
+                              className="text-dark text-decoration-none link-existencia"
                               title="Ver kárdex de este artículo"
                             >
                               {e.articulo.nombre}
@@ -281,11 +282,11 @@ export default function ExistenciasPage() {
                         <td className={`text-end fw-medium ${e.saldo < 0 ? "text-danger" : ""}`}>
                           {convertido === null ? Number(e.saldo).toFixed(2) : Number(convertido.toFixed(4)).toLocaleString("es-CO", { maximumFractionDigits: 4 })}
                         </td>
-                        <td className="small text-secondary">
+                        <td className="text-secondary">
                           {opciones.length > 1 ? (
                             <select
-                              className="form-select form-select-sm rounded-3"
-                              style={{ minWidth: 150 }}
+                              className="form-select form-select-sm rounded-2 py-0"
+                              style={{ minWidth: 150, fontSize: "0.72rem" }}
                               value={elegida}
                               onChange={(ev) => setUnidadSel((m) => ({ ...m, [clave]: ev.target.value }))}
                             >
