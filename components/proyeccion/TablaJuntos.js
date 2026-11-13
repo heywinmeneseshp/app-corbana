@@ -374,8 +374,12 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
                   const fin = idx === detalle.length - 1 ? { borderBottom: `2px solid ${VERDE}` } : {};
                   const sumaEmb = fincas.reduce((t, f) => t + (detalleDe(f.uuid, idx)?.embolse || 0), 0);
                   const sumaRac = fincas.reduce((t, f) => t + (detalleDe(f.uuid, idx)?.descartado ? 0 : detalleDe(f.uuid, idx)?.racimos || 0), 0);
+                  const sumaHa = fincas.reduce((t, f) => t + (detalleDe(f.uuid, idx)?.hectareas || 0), 0);
+                  const sumaEmbConHa = fincas.reduce((t, f) => t + ((detalleDe(f.uuid, idx)?.hectareas || 0) > 0 ? detalleDe(f.uuid, idx)?.embolse || 0 : 0), 0);
                   const sumaEmbValido = fincas.reduce((t, f) => t + (detalleDe(f.uuid, idx)?.descartado ? 0 : detalleDe(f.uuid, idx)?.embolse || 0), 0);
                   const celdaDet = (id, d, esTotal = false) => {
+                    if (id === "ha") return d && d.hectareas > 0 ? haTxt(d.hectareas) : "—";
+                    if (id === "ephs") return d && d.embolsesPorHa != null ? haTxt(d.embolsesPorHa) : "—";
                     if (id === "embolses") return d ? num(d.embolse) : "—";
                     if (id === "aprov") return d ? `${(d.tasa * 100).toFixed(2)}%` : "—";
                     if (id === "racimos") return d ? (d.descartado ? "—" : num(d.racimos)) : "—";
@@ -391,7 +395,7 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
                         return DATOS.map((dd, di) => (
                           <td
                             key={`${f.uuid}-${dd.id}`}
-                            title={d ? (dd.id === "embolses" ? `${d.embolseReal ? "Embolse real" : "Embolse proyectado"} de la cinta ${d.semanaCodigo}` : dd.id === "aprov" ? `Porcentaje de la cinta que se corta a la edad ${d.edad}` : dd.id === "racimos" ? (d.descartado ? "Cinta embolsada antes de un cierre: no se cosecha" : `Embolse × porcentaje de corte`) : undefined) : undefined}
+                            title={d ? (dd.id === "ha" ? `Hectáreas en producción de la finca en la semana de embolse ${d.semanaCodigo}` : dd.id === "ephs" ? `Embolses por hectárea de la cinta ${d.semanaCodigo}` : dd.id === "embolses" ? `${d.embolseReal ? "Embolse real" : "Embolse proyectado"} de la cinta ${d.semanaCodigo}` : dd.id === "aprov" ? `Porcentaje de la cinta que se corta a la edad ${d.edad}` : dd.id === "racimos" ? (d.descartado ? "Cinta embolsada antes de un cierre: no se cosecha" : `Embolse × porcentaje de corte`) : undefined) : undefined}
                             style={{ ...base, ...(di === 0 ? grupo : {}), ...fin, ...(dd.id === "embolses" && d && !d.embolseReal ? { fontStyle: "italic", color: "#6b7280" } : {}) }}
                           >
                             {celdaDet(dd.id, d)}
@@ -400,7 +404,7 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
                       })}
                       {DATOS.map((dd, di) => (
                         <td key={`t-${dd.id}`} style={{ ...base, background: "#e3efe7", fontWeight: 600, ...(di === 0 ? grupo : {}), ...fin }}>
-                          {dd.id === "embolses" ? num(sumaEmb) : dd.id === "aprov" ? (sumaEmbValido > 0 ? `${((sumaRac / sumaEmbValido) * 100).toFixed(2)}%` : "—") : dd.id === "racimos" ? num(sumaRac) : ""}
+                          {dd.id === "ha" ? (sumaHa > 0 ? haTxt(sumaHa) : "—") : dd.id === "ephs" ? (sumaHa > 0 ? haTxt(sumaEmbConHa / sumaHa) : "—") : dd.id === "embolses" ? num(sumaEmb) : dd.id === "aprov" ? (sumaEmbValido > 0 ? `${((sumaRac / sumaEmbValido) * 100).toFixed(2)}%` : "—") : dd.id === "racimos" ? num(sumaRac) : ""}
                         </td>
                       ))}
                     </tr>
