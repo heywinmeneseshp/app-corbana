@@ -5,6 +5,7 @@ import { FiChevronDown, FiChevronRight, FiColumns, FiDownload } from "react-icon
 import GraficasFincaModal from "./GraficasFincaModal";
 import PorProducto from "./PorProducto";
 import TablaJuntos, { exportarJuntos } from "./TablaJuntos";
+import { aplicarRatioManual } from "./ratioManual";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -415,7 +416,9 @@ async function exportarPivot({ resultado, metrica, metricaLabel, periodo, oculta
   URL.revokeObjectURL(a.href);
 }
 
-export default function ResultadosProyeccion({ resultado, productos = [], onProductosChange = () => {}, puedeEditar = false, nombreEscenario = "", params, onParamsChange }) {
+export default function ResultadosProyeccion({ resultado: resultadoBase, productos = [], onProductosChange = () => {}, puedeEditar = false, nombreEscenario = "", params, onParamsChange }) {
+  // Con los ratios fijados a mano (aún sin guardar) las cajas, los totales y las gráficas se recalculan en pantalla.
+  const resultado = useMemo(() => aplicarRatioManual(resultadoBase, params?.ratioManual), [resultadoBase, params?.ratioManual]);
   const METRICAS = metricas(resultado.meta.tasaConversion ?? 18.6);
   const [vista, setVista] = useState("semanal");
   const [metrica, setMetrica] = useState("cajas");
