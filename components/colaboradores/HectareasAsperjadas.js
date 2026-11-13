@@ -135,8 +135,8 @@ export default function HectareasAsperjadas({ vista = "tabla" }) {
       const enc = ws.getRow(1);
       enc.height = 30;
       enc.eachCell((c) => {
-        c.font = { bold: true, size: 12 };
-        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFF00" } };
+        c.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } };
         c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         c.border = bordes;
       });
@@ -266,9 +266,9 @@ export default function HectareasAsperjadas({ vista = "tabla" }) {
               <div className="table-responsive">
                 <table className="table table-sm mb-0 align-middle text-center" style={{ fontSize: "0.78rem" }}>
                   <thead>
-                    <tr style={{ backgroundColor: "#ffff00" }}>
+                    <tr>
                       {["FECHA", "SEMANA", "FINCA", "CÓDIGO FINCA", "CÓDIGO TRABAJADOR", "NOMBRE DEL TRABAJADOR", "C.C.", "HA FINCAS"].map((h) => (
-                        <th key={h} className="fw-bold" style={{ backgroundColor: "#ffff00" }}>
+                        <th key={h} className="fw-bold" style={{ backgroundColor: "#166534", color: "#fff" }}>
                           {h}
                         </th>
                       ))}
