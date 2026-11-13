@@ -330,7 +330,7 @@ export default function MovimientosPage() {
 
         <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
-            <table className="table table-hover mb-0 align-middle">
+            <table className="table table-sm table-hover mb-0 align-middle" style={{ fontSize: "0.74rem" }}>
               <thead className="table-light">
                 <tr>
                   <th>Fecha</th>
@@ -363,16 +363,16 @@ export default function MovimientosPage() {
                 {!loading &&
                   items.map((m) => (
                     <tr key={m.uuid}>
-                      <td className="small text-secondary text-nowrap">{formatoFecha(m.fecha)}</td>
-                      <td className="fw-medium">
+                      <td className="text-secondary text-nowrap">{formatoFecha(m.fecha)}</td>
+                      <td className="fw-medium text-nowrap">
                         {m.documento}
                         {m.proveedor && <div className="small text-secondary fw-normal">{m.proveedor.nombre}</div>}
                       </td>
                       <td>
-                        <span className={`badge rounded-pill text-bg-${badgeFor(m.tipo)}`}>{labelFor(m.tipo)}</span>
+                        <span className={`badge rounded-1 fw-medium text-bg-${badgeFor(m.tipo)}`} style={{ fontSize: "0.66rem" }}>{labelFor(m.tipo)}</span>
                       </td>
-                      <td className="small text-secondary">{m.almacen?.nombre || "—"}</td>
-                      <td className="small">
+                      <td className="text-secondary">{m.almacen?.nombre || "—"}</td>
+                      <td>
                         {m.articulo?.uuid ? (
                           <Link href={`/inventarios/kardex?articuloUuid=${m.articulo.uuid}`} className="text-decoration-none" title="Ver kárdex de este artículo">
                             {m.articulo.nombre}
@@ -381,13 +381,13 @@ export default function MovimientosPage() {
                           "—"
                         )}
                       </td>
-                      <td className="small">
+                      <td>
                         {Number(m.cantidad).toFixed(2)} {m.unidad?.simbolo || ""}
                       </td>
-                      <td className="small">{Number(m.costoUnitario || 0).toFixed(2)}</td>
-                      <td className="small">{Number(m.costoTotal || 0).toFixed(2)}</td>
-                      <td className="small text-secondary">{m.motivo?.nombre || "—"}</td>
-                      <td className="small text-secondary">{m.usuario?.usuario || "—"}</td>
+                      <td>{Number(m.costoUnitario || 0).toFixed(2)}</td>
+                      <td>{Number(m.costoTotal || 0).toFixed(2)}</td>
+                      <td className="text-secondary text-truncate" style={{ maxWidth: "11rem" }} title={m.motivo?.nombre || ""}>{m.motivo?.nombre || "—"}</td>
+                      <td className="text-secondary">{m.usuario?.usuario || "—"}</td>
                     </tr>
                   ))}
               </tbody>
