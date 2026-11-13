@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
+import { FiChevronDown, FiChevronRight } from "react-icons/fi";
 
 // Vista «Embolses, aprovechamiento, racimos, ratio y cajas»: una fila por semana (o mes); cada finca (y el total) es un grupo de cinco columnas que
 // se lee de izquierda a derecha como el cálculo: embolses × aprovechamiento = racimos; racimos × ratio = cajas.
@@ -82,6 +83,16 @@ const texto = (dato, v) => (v === null || v === undefined ? "—" : dato === "ap
 const esEstimado = (dato, c) => dato === "aprov" && c && c.real === 0;
 
 export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, params, onParamsChange, puedeEditar = false }) {
+  // Semanas desplegadas: debajo de la semana se ve de dónde salen sus racimos, edad por edad.
+  const [abiertas, setAbiertas] = useState(() => new Set());
+  const alternar = (clave) =>
+    setAbiertas((prev) => {
+      const n = new Set(prev);
+      if (n.has(clave)) n.delete(clave);
+      else n.add(clave);
+      return n;
+    });
+  const filaDe = useMemo(() => new Map(resultado.filas.map((f) => [`${f.fincaUuid}|${f.semanaCodigo}`, f])), [resultado]);
   const [editando, setEditando] = useState(null); // `${fincaUuid}|${semana}` de la celda de ratio que se está editando
   const { fincas, celdas, sumaFincas, sumaPeriodos } = useMemo(() => acumular(resultado, periodo, ocultas), [resultado, periodo, ocultas]);
   const periodos = periodo === "semana" ? resultado.porSemana.map((s) => ({ clave: s.semanaCodigo, titulo: s.semanaCodigo, real: s.real })) : MESES.map((m, i) => ({ clave: i, titulo: m }));
@@ -266,7 +277,7 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
     <div>
       <p className="small text-secondary mb-2">
         Cada finca se lee de izquierda a derecha: <strong>embolses × aprovechamiento = racimos</strong>, y <strong>racimos × ratio = cajas</strong>. En cursiva, un aprovechamiento sin dato real
-        todavía (usa el % aplicado a la finca).{puedeEditar && periodo === "semana" && " Haz clic en el ratio de una semana proyectada para fijarlo a mano y luego pulsa Guardar y calcular."}
+        todavía (usa el % aplicado a la finca). Haz clic en una semana para ver de qué cintas y edades salen sus racimos.{puedeEditar && periodo === "semana" && " Haz clic en el ratio de una semana proyectada para fijarlo a mano y luego pulsa Guardar y calcular."}
       </p>
       <div className="table-responsive border rounded-3" style={{ maxHeight: "68vh" }}>
         <table className="table table-sm align-middle mb-0" style={{ whiteSpace: "nowrap", borderCollapse: "separate", borderSpacing: 0 }}>
@@ -326,21 +337,80 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
           <tbody>
             {periodos.map((pr, bi) => {
               const fondo = bi % 2 === 0 ? "#ffffff" : "#f6faf7"; // filas alternas
+              const desplegable = periodo === "semana";
+              const abierta = desplegable && abiertas.has(pr.clave);
+              const bordeAbierta = abierta ? { borderTop: `2px solid ${VERDE}` } : { borderTop: "1px solid #e5ece7" };
+              // Desglose de los racimos de esta semana: cada edad de corte (8 a 12) viene de una cinta (semana de embolse) distinta.
+              const detalle = abierta ? [0, 1, 2, 3, 4] : [];
+              const detalleDe = (uuid, idx) => filaDe.get(`${uuid}|${pr.clave}`)?.detalleEdades?.[idx];
+              const origen = (idx) => fincas.map((f) => detalleDe(f.uuid, idx)).find((d) => d?.semanaCodigo);
               return (
-                <tr key={pr.clave}>
+                <Fragment key={pr.clave}>
+                <tr>
                   <td
                     className="fw-bold"
-                    style={{ position: "sticky", left: 0, zIndex: 2, background: fondo, minWidth: W1, width: W1, padding: "0.25rem 0.6rem", color: "#14532d", borderTop: "1px solid #e5ece7", boxShadow: "2px 0 0 #cfdcd3" }}
+                    role={desplegable ? "button" : undefined}
+                    onClick={desplegable ? () => alternar(pr.clave) : undefined}
+                    title={desplegable ? "Clic para ver de qué cintas y edades salen los racimos de esta semana" : undefined}
+                    style={{ position: "sticky", left: 0, zIndex: 2, background: fondo, minWidth: W1, width: W1, padding: "0.25rem 0.6rem", color: "#14532d", boxShadow: "2px 0 0 #cfdcd3", cursor: desplegable ? "pointer" : undefined, whiteSpace: "nowrap", ...bordeAbierta }}
                   >
+                    {desplegable && (abierta ? <FiChevronDown className="me-1" /> : <FiChevronRight className="me-1" />)}
                     {pr.titulo}
                     {pr.real && (
-                      <span className="badge rounded-pill ms-1" style={{ background: "#dcfce7", color: "#166534", fontWeight: 600, fontSize: "0.62rem" }} title="Semana ya transcurrida: usa el dato real">
+                      <span className="badge rounded-1 ms-1" style={{ background: "#dcfce7", color: "#166534", fontWeight: 600, fontSize: "0.62rem" }} title="Semana ya transcurrida: usa el dato real">
                         Real
                       </span>
                     )}
                   </td>
-                  {celdasFila((uuid) => celdas.get(`${uuid}|${pr.clave}`), totalPeriodo(pr.clave), { fondo, borde: { borderTop: "1px solid #e5ece7" }, clave: pr.clave })}
+                  {celdasFila((uuid) => celdas.get(`${uuid}|${pr.clave}`), totalPeriodo(pr.clave), { fondo, borde: bordeAbierta, clave: pr.clave })}
                 </tr>
+                {detalle.map((idx) => {
+                  const o = origen(idx);
+                  const fondoDet = "#eef5f0";
+                  const base = { background: fondoDet, fontSize: "0.76rem", color: "#374151", padding: "0.15rem 0.55rem", textAlign: "right", fontVariantNumeric: "tabular-nums", borderTop: "1px solid #dfe9e2" };
+                  const fin = idx === detalle.length - 1 ? { borderBottom: `2px solid ${VERDE}` } : {};
+                  const sumaEmb = fincas.reduce((t, f) => t + (detalleDe(f.uuid, idx)?.embolse || 0), 0);
+                  const sumaRac = fincas.reduce((t, f) => t + (detalleDe(f.uuid, idx)?.descartado ? 0 : detalleDe(f.uuid, idx)?.racimos || 0), 0);
+                  const sumaEmbValido = fincas.reduce((t, f) => t + (detalleDe(f.uuid, idx)?.descartado ? 0 : detalleDe(f.uuid, idx)?.embolse || 0), 0);
+                  const celdaDet = (id, d, esTotal = false) => {
+                    if (id === "embolses") return d ? num(d.embolse) : "—";
+                    if (id === "aprov") return d ? `${(d.tasa * 100).toFixed(2)}%` : "—";
+                    if (id === "racimos") return d ? (d.descartado ? "—" : num(d.racimos)) : "—";
+                    return "";
+                  };
+                  return (
+                    <tr key={`det-${idx}`}>
+                      <td style={{ position: "sticky", left: 0, zIndex: 2, background: fondoDet, minWidth: W1, width: W1, padding: "0.15rem 0.6rem 0.15rem 1.5rem", fontSize: "0.74rem", color: "#14532d", boxShadow: "2px 0 0 #cfdcd3", whiteSpace: "nowrap", borderTop: "1px solid #dfe9e2", ...fin }} title={o ? `Embolsado en ${o.semanaCodigo}: a esta semana tiene ${o.edad} semanas de edad` : undefined}>
+                        Edad {[8, 9, 10, 11, 12][idx]} <span className="text-secondary">· {o?.semanaCodigo || "—"}</span>
+                      </td>
+                      {fincas.flatMap((f) => {
+                        const d = detalleDe(f.uuid, idx);
+                        return DATOS.map((dd, di) => (
+                          <td
+                            key={`${f.uuid}-${dd.id}`}
+                            title={d ? (dd.id === "embolses" ? `${d.embolseReal ? "Embolse real" : "Embolse proyectado"} de la cinta ${d.semanaCodigo}` : dd.id === "aprov" ? `Porcentaje de la cinta que se corta a la edad ${d.edad}` : dd.id === "racimos" ? (d.descartado ? "Cinta embolsada antes de un cierre: no se cosecha" : `Embolse × porcentaje de corte`) : undefined) : undefined}
+                            style={{ ...base, ...(di === 0 ? grupo : {}), ...fin, ...(dd.id === "embolses" && d && !d.embolseReal ? { fontStyle: "italic", color: "#6b7280" } : {}) }}
+                          >
+                            {celdaDet(dd.id, d)}
+                          </td>
+                        ));
+                      })}
+                      {DATOS.map((dd, di) => (
+                        <td key={`t-${dd.id}`} style={{ ...base, background: "#e3efe7", fontWeight: 600, ...(di === 0 ? grupo : {}), ...fin }}>
+                          {dd.id === "embolses" ? num(sumaEmb) : dd.id === "aprov" ? (sumaEmbValido > 0 ? `${((sumaRac / sumaEmbValido) * 100).toFixed(2)}%` : "—") : dd.id === "racimos" ? num(sumaRac) : ""}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+                {abierta && pr.real && (
+                  <tr>
+                    <td colSpan={1 + DATOS.length * (fincas.length + 1)} style={{ background: "#f8fafc", fontSize: "0.72rem", color: "#6b7280", padding: "0.2rem 0.6rem 0.2rem 1.5rem", borderBottom: `2px solid ${VERDE}` }}>
+                      Semana real: los racimos de la fila de arriba son los realmente cosechados; este desglose usa los porcentajes de corte del modelo y puede no coincidir con ellos.
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
