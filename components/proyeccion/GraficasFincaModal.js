@@ -8,6 +8,7 @@ import RangoSemanasSlider, { filtrarSemanas } from "@/components/reportes/RangoS
 const COLOR_PROYECCION = "#16a34a";
 const COLOR_PROMEDIO = "#d97706";
 const COLORES_ANIOS = ["#c0c9d4", "#8b9aab", "#4b5b6e"]; // del año más antiguo al más reciente
+const COLORES_CMP = ["#bfdbfe", "#93c5fd", "#3b82f6"]; // años reales de la comparación (azules), del más antiguo al más reciente
 
 const fmt = (n, d = 0) => (n == null ? "—" : Number(n).toLocaleString("es", { minimumFractionDigits: d, maximumFractionDigits: d }));
 
@@ -39,13 +40,15 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
   const [excluirTexto, setExcluirTexto] = useState("");
   // Comparación con otra finca ("" = ninguna, "TODAS" = todas las fincas en promedio por finca, o el uuid de una finca).
   const [comparar, setComparar] = useState("");
+  const [cmpAnios, setCmpAnios] = useState(() => new Set()); // años reales de la comparación que se dibujan (p. ej. 2024 de todas las fincas)
+  const [cmpProy, setCmpProy] = useState(true); // proyección del año de la finca con la que se compara
   const fincasLista = useMemo(
     () => (resultado.aprovechamiento || []).map((a) => ({ uuid: a.fincaUuid, nombre: a.fincaNombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es")),
     [resultado],
   );
   const nombreCmp = comparar === "TODAS" ? "Todas (prom. por finca)" : fincasLista.find((f) => f.uuid === comparar)?.nombre || "";
 
-  const { datos, anios } = useMemo(() => {
+  const { datos, anios, aniosCmp } = useMemo(() => {
     // Arma las series semana a semana de un conjunto de fincas; `divisor` > 1 las lleva a promedio por finca.
     const armar = (sel, divisor = 1) => {
     const aniosHist = new Set();
@@ -116,7 +119,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
     };
 
     const base = armar(new Set(uuids), 1);
-    if (!comparar) return base;
+    if (!comparar) return { ...base, aniosCmp: [] };
     const selCmp = comparar === "TODAS" ? fincasLista.map((f) => f.uuid) : [comparar];
     const cmp = armar(new Set(selCmp), comparar === "TODAS" ? Math.max(1, selCmp.length) : 1);
     const porSemana = new Map(cmp.datos.map((r) => [r.semana, r]));
@@ -126,14 +129,22 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
       for (const g of GRAFICAS) {
         extra[`cmp_proy_${g.id}`] = c[`proy_${g.id}`];
         extra[`cmp_prom_${g.id}`] = c[`prom_${g.id}`];
+        for (const y of cmp.anios) extra[`cmp_${y}_${g.id}`] = c[`${y}_${g.id}`];
       }
       return { ...r, ...extra };
     });
-    return { datos, anios: base.anios };
+    return { datos, anios: base.anios, aniosCmp: cmp.anios };
   }, [resultado, uuids, excluidos, excluirUltimas, anioProy, comparar, fincasLista]);
 
   const alternarAnio = (y) =>
     setExcluidos((prev) => {
+      const n = new Set(prev);
+      if (n.has(y)) n.delete(y);
+      else n.add(y);
+      return n;
+    });
+  const alternarAnioCmp = (y) =>
+    setCmpAnios((prev) => {
       const n = new Set(prev);
       if (n.has(y)) n.delete(y);
       else n.add(y);
@@ -185,7 +196,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
           <label className="small mb-0 fw-semibold" htmlFor="gf-comparar" title="Dibuja también la proyección de otra finca (o el promedio por finca de todas) para compararla">
             Comparar con
           </label>
-          <select id="gf-comparar" className="form-select form-select-sm rounded-3" style={{ width: "auto", maxWidth: 260 }} value={comparar} onChange={(e) => setComparar(e.target.value)}>
+          <select id="gf-comparar" className="form-select form-select-sm rounded-3" style={{ width: "auto", maxWidth: 260 }} value={comparar} onChange={(e) => (setComparar(e.target.value), setCmpAnios(new Set()))}>
             <option value="">Ninguna</option>
             <option value="TODAS">Todas las fincas (promedio por finca)</option>
             {fincasLista
@@ -204,6 +215,28 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
           </label>
         </div>
       </div>
+      {comparar && (
+        <div className="d-flex flex-wrap align-items-center gap-3 mb-3 p-2 rounded-3" style={{ background: "#eef4fd" }}>
+          <span className="small fw-semibold" style={{ color: "#1d4ed8" }}>
+            {nombreCmp}
+          </span>
+          {aniosCmp.map((y, i) => (
+            <div key={y} className="form-check mb-0">
+              <input type="checkbox" className="form-check-input" id={`gf-cmp-anio-${y}`} checked={cmpAnios.has(y)} onChange={() => alternarAnioCmp(y)} />
+              <label className="form-check-label small" htmlFor={`gf-cmp-anio-${y}`}>
+                <span style={{ display: "inline-block", width: 14, height: 3, background: COLORES_CMP[Math.max(0, COLORES_CMP.length - aniosCmp.length) + i] || "#93c5fd", marginRight: 6, verticalAlign: "middle" }} />
+                {y} real
+              </label>
+            </div>
+          ))}
+          <div className="form-check mb-0">
+            <input type="checkbox" className="form-check-input" id="gf-cmp-proy" checked={cmpProy} onChange={() => setCmpProy((v) => !v)} />
+            <label className="form-check-label small" htmlFor="gf-cmp-proy">
+              {anioProy} proyectado
+            </label>
+          </div>
+        </div>
+      )}
       <div className="mb-3 px-2">
         <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} />
       </div>
@@ -232,7 +265,14 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
                     {comparar && verPromedio && !g.sinPromedio && visibles.length > 0 && (
                       <Line type="monotone" dataKey={`cmp_prom_${g.id}`} name={`${nombreCmp} · promedio histórico`} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2 3" dot={false} connectNulls />
                     )}
-                    {comparar && <Line type="monotone" dataKey={`cmp_proy_${g.id}`} name={`${nombreCmp} · ${anioProy} proyectado`} stroke="#2563eb" strokeWidth={2.6} dot={false} connectNulls />}
+                    {comparar && cmpProy && <Line type="monotone" dataKey={`cmp_proy_${g.id}`} name={`${nombreCmp} · ${anioProy} proyectado`} stroke="#2563eb" strokeWidth={2.6} dot={false} connectNulls />}
+                    {comparar &&
+                      aniosCmp.map(
+                        (y, i) =>
+                          cmpAnios.has(y) && (
+                            <Line key={`cmp-${y}`} type="monotone" dataKey={`cmp_${y}_${g.id}`} name={`${nombreCmp} · ${y} real`} stroke={COLORES_CMP[Math.max(0, COLORES_CMP.length - aniosCmp.length) + i] || "#93c5fd"} strokeWidth={2} strokeDasharray="6 3" dot={false} connectNulls />
+                          ),
+                      )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
