@@ -3,13 +3,14 @@
 import InfoModulo from "@/components/InfoModulo";
 import { AYUDA_REPUESTOS } from "@/lib/ayudaEquipos";
 import { useEffect, useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2, FiDownload, FiArchive, FiRotateCcw, FiX, FiChevronLeft, FiChevronRight } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiDownload, FiUploadCloud, FiArchive, FiRotateCcw, FiX, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { hasAnyPermission, hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import TagPicker from "@/components/TagPicker";
+import CargueMasivoArticulosModal from "@/components/inventario/CargueMasivoArticulosModal";
 
 const TIPOS = ["INSUMO", "REPUESTO", "ELABORADO", "GENERAL"];
 
@@ -80,6 +81,7 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [exportando, setExportando] = useState(false);
+  const [cargando, setCargando] = useState(false); // modal de cargue masivo (solo repuestos)
   const [esAdmin, setEsAdmin] = useState(false);
 
   // Papelera de eliminados — solo Administrador (backend también lo exige).
@@ -281,11 +283,11 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
   async function handleExportar() {
     setExportando(true);
     try {
-      const blob = await apiFetchBlob("/inventarios/articulos/exportar");
+      const blob = await apiFetchBlob(cfg.conCategoria ? "/inventarios/articulos/exportar" : `${cfg.base}/exportar`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `articulos-${Date.now()}.xlsx`;
+      a.download = `${cfg.conCategoria ? "articulos" : "repuestos"}-${Date.now()}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -326,7 +328,7 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
                 {verEliminados ? <FiX /> : <FiArchive />} {verEliminados ? "Cerrar eliminados" : "Eliminados"}
               </button>
             )}
-            {!verEliminados && cfg.conCategoria && hasPermission("inventario.articulos.ver") && (
+            {!verEliminados && (cfg.conCategoria ? hasPermission("inventario.articulos.ver") : hasAnyPermission(["inventario.articulos.ver", "inventario.equipos.ver"])) && (
               <button
                 type="button"
                 className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
@@ -334,6 +336,11 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
                 disabled={exportando}
               >
                 <FiDownload /> {exportando ? "Exportando..." : "Exportar"}
+              </button>
+            )}
+            {!verEliminados && !cfg.conCategoria && puede("crear") && (
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setCargando(true)}>
+                <FiUploadCloud /> Cargar masivo
               </button>
             )}
             {!verEliminados && puede("crear") && (
@@ -545,6 +552,8 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
             </div>
           )}
         </div>
+
+        {cargando && <CargueMasivoArticulosModal endpoint={`${cfg.base}/bulk-upload`} onClose={() => setCargando(false)} onListo={() => load()} />}
 
         {modalOpen && (
           <ModalShell title={editing ? `Editar ${cfg.singular}` : `Nuevo ${cfg.singular}`} onClose={() => setModalOpen(false)}>
