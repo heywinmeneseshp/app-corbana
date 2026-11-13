@@ -50,6 +50,27 @@ export default function EquiposInventarioPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  // Vista compacta: filas de una sola línea y acciones sin borde. Se recuerda en el navegador.
+  const [compacta, setCompacta] = useState(true);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (localStorage.getItem("equipos_vista_compacta") === "0") setCompacta(false);
+    } catch {
+      /* sin almacenamiento: se queda compacta */
+    }
+  }, []);
+  const alternarCompacta = () =>
+    setCompacta((v) => {
+      try {
+        localStorage.setItem("equipos_vista_compacta", v ? "0" : "1");
+      } catch {
+        /* no pasa nada */
+      }
+      return !v;
+    });
+  // Botones de acción: sin borde y pequeños en la vista compacta; con borde en la cómoda.
+  const bt = (tono) => (compacta ? `btn btn-link btn-sm p-1 text-${tono}` : `btn btn-sm btn-outline-${tono}`);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -212,7 +233,7 @@ export default function EquiposInventarioPage() {
           )}
         </div>
 
-        <div className="mb-3">
+        <div className="mb-3 d-flex flex-wrap align-items-center gap-3">
           <input
             type="text"
             className="form-control rounded-3"
@@ -222,13 +243,19 @@ export default function EquiposInventarioPage() {
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && load()}
           />
+          <div className="form-check form-switch mb-0">
+            <input className="form-check-input" type="checkbox" role="switch" id="equipos-compacta" checked={compacta} onChange={alternarCompacta} />
+            <label className="form-check-label small" htmlFor="equipos-compacta">
+              Vista compacta
+            </label>
+          </div>
         </div>
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
         <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
-            <table className="table table-hover mb-0 align-middle">
+            <table className={`table table-hover mb-0 align-middle ${compacta ? "table-sm" : ""}`} style={compacta ? { fontSize: "0.82rem", whiteSpace: "nowrap" } : undefined}>
               <thead className="table-light">
                 <tr>
                   <th>Código</th>
@@ -262,36 +289,38 @@ export default function EquiposInventarioPage() {
                   items.map((eq) => (
                     <tr key={eq.uuid}>
                       <td className="fw-medium">{eq.codigo}</td>
-                      <td>{eq.nombre}</td>
+                      <td title={eq.nombre} style={compacta ? { maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" } : undefined}>
+                        {eq.nombre}
+                      </td>
                       <td className="small text-secondary">{eq.tipo?.nombre || "—"}</td>
                       <td className="small text-secondary">{[eq.marca, eq.modelo].filter(Boolean).join(" / ") || "—"}</td>
                       <td className="small text-secondary">{eq.ubicacion?.nombre || "—"}</td>
-                      <td className="small">{Number(eq.horometro || 0).toFixed(2)}</td>
-                      <td className="small">{Number(eq.kilometraje || 0).toFixed(2)}</td>
+                      <td className="small">{compacta ? Number(eq.horometro || 0).toLocaleString("es", { maximumFractionDigits: 1 }) : Number(eq.horometro || 0).toFixed(2)}</td>
+                      <td className="small">{compacta ? Number(eq.kilometraje || 0).toLocaleString("es", { maximumFractionDigits: 1 }) : Number(eq.kilometraje || 0).toFixed(2)}</td>
                       <td className="small text-secondary">{eq.responsable?.nombre || "—"}</td>
                       <td>
-                        <span className={`badge rounded-pill text-bg-${ESTADO_BADGE[eq.estado] || "secondary"}`}>{eq.estado}</span>
+                        <span className={`badge ${compacta ? "rounded-1 fw-normal" : "rounded-pill"} text-bg-${ESTADO_BADGE[eq.estado] || "secondary"}`}>{eq.estado}</span>
                       </td>
                       <td>
-                        <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                        <div className={`d-flex justify-content-end flex-nowrap ${compacta ? "gap-0" : "gap-2"}`}>
                           {(hasPermission("inventario.equipos.lecturas") || hasPermission("inventario.equipos.editar") || hasPermission("inventario.equipos.ver")) && (
-                            <button type="button" className="btn btn-sm btn-outline-secondary" title="Registrar o ver lecturas de kilometraje / horas" onClick={() => setLecturasEquipo(eq)}>
+                            <button type="button" className={bt("secondary")} title="Registrar o ver lecturas de kilometraje / horas" onClick={() => setLecturasEquipo(eq)}>
                               <FiActivity />
                             </button>
                           )}
-                          <button type="button" className="btn btn-sm btn-outline-secondary" title="Partes y accesorios con serie (baterías, control remoto...)" onClick={() => setPartesEquipo(eq)}>
+                          <button type="button" className={bt("secondary")} title="Partes y accesorios con serie (baterías, control remoto...)" onClick={() => setPartesEquipo(eq)}>
                             <FiBatteryCharging />
                           </button>
-                          <button type="button" className="btn btn-sm btn-outline-secondary" title="Repuestos compatibles" onClick={() => openRepuestos(eq)}>
+                          <button type="button" className={bt("secondary")} title="Repuestos compatibles" onClick={() => openRepuestos(eq)}>
                             <FiTool />
                           </button>
                           {hasPermission("inventario.equipos.editar") && (
-                            <button type="button" className="btn btn-sm btn-outline-warning" title="Editar" onClick={() => openEdit(eq)}>
+                            <button type="button" className={bt("warning")} title="Editar" onClick={() => openEdit(eq)}>
                               <FiEdit2 />
                             </button>
                           )}
                           {hasPermission("inventario.equipos.eliminar") && (
-                            <button type="button" className="btn btn-sm btn-outline-danger" title="Eliminar" onClick={() => handleDelete(eq)}>
+                            <button type="button" className={bt("danger")} title="Eliminar" onClick={() => handleDelete(eq)}>
                               <FiTrash2 />
                             </button>
                           )}
