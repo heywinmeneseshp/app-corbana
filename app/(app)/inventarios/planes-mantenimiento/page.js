@@ -12,7 +12,7 @@ import PlantillasChecklistModal from "@/components/mantenimiento/PlantillasCheck
 import { AYUDA_PLANES } from "@/lib/ayudaEquipos";
 import { TIPOS_MANTENIMIENTO, UNIDADES_PERIODICIDAD, etiqueta } from "@/lib/mantenimiento";
 
-const vacio = () => ({ equipoUuid: "", equiposUuids: [], nombre: "", descripcion: "", tipo: "PREVENTIVO", periodicidadValor: "30", periodicidadUnidad: "DIAS", lecturaBase: "", plantillaUuid: "", estado: true });
+const vacio = () => ({ equipoUuid: "", equiposUuids: [], nombre: "", descripcion: "", tipo: "PREVENTIVO", periodicidadValor: "30", periodicidadUnidad: "DIAS", lecturaBase: "", fechaUltimo: "", plantillaUuid: "", estado: true });
 
 const POR_LECTURA = ["KILOMETROS", "HORAS", "HOROMETRO"];
 const COLOR_LECTURA = { AL_DIA: "text-success", PROXIMO: "text-warning", VENCIDO: "text-danger" };
@@ -76,6 +76,7 @@ export default function PlanesMantenimientoPage() {
             periodicidadValor: String(plan.periodicidadValor),
             periodicidadUnidad: plan.periodicidadUnidad,
             lecturaBase: plan.lecturaBase === null || plan.lecturaBase === undefined ? "" : String(plan.lecturaBase),
+            fechaUltimo: plan.fechaUltimo || "",
             plantillaUuid: plan.plantilla?.uuid || "",
             estado: plan.estado,
           }
@@ -95,6 +96,9 @@ export default function PlanesMantenimientoPage() {
       body.plantillaUuid = body.plantillaUuid || null;
       if (POR_LECTURA.includes(body.periodicidadUnidad) && String(body.lecturaBase).trim() !== "") body.lecturaBase = Number(String(body.lecturaBase).replace(",", "."));
       else delete body.lecturaBase;
+      // Planes por días / meses: fecha del último mantenimiento (vacío = sin fecha).
+      if (POR_LECTURA.includes(body.periodicidadUnidad)) delete body.fechaUltimo;
+      else body.fechaUltimo = body.fechaUltimo || null;
       if (modal.editing) await apiFetch(`/inventarios/planes-mantenimiento/${modal.editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       else {
         // Un mismo plan para varios equipos: se crea un plan por equipo (cada uno cuenta desde su propia lectura).
@@ -385,6 +389,15 @@ export default function PlanesMantenimientoPage() {
                   </select>
                 </div>
               </div>
+              {!POR_LECTURA.includes(modal.form.periodicidadUnidad) && (
+                <div className="mb-2">
+                  <label className="form-label small fw-medium mb-1">
+                    Fecha del último mantenimiento <span className="text-secondary fw-normal">— opcional</span>
+                  </label>
+                  <input type="date" className="form-control form-control-sm rounded-3" style={{ maxWidth: "12rem" }} value={modal.form.fechaUltimo} onChange={(e) => setForm({ fechaUltimo: e.target.value })} />
+                  <div className="form-text small">Con esta fecha se cuenta la periodicidad: el siguiente mantenimiento se agenda solo (último + {modal.form.periodicidadValor || "…"} {modal.form.periodicidadUnidad === "MESES" ? "meses" : "días"}).</div>
+                </div>
+              )}
               {POR_LECTURA.includes(modal.form.periodicidadUnidad) && (
                 <div className="mb-2">
                   <label className="form-label small fw-medium mb-1">
