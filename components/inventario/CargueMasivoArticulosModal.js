@@ -70,11 +70,11 @@ export default function CargueMasivoArticulosModal({ endpoint, onClose, onListo 
   );
 
   return (
-    <ModalShell title="Cargar repuestos masivamente" onClose={onClose} size="lg">
+    <ModalShell title="Cargar repuestos masivamente" onClose={onClose} size="xl">
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       <div className="row g-3">
-        <div className="col-12 col-md-5">
+        <div className="col-12 col-lg-5">
           <div className="border rounded-1 p-3 h-100">
             {paso(1, "Prepara el archivo")}
             <p className="small text-secondary mb-2">
@@ -90,7 +90,7 @@ export default function CargueMasivoArticulosModal({ endpoint, onClose, onListo 
           </div>
         </div>
 
-        <div className="col-12 col-md-7">
+        <div className="col-12 col-lg-7">
           <div className="border rounded-1 p-3 mb-3">
             {paso(2, "Elige el archivo y revísalo")}
             <input
@@ -133,7 +133,7 @@ export default function CargueMasivoArticulosModal({ endpoint, onClose, onListo 
                 )}
               </>
             )}
-            <div className="d-flex gap-2 justify-content-end mt-2">
+            <div className="d-flex gap-2 justify-content-end mt-3">
               <button type="button" className="btn btn-link btn-sm text-secondary" onClick={onClose}>
                 {resultado ? "Cerrar" : "Cancelar"}
               </button>
