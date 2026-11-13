@@ -47,52 +47,105 @@ export default function CargueMasivoArticulosModal({ endpoint, onClose, onListo 
   }
 
   const r = resultado || revision;
+  const hayParaCargar = revision && revision.articulosCreados + revision.articulosActualizados > 0;
+  const paso = (n, titulo) => (
+    <div className="d-flex align-items-center gap-2 mb-2">
+      <span className="badge rounded-circle d-inline-flex align-items-center justify-content-center" style={{ background: "#166534", width: "1.5rem", height: "1.5rem" }}>
+        {n}
+      </span>
+      <span className="fw-semibold small">{titulo}</span>
+    </div>
+  );
+  const dato = (valor, etiqueta, color) => (
+    <div className="col-4">
+      <div className="border rounded-1 text-center py-2" style={{ background: "#f8fafc" }}>
+        <div className="fw-bold fs-5" style={{ color }}>
+          {valor}
+        </div>
+        <div className="text-secondary" style={{ fontSize: "0.72rem" }}>
+          {etiqueta}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <ModalShell title="Cargar repuestos masivamente" onClose={onClose} size="lg">
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
-      <p className="small text-secondary">
-        Sube un Excel o CSV con una fila por repuesto. Si el nombre ya existe se actualiza; si no, se crea. Todos quedan en la categoría «Piezas y repuestos». Columnas: <code>{COLUMNAS.join(", ")}</code> (solo
-        <code> nombre</code> es obligatoria). Puedes partir del Excel que descargas con «Exportar».
-      </p>
-      <div className="d-flex flex-wrap gap-2 align-items-center mb-3">
-        <button type="button" className="btn btn-outline-secondary btn-sm rounded-1 d-inline-flex align-items-center gap-1" onClick={descargarPlantilla}>
-          <FiDownload /> Descargar plantilla
-        </button>
-        <input
-          ref={inputRef}
-          type="file"
-          className="form-control form-control-sm rounded-1"
-          style={{ maxWidth: "22rem" }}
-          accept=".xlsx,.xls,.csv"
-          onChange={(e) => {
-            setArchivo(e.target.files?.[0] || null);
-            setRevision(null);
-            setResultado(null);
-            setError("");
-          }}
-        />
-        <button type="button" className="btn btn-outline-secondary btn-sm rounded-1" disabled={!archivo || trabajando || !!resultado} onClick={() => enviar(true)}>
-          {trabajando && !revision ? "Revisando..." : "Revisar archivo"}
-        </button>
-        <button type="button" className="btn btn-brand btn-sm rounded-1 d-inline-flex align-items-center gap-1" disabled={!revision || trabajando || !!resultado || revision.articulosCreados + revision.articulosActualizados === 0} onClick={() => enviar(false)}>
-          <FiUploadCloud /> {trabajando && revision ? "Cargando..." : "Cargar"}
-        </button>
-      </div>
-      {r && (
-        <div className={`alert py-2 small ${resultado ? "alert-success" : "alert-info"}`}>
-          {resultado ? "Cargue terminado. " : "Revisión (aún no se guardó nada). "}
-          {r.totalFilas} fila(s): <strong>{r.articulosCreados}</strong> nueva(s), <strong>{r.articulosActualizados}</strong> por actualizar, <strong>{r.errores.length}</strong> con error.
-          {r.errores.length > 0 && (
-            <ul className="mb-0 mt-1 ps-3" style={{ maxHeight: "10rem", overflowY: "auto" }}>
-              {r.errores.map((e, i) => (
-                <li key={i}>
-                  Fila {e.fila}: {e.mensaje}
-                </li>
-              ))}
-            </ul>
-          )}
+
+      <div className="row g-3">
+        <div className="col-12 col-md-5">
+          <div className="border rounded-1 p-3 h-100">
+            {paso(1, "Prepara el archivo")}
+            <p className="small text-secondary mb-2">
+              Una fila por repuesto. Si el nombre ya existe se actualiza; si no, se crea. Todos quedan en la categoría «Piezas y repuestos».
+            </p>
+            <p className="small mb-2">
+              Columnas: <code>{COLUMNAS.join(", ")}</code>. Solo <code>nombre</code> es obligatoria.
+            </p>
+            <button type="button" className="btn btn-outline-secondary btn-sm rounded-1 d-inline-flex align-items-center gap-1" onClick={descargarPlantilla}>
+              <FiDownload /> Descargar plantilla
+            </button>
+            <div className="form-text small">También puedes partir del Excel que descargas con «Exportar».</div>
+          </div>
         </div>
-      )}
+
+        <div className="col-12 col-md-7">
+          <div className="border rounded-1 p-3 mb-3">
+            {paso(2, "Elige el archivo y revísalo")}
+            <input
+              ref={inputRef}
+              type="file"
+              className="form-control form-control-sm rounded-1 mb-2"
+              accept=".xlsx,.xls,.csv"
+              onChange={(e) => {
+                setArchivo(e.target.files?.[0] || null);
+                setRevision(null);
+                setResultado(null);
+                setError("");
+              }}
+            />
+            <button type="button" className="btn btn-outline-secondary btn-sm rounded-1" disabled={!archivo || trabajando || !!resultado} onClick={() => enviar(true)}>
+              {trabajando && !revision ? "Revisando..." : "Revisar archivo"}
+            </button>
+            <span className="small text-secondary ms-2">No guarda nada todavía.</span>
+          </div>
+
+          <div className="border rounded-1 p-3">
+            {paso(3, resultado ? "Cargue terminado" : "Revisa y carga")}
+            {!r ? (
+              <p className="small text-secondary mb-0">Aquí verás cuántas filas son nuevas, cuántas se actualizan y los errores.</p>
+            ) : (
+              <>
+                <div className="row g-2 mb-2">
+                  {dato(r.articulosCreados, resultado ? "creados" : "nuevos", "#166534")}
+                  {dato(r.articulosActualizados, resultado ? "actualizados" : "por actualizar", "#1d4ed8")}
+                  {dato(r.errores.length, "con error", r.errores.length ? "#b91c1c" : "#64748b")}
+                </div>
+                {r.errores.length > 0 && (
+                  <ul className="small mb-2 ps-3" style={{ maxHeight: "9rem", overflowY: "auto" }}>
+                    {r.errores.map((e, i) => (
+                      <li key={i}>
+                        Fila {e.fila}: {e.mensaje}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+            <div className="d-flex gap-2 justify-content-end mt-2">
+              <button type="button" className="btn btn-link btn-sm text-secondary" onClick={onClose}>
+                {resultado ? "Cerrar" : "Cancelar"}
+              </button>
+              {!resultado && (
+                <button type="button" className="btn btn-brand btn-sm rounded-1 d-inline-flex align-items-center gap-1" disabled={!hayParaCargar || trabajando} onClick={() => enviar(false)}>
+                  <FiUploadCloud /> {trabajando && revision ? "Cargando..." : "Cargar"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </ModalShell>
   );
 }
