@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2, FiCheckCircle, FiX } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiCheckCircle, FiX, FiFileText } from "react-icons/fi";
 import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
@@ -228,6 +228,32 @@ export default function OrdenesMantenimientoPage() {
   // Pestañas de una orden ya creada: General (el formulario), Checklist y Hallazgos. El formulario se oculta, no se desmonta, para no perder lo escrito.
   const tabOrden = modal?.editing ? modal.tab || "general" : "general";
   const irA = (tab) => setModal((m) => ({ ...m, tab }));
+  const [generandoInforme, setGenerandoInforme] = useState(false);
+  const [errorInforme, setErrorInforme] = useState("");
+
+  // Informe del servicio (PDF): Formato de ejecución + Anexo técnico, armado en el navegador con los datos de la orden, su checklist, hallazgos, servicio y partes.
+  async function descargarInforme() {
+    const orden = modal?.editing;
+    if (!orden) return;
+    setErrorInforme("");
+    setGenerandoInforme(true);
+    try {
+      const base = `/inventarios/ordenes-mantenimiento/${orden.uuid}`;
+      const [completa, equipo, servicio, checklist, partes] = await Promise.all([
+        apiFetch(base),
+        apiFetch(`/inventarios/equipos/${orden.equipo?.uuid}`),
+        apiFetch(`${base}/servicio`),
+        apiFetch(`${base}/checklist`),
+        apiFetch(`/inventarios/equipos/${orden.equipo?.uuid}/partes`).then((r) => r.asignadas || []).catch(() => []),
+      ]);
+      const { descargarInformeServicioPdf } = await import("@/lib/informeMantenimientoPdf");
+      descargarInformeServicioPdf({ orden: completa, equipo, servicio, checklist, partes });
+    } catch (err) {
+      setErrorInforme(err.message);
+    } finally {
+      setGenerandoInforme(false);
+    }
+  }
   const planesDelEquipo = modal ? planes.filter((p) => !modal.form.equipoUuid || p.equipo?.uuid === modal.form.equipoUuid) : [];
 
   return (
@@ -389,7 +415,8 @@ export default function OrdenesMantenimientoPage() {
             size="xl"
           >
             {modal.editing && (
-              <ul className="nav nav-tabs mb-3">
+              <div className="d-flex align-items-start gap-2 mb-3 flex-wrap">
+              <ul className="nav nav-tabs flex-grow-1 mb-0">
                 {[
                   ["general", "General"],
                   ["checklist", "Checklist"],
@@ -403,7 +430,12 @@ export default function OrdenesMantenimientoPage() {
                   </li>
                 ))}
               </ul>
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-1 d-inline-flex align-items-center gap-1" disabled={generandoInforme} onClick={descargarInforme} title="Descarga el Formato de ejecución y el Anexo técnico de este servicio en PDF">
+                <FiFileText /> {generandoInforme ? "Generando..." : "Informe del servicio (PDF)"}
+              </button>
+              </div>
             )}
+            {errorInforme && <div className="alert alert-danger py-2 small">{errorInforme}</div>}
             {modal.editing && tabOrden === "checklist" && <OrdenChecklist ordenUuid={modal.editing.uuid} cerrada={!editable} onCambio={() => setModal((m) => ({ ...m, refrescar: (m.refrescar || 0) + 1 }))} />}
             {modal.editing && tabOrden === "hallazgos" && <OrdenHallazgos ordenUuid={modal.editing.uuid} refrescar={modal.refrescar || 0} />}
             {modal.editing && tabOrden === "servicio" && <OrdenServicio ordenUuid={modal.editing.uuid} />}
