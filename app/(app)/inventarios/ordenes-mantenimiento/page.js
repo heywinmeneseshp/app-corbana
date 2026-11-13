@@ -9,6 +9,7 @@ import ModalShell from "@/components/ModalShell";
 import InfoModulo from "@/components/InfoModulo";
 import OrdenChecklist from "@/components/mantenimiento/OrdenChecklist";
 import OrdenHallazgos from "@/components/mantenimiento/OrdenHallazgos";
+import OrdenServicio from "@/components/mantenimiento/OrdenServicio";
 import { AYUDA_ORDENES } from "@/lib/ayudaEquipos";
 import { TIPOS_MANTENIMIENTO, PRIORIDADES, ESTADOS_ORDEN, Insignia, TextoPrioridad, etiqueta, formatoFecha, hoyIso, dinero } from "@/lib/mantenimiento";
 
@@ -393,6 +394,7 @@ export default function OrdenesMantenimientoPage() {
                   ["general", "General"],
                   ["checklist", "Checklist"],
                   ["hallazgos", "Hallazgos"],
+                  ["servicio", "Servicio y evidencias"],
                 ].map(([id, label]) => (
                   <li key={id} className="nav-item">
                     <button type="button" className={`nav-link btn-sm py-1 ${tabOrden === id ? "active" : ""}`} onClick={() => irA(id)}>
@@ -404,6 +406,7 @@ export default function OrdenesMantenimientoPage() {
             )}
             {modal.editing && tabOrden === "checklist" && <OrdenChecklist ordenUuid={modal.editing.uuid} cerrada={!editable} onCambio={() => setModal((m) => ({ ...m, refrescar: (m.refrescar || 0) + 1 }))} />}
             {modal.editing && tabOrden === "hallazgos" && <OrdenHallazgos ordenUuid={modal.editing.uuid} refrescar={modal.refrescar || 0} />}
+            {modal.editing && tabOrden === "servicio" && <OrdenServicio ordenUuid={modal.editing.uuid} />}
             <form onSubmit={guardar} style={tabOrden !== "general" ? { display: "none" } : undefined}>
               <fieldset disabled={!editable}>
                 <div className="row g-2 mb-2">
