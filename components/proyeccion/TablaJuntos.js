@@ -35,7 +35,7 @@ function acumular(resultado, periodo, ocultas) {
     nombres.set(f.fincaUuid, f.fincaNombre);
     const clave = periodo === "semana" ? f.semanaCodigo : mesDe(f.fechaInicio);
     const k = `${f.fincaUuid}|${clave}`;
-    const c = celdas.get(k) || { embolses: 0, racimos: 0, cajas: 0, an: 0, ad: 0, real: 0, filas: 0, realF: 0, manual: 0, ha: 0, hae: 0, haeS: 0, haN: 0 };
+    const c = celdas.get(k) || { embolses: 0, racimos: 0, cajas: 0, an: 0, ad: 0, real: 0, filas: 0, realF: 0, manual: 0, embManual: 0, ha: 0, hae: 0, haeS: 0, haN: 0 };
     c.embolses += f.embolses || 0;
     c.ha += f.hectareas || 0; // teóricas: las reales más las entradas del plan al 100 %
     c.haeS += f.hectareasEfectivas || 0; // suma de hectáreas efectivas por semana: base del embolse por hectárea
@@ -49,10 +49,11 @@ function acumular(resultado, periodo, ocultas) {
     if (f.aprovechamientoCintaReal) c.real += 1;
     if (f.fuente === "real") c.realF += 1; // semana con cosecha y cajas reales: su ratio no se edita
     if (f.ratioManual) c.manual += 1;
+    if (f.embolsesPorHaManual) c.embManual += 1;
     celdas.set(k, c);
   }
   const fincas = [...nombres.entries()].map(([uuid, nombre]) => ({ uuid, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-  const CLAVES = ["embolses", "racimos", "cajas", "an", "ad", "real", "filas", "realF", "manual", "ha", "hae", "haeS", "haN"];
+  const CLAVES = ["embolses", "racimos", "cajas", "an", "ad", "real", "filas", "realF", "manual", "embManual", "ha", "hae", "haeS", "haN"];
   const vacia = () => Object.fromEntries(CLAVES.map((k) => [k, 0]));
   // Entre fincas (mismo periodo) todo se suma, también las hectáreas de cada finca (su promedio si la celda abarca varias semanas).
   const sumaFincas = (lista) =>
@@ -149,6 +150,69 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
     setEditando(null);
   };
   const editable = puedeEditar && periodo === "semana" && typeof onParamsChange === "function";
+
+  // Embolse por hectárea fijado a mano (por finca y semana de embolse, incluidas las cintas de 2026 del desglose). Se aplica al instante en pantalla y
+  // se guarda con «Guardar y calcular».
+  const embHaManualDe = (uuid, codigo) => params?.embPorHaManual?.[uuid]?.[codigo];
+  const fijarEmbHa = (uuid, codigo, texto) => {
+    setEditando(null);
+    const n = Number(String(texto).replace(",", "."));
+    const todos = { ...(params?.embPorHaManual || {}) };
+    const deFinca = { ...(todos[uuid] || {}) };
+    if (String(texto).trim() === "" || !Number.isFinite(n) || n <= 0) delete deFinca[codigo];
+    else deFinca[codigo] = Math.round(Math.min(5000, Math.max(0.1, n)) * 100) / 100;
+    if (Object.keys(deFinca).length) todos[uuid] = deFinca;
+    else delete todos[uuid];
+    onParamsChange({ ...params, embPorHaManual: todos });
+  };
+  const entradaEmbHa = (uuid, codigo, valorActual) => (
+    <input
+      autoFocus
+      type="number"
+      step="0.1"
+      min="0"
+      max="5000"
+      className="form-control form-control-sm text-end p-0 px-1"
+      style={{ width: 70, fontSize: "0.76rem" }}
+      defaultValue={embHaManualDe(uuid, codigo) ?? (valorActual ? Number(Number(valorActual).toFixed(1)) : "")}
+      placeholder="automático"
+      onBlur={(e) => fijarEmbHa(uuid, codigo, e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") setEditando(null);
+      }}
+    />
+  );
+  const AYUDA_EMB = "Clic para fijar el embolse por hectárea a mano; déjalo vacío para volver al automático (promedio histórico de esa semana del año).";
+  // Celda de Emb./ha de la fila principal (finca y semana): editable en semanas proyectadas.
+  const celdaEmbHa = (f, clave, base) => {
+    const k = `eph|${f.uuid}|${clave}`;
+    const c = celdas.get(k.slice(4));
+    if (!editable || !c || c.realF > 0) return base;
+    const m = embHaManualDe(f.uuid, clave);
+    const fijado = m !== undefined || c.embManual > 0;
+    if (editando === k) return { ...base, contenido: entradaEmbHa(f.uuid, clave, valorDe("ephs", c)) };
+    return {
+      ...base,
+      contenido: m !== undefined ? haTxt(m) : base.contenido,
+      title: fijado ? `Embolse por hectárea fijado a mano. ${AYUDA_EMB}` : AYUDA_EMB,
+      style: { ...base.style, cursor: "text", ...(fijado ? { color: "#b45309", fontWeight: 700, background: "#fff7ed", boxShadow: "inset 0 -2px 0 #f59e0b" } : { textDecoration: "underline dotted #9ca3af", textUnderlineOffset: 3 }) },
+      onClick: () => setEditando(k),
+    };
+  };
+  // Celda de Emb./ha de una cinta en el desglose por edad (semana de embolse, puede ser de 2026): editable si el embolse no es real.
+  const detEditable = (dd, d) => dd.id === "ephs" && editable && d && !d.embolseReal;
+  const detClave = (f, d) => `eph|${f.uuid}|${d.semanaCodigo}`;
+  const detFijado = (f, d) => embHaManualDe(f.uuid, d.semanaCodigo) !== undefined || d.embolsesPorHaManual;
+  const detClick = (dd, f, d) => (detEditable(dd, d) && editando !== detClave(f, d) ? () => setEditando(detClave(f, d)) : undefined);
+  const detEstilo = (dd, f, d) =>
+    detEditable(dd, d) ? { cursor: "text", ...(detFijado(f, d) ? { color: "#b45309", fontWeight: 700, background: "#fff7ed" } : { textDecoration: "underline dotted #9ca3af", textUnderlineOffset: 3 }) } : {};
+  const detContenido = (dd, f, d, normal) => {
+    if (!detEditable(dd, d)) return normal;
+    if (editando === detClave(f, d)) return entradaEmbHa(f.uuid, d.semanaCodigo, d.embolsesPorHa);
+    const m = embHaManualDe(f.uuid, d.semanaCodigo);
+    return m !== undefined ? haTxt(m) : normal;
+  };
   const celdaRatio = (f, clave, base) => {
     const k = `${f.uuid}|${clave}`;
     const c = celdas.get(k);
@@ -258,6 +322,7 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
       DATOS.map((d, di) => {
         let c = celdaDe(d.id, obtener(f.uuid), { ...(di === 0 ? grupo : {}), ...borde, ...(fondo ? { background: fondo } : {}), ...(color ? { color } : {}) });
         if (d.id === "ratio" && clave !== undefined) c = celdaRatio(f, clave, c);
+        if (d.id === "ephs" && clave !== undefined) c = celdaEmbHa(f, clave, c);
         return (
           <td key={`${f.uuid}-${d.id}`} style={c.style} title={c.title} onClick={c.onClick}>
             {c.contenido}
@@ -395,10 +460,11 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
                         return DATOS.map((dd, di) => (
                           <td
                             key={`${f.uuid}-${dd.id}`}
+                            onClick={detClick(dd, f, d)}
                             title={d ? (dd.id === "ha" ? `Hectáreas en producción de la finca en la semana de embolse ${d.semanaCodigo}` : dd.id === "ephs" ? `Embolses por hectárea de la cinta ${d.semanaCodigo}` : dd.id === "embolses" ? `${d.embolseReal ? "Embolse real" : "Embolse proyectado"} de la cinta ${d.semanaCodigo}` : dd.id === "aprov" ? `Porcentaje de la cinta que se corta a la edad ${d.edad}` : dd.id === "racimos" ? (d.descartado ? "Cinta embolsada antes de un cierre: no se cosecha" : `Embolse × porcentaje de corte`) : undefined) : undefined}
-                            style={{ ...base, ...(di === 0 ? grupo : {}), ...fin, ...(dd.id === "embolses" && d && !d.embolseReal ? { fontStyle: "italic", color: "#6b7280" } : {}) }}
+                            style={{ ...base, ...(di === 0 ? grupo : {}), ...fin, ...(dd.id === "embolses" && d && !d.embolseReal ? { fontStyle: "italic", color: "#6b7280" } : {}), ...detEstilo(dd, f, d) }}
                           >
-                            {celdaDet(dd.id, d)}
+                            {detContenido(dd, f, d, celdaDet(dd.id, d))}
                           </td>
                         ));
                       })}
