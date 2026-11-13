@@ -9,7 +9,7 @@ const VERDE = "#166534";
 const BORDE = "#b9c9be";
 
 const DATOS = [
-  { id: "ha", titulo: "Hectáreas", corto: "Hectáreas", ayuda: "Hectáreas en producción (en un mes o en el total del año, el promedio de sus semanas)", color: "#0d9488" },
+  { id: "ha", titulo: "Hectáreas", corto: "Hectáreas", ayuda: "Hectáreas en producción teóricas: las reales más las entradas del plan al 100 % (en un mes o en el total del año, el promedio de sus semanas)", color: "#0d9488" },
   { id: "embolses", titulo: "Embolses", corto: "Embolses", ayuda: "Embolses de la semana (real si ya pasó, proyectado si no)", color: "#0891b2" },
   { id: "aprov", titulo: "Aprovechamiento", corto: "Aprovech.", ayuda: "Cosechado ÷ (cosechado + repique + recusado) de la cinta que cumple 12 semanas en esta semana", color: "#7c3aed", derivado: true },
   { id: "racimos", titulo: "Racimos", corto: "Racimos", ayuda: "Racimos cosechados", color: "#d97706" },
@@ -33,9 +33,10 @@ function acumular(resultado, periodo, ocultas) {
     nombres.set(f.fincaUuid, f.fincaNombre);
     const clave = periodo === "semana" ? f.semanaCodigo : mesDe(f.fechaInicio);
     const k = `${f.fincaUuid}|${clave}`;
-    const c = celdas.get(k) || { embolses: 0, racimos: 0, cajas: 0, an: 0, ad: 0, real: 0, filas: 0, realF: 0, manual: 0, ha: 0, haN: 0 };
+    const c = celdas.get(k) || { embolses: 0, racimos: 0, cajas: 0, an: 0, ad: 0, real: 0, filas: 0, realF: 0, manual: 0, ha: 0, hae: 0, haN: 0 };
     c.embolses += f.embolses || 0;
-    c.ha += f.hectareasEfectivas || 0;
+    c.ha += f.hectareas || 0; // teóricas: las reales más las entradas del plan al 100 %
+    c.hae += f.hectareasEfectivas || 0; // efectivas: con la rampa de arranque (de ahí sale el embolse)
     c.haN += 1;
     c.racimos += f.racimos || 0;
     c.cajas += f.cajas || 0;
@@ -48,13 +49,14 @@ function acumular(resultado, periodo, ocultas) {
     celdas.set(k, c);
   }
   const fincas = [...nombres.entries()].map(([uuid, nombre]) => ({ uuid, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-  const CLAVES = ["embolses", "racimos", "cajas", "an", "ad", "real", "filas", "realF", "manual", "ha", "haN"];
+  const CLAVES = ["embolses", "racimos", "cajas", "an", "ad", "real", "filas", "realF", "manual", "ha", "hae", "haN"];
   const vacia = () => Object.fromEntries(CLAVES.map((k) => [k, 0]));
   // Entre fincas (mismo periodo) todo se suma, también las hectáreas de cada finca (su promedio si la celda abarca varias semanas).
   const sumaFincas = (lista) =>
     lista.reduce((t, c) => {
-      for (const k of CLAVES) if (k !== "ha" && k !== "haN") t[k] += c[k];
+      for (const k of CLAVES) if (k !== "ha" && k !== "hae" && k !== "haN") t[k] += c[k];
       t.ha += c.haN > 0 ? c.ha / c.haN : 0;
+      t.hae += c.haN > 0 ? c.hae / c.haN : 0;
       t.haN = 1;
       return t;
     }, vacia());
@@ -99,7 +101,11 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
     const def = DATOS.find((d) => d.id === dato);
     return {
       contenido: texto(dato, v),
-      title: estimado ? "Sin movimientos reales en esta cinta: se usa el % de aprovechamiento aplicado a la finca" : undefined,
+      title: estimado
+        ? "Sin movimientos reales en esta cinta: se usa el % de aprovechamiento aplicado a la finca"
+        : dato === "ha" && c && c.haN > 0 && Math.abs(c.hae - c.ha) / c.haN > 0.05
+          ? `Hectáreas teóricas (las reales más las entradas del plan al 100 %). Con la rampa de arranque, el embolse se calcula sobre ${haTxt(c.hae / c.haN)} ha efectivas.`
+          : undefined,
       style: {
         textAlign: "right",
         fontVariantNumeric: "tabular-nums",
