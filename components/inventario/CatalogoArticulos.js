@@ -81,6 +81,7 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [exportando, setExportando] = useState(false);
+  const [codigoSugerido, setCodigoSugerido] = useState(false); // el código del formulario es la sugerencia automática
   const [cargando, setCargando] = useState(false); // modal de cargue masivo (solo repuestos)
   const [esAdmin, setEsAdmin] = useState(false);
 
@@ -210,7 +211,16 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
     setEditing(null);
     setForm(emptyForm());
     setFormError("");
+    setCodigoSugerido(false);
     setModalOpen(true);
+    // Sugiere el siguiente código libre; si la persona ya escribió uno, no se pisa.
+    apiFetch(`${cfg.base}/siguiente-codigo`)
+      .then((r) => {
+        if (!r?.codigo) return;
+        setForm((f) => (f.codigo ? f : { ...f, codigo: r.codigo }));
+        setCodigoSugerido(true);
+      })
+      .catch(() => {});
   }
 
   function openEdit(articulo) {
@@ -566,8 +576,12 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
                     className="form-control rounded-3"
                     maxLength={20}
                     value={form.codigo}
-                    onChange={(e) => setForm((f) => ({ ...f, codigo: e.target.value }))}
+                    onChange={(e) => {
+                      setCodigoSugerido(false);
+                      setForm((f) => ({ ...f, codigo: e.target.value }));
+                    }}
                   />
+                  {!editing && codigoSugerido && <div className="form-text small">Sugerido automáticamente; puedes cambiarlo.</div>}
                 </div>
                 <div className="col-8">
                   <label className="form-label small fw-medium">
