@@ -126,8 +126,10 @@ export default function ClimaGraficas({ ucBases }) {
   const defVariable = VARIABLES.find((v) => v.key === variable);
   const alternar = (lista, setLista, valor) => setLista(lista.includes(valor) ? lista.filter((x) => x !== valor) : [...lista, valor]);
 
-  const estacionSeleccionada = modo === "fuentes" ? fuentesSel.includes("estacion") : fuenteAnios === "estacion";
-  const sinDatosEstacion = estacionSeleccionada && !cargando && !datos.some((d) => d.fuente === "estacion");
+  // Aviso «sin datos de estación»: para cada estación elegida (cualquier fuente de tipo estación) que no trajo datos en el rango.
+  const esEstacion = (id) => fuentes.find((x) => x.id === id)?.tipo === "estacion";
+  const estacionesElegidas = modo === "fuentes" ? fuentesSel.filter(esEstacion) : esEstacion(fuenteAnios) ? [fuenteAnios] : [];
+  const sinDatosEstacion = !cargando && estacionesElegidas.some((id) => !datos.some((d) => d.fuente === id));
 
   return (
     <div>

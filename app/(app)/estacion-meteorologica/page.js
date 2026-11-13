@@ -17,10 +17,7 @@ import { esAdministrador } from "@/lib/laborEstados";
 // sincronizar-estacion-meteorologica; acá también hay un botón para
 // forzar una sincronización puntual.
 
-const ESTACIONES = [
-  { id: 1, nombre: "Pantoja 01 Norte" },
-  { id: 2, nombre: "San Francisco Consola" },
-];
+// Las estaciones se administran en Configuración → Estaciones (GET /estacion-meteorologica/estaciones); solo se listan las activas.
 
 function fmtFechaHora(iso) {
   if (!iso) return "—";
@@ -78,6 +75,17 @@ export default function EstacionMeteorologicaPage() {
   const [tab, setTab] = useState("estacion"); // "estacion" | "openmeteo" | "graficas"
   const [ucBases, setUcBases] = useState([14]);
   const [estacion, setEstacion] = useState(1);
+  const [ESTACIONES, setEstaciones] = useState([{ id: 1, nombre: "Pantoja 01 Norte" }]);
+  const cargarEstaciones = () =>
+    apiFetch("/estacion-meteorologica/estaciones")
+      .then((lista) => {
+        const activas = (lista || []).filter((e) => e.estado).map((e) => ({ id: e.id, nombre: e.nombre }));
+        if (activas.length) {
+          setEstaciones(activas);
+          setEstacion((actual) => (activas.some((e) => e.id === actual) ? actual : activas[0].id));
+        }
+      })
+      .catch(() => {});
   const esAdmin = esAdministrador();
 
   // Rango para la sincronización manual — arranca en el último mes, mismo
@@ -107,6 +115,10 @@ export default function EstacionMeteorologicaPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    cargarEstaciones();
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -357,7 +369,7 @@ export default function EstacionMeteorologicaPage() {
           to { transform: rotate(360deg); }
         }
       `}</style>
-      {modalConfig && <EstacionConfigModal ucBases={ucBases} onUcGuardado={(b) => setUcBases(b)} onClose={() => setModalConfig(false)} />}
+      {modalConfig && <EstacionConfigModal ucBases={ucBases} onUcGuardado={(b) => setUcBases(b)} onEstacionesCambio={cargarEstaciones} onClose={() => setModalConfig(false)} />}
     </RequirePermission>
   );
 }
