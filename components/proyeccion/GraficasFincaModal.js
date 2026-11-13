@@ -37,9 +37,17 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
   // Cuántas de las últimas semanas con datos reales del año actual se dejan fuera de todas las gráficas (y del promedio).
   const [excluirUltimas, setExcluirUltimas] = useState(0);
   const [excluirTexto, setExcluirTexto] = useState("");
+  // Comparación con otra finca ("" = ninguna, "TODAS" = todas las fincas en promedio por finca, o el uuid de una finca).
+  const [comparar, setComparar] = useState("");
+  const fincasLista = useMemo(
+    () => (resultado.aprovechamiento || []).map((a) => ({ uuid: a.fincaUuid, nombre: a.fincaNombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es")),
+    [resultado],
+  );
+  const nombreCmp = comparar === "TODAS" ? "Todas (prom. por finca)" : fincasLista.find((f) => f.uuid === comparar)?.nombre || "";
 
   const { datos, anios } = useMemo(() => {
-    const sel = new Set(uuids);
+    // Arma las series semana a semana de un conjunto de fincas; `divisor` > 1 las lleva a promedio por finca.
+    const armar = (sel, divisor = 1) => {
     const aniosHist = new Set();
     // Histórico: por año y semana, suma de las fincas seleccionadas.
     const hist = new Map(); // `${anio}|${n}` -> { e, ha, c, j }
@@ -49,10 +57,10 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
         for (const w of lista) {
           const k = `${y}|${w.n}`;
           const t = hist.get(k) || { e: 0, ha: 0, c: 0, j: 0 };
-          t.e += w.e;
-          t.ha += w.ha;
-          t.c += w.c;
-          t.j += w.j;
+          t.e += w.e / divisor;
+          t.ha += w.ha / divisor;
+          t.c += w.c / divisor;
+          t.j += w.j / divisor;
           hist.set(k, t);
         }
       }
@@ -62,10 +70,10 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
     for (const f of resultado.filas) {
       if (!sel.has(f.fincaUuid)) continue;
       const t = proy.get(f.numeroSemana) || { e: 0, ha: 0, rac: 0, caj: 0 };
-      t.e += f.embolses;
-      t.ha += f.hectareasEfectivas;
-      t.rac += f.racimos;
-      t.caj += f.cajas;
+      t.e += f.embolses / divisor;
+      t.ha += f.hectareasEfectivas / divisor;
+      t.rac += f.racimos / divisor;
+      t.caj += f.cajas / divisor;
       proy.set(f.numeroSemana, t);
     }
     const ys = [...aniosHist].sort();
@@ -105,7 +113,24 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
       filas.push(fila);
     }
     return { datos: filas, anios: ys };
-  }, [resultado, uuids, excluidos, excluirUltimas, anioProy]);
+    };
+
+    const base = armar(new Set(uuids), 1);
+    if (!comparar) return base;
+    const selCmp = comparar === "TODAS" ? fincasLista.map((f) => f.uuid) : [comparar];
+    const cmp = armar(new Set(selCmp), comparar === "TODAS" ? Math.max(1, selCmp.length) : 1);
+    const porSemana = new Map(cmp.datos.map((r) => [r.semana, r]));
+    const datos = base.datos.map((r) => {
+      const c = porSemana.get(r.semana) || {};
+      const extra = {};
+      for (const g of GRAFICAS) {
+        extra[`cmp_proy_${g.id}`] = c[`proy_${g.id}`];
+        extra[`cmp_prom_${g.id}`] = c[`prom_${g.id}`];
+      }
+      return { ...r, ...extra };
+    });
+    return { datos, anios: base.anios };
+  }, [resultado, uuids, excluidos, excluirUltimas, anioProy, comparar, fincasLista]);
 
   const alternarAnio = (y) =>
     setExcluidos((prev) => {
@@ -121,7 +146,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
     <ModalShell title={titulo} onClose={onClose} fullscreen>
       <div className="p-3 overflow-auto flex-grow-1">
       <p className="small text-secondary mb-2">
-        Cada gráfica compara, semana a semana, los años históricos reales con la proyección de {anioProy} (línea verde gruesa) y el promedio histórico (línea naranja punteada). Pasa el ratón sobre la gráfica para ver el valor de cada semana.
+        Cada gráfica compara, semana a semana, los años históricos reales con la proyección de {anioProy} (línea verde gruesa) y el promedio histórico (línea naranja punteada). Pasa el ratón sobre la gráfica para ver el valor de cada semana.{comparar && ` En azul, ${nombreCmp}${comparar === "TODAS" ? ": en embolses, cajas y hectáreas se muestra el promedio por finca para que la escala sea comparable" : ""}.`}
       </p>
       <div className="d-flex flex-wrap align-items-center gap-3 mb-3 p-2 rounded-3" style={{ background: "#f1f6f2" }}>
         <span className="small fw-semibold">Años</span>
@@ -156,6 +181,22 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
             />
           </div>
         )}
+        <div className="d-flex align-items-center gap-2 ms-2">
+          <label className="small mb-0 fw-semibold" htmlFor="gf-comparar" title="Dibuja también la proyección de otra finca (o el promedio por finca de todas) para compararla">
+            Comparar con
+          </label>
+          <select id="gf-comparar" className="form-select form-select-sm rounded-3" style={{ width: "auto", maxWidth: 260 }} value={comparar} onChange={(e) => setComparar(e.target.value)}>
+            <option value="">Ninguna</option>
+            <option value="TODAS">Todas las fincas (promedio por finca)</option>
+            {fincasLista
+              .filter((f) => !uuids.includes(f.uuid))
+              .map((f) => (
+                <option key={f.uuid} value={f.uuid}>
+                  {f.nombre}
+                </option>
+              ))}
+          </select>
+        </div>
         <div className="form-check mb-0 ms-2">
           <input type="checkbox" className="form-check-input" id="gf-promedio" checked={verPromedio} onChange={() => setVerPromedio((v) => !v)} />
           <label className="form-check-label small" htmlFor="gf-promedio">
@@ -188,6 +229,10 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
                       <Line type="monotone" dataKey={`prom_${g.id}`} name="Promedio histórico" stroke={COLOR_PROMEDIO} strokeWidth={2.2} strokeDasharray="6 4" dot={false} connectNulls />
                     )}
                     <Line type="monotone" dataKey={`proy_${g.id}`} name={`${anioProy} proyectado`} stroke={COLOR_PROYECCION} strokeWidth={3} dot={false} connectNulls />
+                    {comparar && verPromedio && !g.sinPromedio && visibles.length > 0 && (
+                      <Line type="monotone" dataKey={`cmp_prom_${g.id}`} name={`${nombreCmp} · promedio histórico`} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2 3" dot={false} connectNulls />
+                    )}
+                    {comparar && <Line type="monotone" dataKey={`cmp_proy_${g.id}`} name={`${nombreCmp} · ${anioProy} proyectado`} stroke="#2563eb" strokeWidth={2.6} dot={false} connectNulls />}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
