@@ -131,9 +131,6 @@ export default function CargueMasivoArticulosModal({ endpoint, onClose, onListo 
               </>
             )}
             <div className="d-flex gap-2 justify-content-end mt-3">
-              <button type="button" className="btn btn-link btn-sm text-secondary" onClick={onClose}>
-                {resultado ? "Cerrar" : "Cancelar"}
-              </button>
               {!resultado && (
                 <button type="button" className="btn btn-brand btn-sm rounded-1 d-inline-flex align-items-center gap-1" disabled={!hayParaCargar || trabajando} onClick={() => enviar(false)}>
                   <FiUploadCloud /> {trabajando && revision ? "Cargando..." : "Cargar"}
