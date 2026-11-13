@@ -261,7 +261,8 @@ export default function EquiposInventarioPage() {
               .equipos-compacta th, .equipos-compacta td { padding: 0.15rem 0.55rem !important; font-size: 0.76rem !important; line-height: 1.25; }
               .equipos-compacta th { font-weight: 600; }
               .equipos-compacta .badge { font-size: 0.66rem !important; padding: 0.2em 0.45em; }
-              .equipos-compacta .btn-link svg { width: 13px; height: 13px; }
+              .equipos-compacta .btn-link { padding: 0.1rem 0.4rem !important; }
+              .equipos-compacta .btn-link svg { width: 18px; height: 18px; }
             `}</style>
             <table className={`table table-hover mb-0 align-middle ${compacta ? "table-sm equipos-compacta" : ""}`}>
               <thead className="table-light">
