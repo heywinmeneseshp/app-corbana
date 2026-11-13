@@ -69,8 +69,8 @@ export default function EquiposInventarioPage() {
       }
       return !v;
     });
-  // Botones de acción: sin borde y pequeños en la vista compacta; con borde en la cómoda.
-  const bt = (tono) => (compacta ? `btn btn-link btn-sm p-1 text-${tono}` : `btn btn-sm btn-outline-${tono}`);
+  // Botones de acción de la fila: siempre sin borde (solo el icono, con su color).
+  const bt = (tono) => `btn btn-link btn-sm p-1 text-${tono}`;
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
