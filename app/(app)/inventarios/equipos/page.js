@@ -255,7 +255,7 @@ export default function EquiposInventarioPage() {
 
         <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
-            <table className={`table table-hover mb-0 align-middle ${compacta ? "table-sm" : ""}`} style={compacta ? { fontSize: "0.82rem", whiteSpace: "nowrap" } : undefined}>
+            <table className={`table table-hover mb-0 align-middle ${compacta ? "table-sm" : ""}`} style={compacta ? { fontSize: "0.88rem", whiteSpace: "nowrap" } : undefined}>
               <thead className="table-light">
                 <tr>
                   <th>Código</th>
@@ -288,8 +288,8 @@ export default function EquiposInventarioPage() {
                 {!loading &&
                   items.map((eq) => (
                     <tr key={eq.uuid}>
-                      <td className="fw-medium">{eq.codigo}</td>
-                      <td title={eq.nombre} style={compacta ? { maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" } : undefined}>
+                      <td className={`fw-medium ${compacta ? "small" : ""}`}>{eq.codigo}</td>
+                      <td className={compacta ? "small" : undefined} title={eq.nombre} style={compacta ? { maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" } : undefined}>
                         {eq.nombre}
                       </td>
                       <td className="small text-secondary">{eq.tipo?.nombre || "—"}</td>
