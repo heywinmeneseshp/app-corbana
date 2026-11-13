@@ -264,6 +264,15 @@ export default function PlanesMantenimientoPage() {
                               {p.estadoLectura === "VENCIDO" ? `Vencido hace ${fmtN(Math.abs(p.faltan))} ${p.unidad}` : `Faltan ${fmtN(p.faltan)} ${p.unidad}`}
                             </div>
                           </>
+                        ) : p.proximaFecha ? (
+                          <>
+                            <div>{p.proximaFecha.split("-").reverse().join("/")}</div>
+                            <div className={`${COLOR_LECTURA[p.estadoFecha] || ""} fw-medium`}>
+                              {p.diasFaltan < 0 ? `Vencido hace ${Math.abs(p.diasFaltan)} día(s)` : p.diasFaltan === 0 ? "Es hoy" : `Faltan ${p.diasFaltan} día(s)`}
+                            </div>
+                          </>
+                        ) : p.estadoFecha === "SIN_BASE" ? (
+                          <span className="text-secondary" title="Escribe la fecha del último mantenimiento en el plan o prográmalo">Sin fecha base</span>
                         ) : p.estadoLectura === "SIN_BASE" ? (
                           <span className="text-secondary">Sin lectura base</span>
                         ) : (
