@@ -415,7 +415,7 @@ async function exportarPivot({ resultado, metrica, metricaLabel, periodo, oculta
   URL.revokeObjectURL(a.href);
 }
 
-export default function ResultadosProyeccion({ resultado, productos = [], onProductosChange = () => {}, puedeEditar = false, nombreEscenario = "" }) {
+export default function ResultadosProyeccion({ resultado, productos = [], onProductosChange = () => {}, puedeEditar = false, nombreEscenario = "", params, onParamsChange }) {
   const METRICAS = metricas(resultado.meta.tasaConversion ?? 18.6);
   const [vista, setVista] = useState("semanal");
   const [metrica, setMetrica] = useState("cajas");
@@ -496,7 +496,7 @@ export default function ResultadosProyeccion({ resultado, productos = [], onProd
         )}
       </div>
 
-      {vista === "semanal" && (metrica === "juntos" ? <TablaJuntos resultado={resultado} periodo="semana" ocultas={ocultas} onGraficas={setGraficas} /> : <Pivot resultado={resultado} metrica={metrica} periodo="semana" ocultas={ocultas} onGraficas={setGraficas} />)}
+      {vista === "semanal" && (metrica === "juntos" ? <TablaJuntos resultado={resultado} periodo="semana" ocultas={ocultas} onGraficas={setGraficas} params={params} onParamsChange={onParamsChange} puedeEditar={puedeEditar} /> : <Pivot resultado={resultado} metrica={metrica} periodo="semana" ocultas={ocultas} onGraficas={setGraficas} />)}
       {vista === "mensual" && (metrica === "juntos" ? <TablaJuntos resultado={resultado} periodo="mes" ocultas={ocultas} onGraficas={setGraficas} /> : <Pivot resultado={resultado} metrica={metrica} periodo="mes" ocultas={ocultas} onGraficas={setGraficas} />)}
       {vista === "producto" && <PorProducto resultado={resultado} ocultas={ocultas} productos={productos} onChange={onProductosChange} puedeEditar={puedeEditar} nombreEscenario={nombreEscenario} />}
       {vista === "grafico" && <Grafico resultado={resultado} metrica={metrica === "juntos" ? "cajas" : metrica} />}

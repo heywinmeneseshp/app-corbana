@@ -19,7 +19,7 @@ import PlanHectareas from "./PlanHectareas";
 import ParametrosFinca from "./ParametrosFinca";
 import ResultadosProyeccion from "./ResultadosProyeccion";
 
-const PARAMS_VACIOS = { rampaPct: 50, rampaSemanas: 12, aniosHistoricos: 3, anios: [], pctNoCosechado: null, pctNoCosechadoPorFinca: {}, hectareasBasePorFinca: {} };
+const PARAMS_VACIOS = { rampaPct: 50, rampaSemanas: 12, aniosHistoricos: 3, anios: [], pctNoCosechado: null, pctNoCosechadoPorFinca: {}, hectareasBasePorFinca: {}, ratioManual: {} };
 const mismoJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // Proyección anual de embolses y cajas: escenarios con nombre, plan de hectáreas nuevas por finca y semana, parámetros
@@ -315,7 +315,7 @@ export default function ProyeccionAnual() {
             ) : resultado ? (
               <>
                 {sucio && <div className="alert alert-info py-2 small">Hay cambios sin guardar: los resultados corresponden a la última versión guardada.</div>}
-                <ResultadosProyeccion resultado={resultado} productos={draft.productos || []} onProductosChange={(productos) => setDraft((d) => ({ ...d, productos }))} puedeEditar={puedeEditar} nombreEscenario={draft.nombre} />
+                <ResultadosProyeccion resultado={resultado} productos={draft.productos || []} onProductosChange={(productos) => setDraft((d) => ({ ...d, productos }))} puedeEditar={puedeEditar} nombreEscenario={draft.nombre} params={draft.params} onParamsChange={(params) => setDraft((d) => ({ ...d, params }))} />
               </>
             ) : null)}
 

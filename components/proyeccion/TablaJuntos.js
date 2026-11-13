@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo } from "react";
+import { useMemo, useState } from "react";
 
 // Vista «Embolses, aprovechamiento, racimos, ratio y cajas»: una fila por semana (o mes); cada finca (y el total) es un grupo de cinco columnas que
 // se lee de izquierda a derecha como el cálculo: embolses × aprovechamiento = racimos; racimos × ratio = cajas.
@@ -31,7 +31,7 @@ function acumular(resultado, periodo, ocultas) {
     nombres.set(f.fincaUuid, f.fincaNombre);
     const clave = periodo === "semana" ? f.semanaCodigo : mesDe(f.fechaInicio);
     const k = `${f.fincaUuid}|${clave}`;
-    const c = celdas.get(k) || { embolses: 0, racimos: 0, cajas: 0, an: 0, ad: 0, real: 0, filas: 0 };
+    const c = celdas.get(k) || { embolses: 0, racimos: 0, cajas: 0, an: 0, ad: 0, real: 0, filas: 0, realF: 0, manual: 0 };
     c.embolses += f.embolses || 0;
     c.racimos += f.racimos || 0;
     c.cajas += f.cajas || 0;
@@ -39,10 +39,17 @@ function acumular(resultado, periodo, ocultas) {
     c.ad += f.aprovechamientoDen || 0;
     c.filas += 1;
     if (f.aprovechamientoCintaReal) c.real += 1;
+    if (f.fuente === "real") c.realF += 1; // semana con cosecha y cajas reales: su ratio no se edita
+    if (f.ratioManual) c.manual += 1;
     celdas.set(k, c);
   }
   const fincas = [...nombres.entries()].map(([uuid, nombre]) => ({ uuid, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-  const suma = (lista) => lista.reduce((t, c) => ({ embolses: t.embolses + c.embolses, racimos: t.racimos + c.racimos, cajas: t.cajas + c.cajas, an: t.an + c.an, ad: t.ad + c.ad, real: t.real + c.real, filas: t.filas + c.filas }), { embolses: 0, racimos: 0, cajas: 0, an: 0, ad: 0, real: 0, filas: 0 });
+  const CLAVES = ["embolses", "racimos", "cajas", "an", "ad", "real", "filas", "realF", "manual"];
+  const suma = (lista) =>
+    lista.reduce((t, c) => {
+      for (const k of CLAVES) t[k] += c[k];
+      return t;
+    }, Object.fromEntries(CLAVES.map((k) => [k, 0])));
   return { fincas, celdas, suma };
 }
 
@@ -57,7 +64,8 @@ const texto = (dato, v) => (v === null || v === undefined ? "—" : dato === "ap
 // El aprovechamiento es «estimado» cuando ninguna cinta de la celda tiene movimientos reales (se usó el % aplicado de la finca).
 const esEstimado = (dato, c) => dato === "aprov" && c && c.real === 0;
 
-export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas }) {
+export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, params, onParamsChange, puedeEditar = false }) {
+  const [editando, setEditando] = useState(null); // `${fincaUuid}|${semana}` de la celda de ratio que se está editando
   const { fincas, celdas, suma } = useMemo(() => acumular(resultado, periodo, ocultas), [resultado, periodo, ocultas]);
   const periodos = periodo === "semana" ? resultado.porSemana.map((s) => ({ clave: s.semanaCodigo, titulo: s.semanaCodigo, real: s.real })) : MESES.map((m, i) => ({ clave: i, titulo: m }));
   const totalPeriodo = (clave) => suma(fincas.map((f) => celdas.get(`${f.uuid}|${clave}`)).filter(Boolean));
@@ -92,13 +100,67 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas })
     };
   };
 
+  // Ratio fijado a mano (por finca y semana). Se guarda en los parámetros del escenario y se aplica al pulsar «Guardar y calcular».
+  const manualDe = (uuid, clave) => params?.ratioManual?.[uuid]?.[clave];
+  const fijarRatio = (uuid, clave, texto) => {
+    const n = Number(String(texto).replace(",", "."));
+    const todos = { ...(params?.ratioManual || {}) };
+    const deFinca = { ...(todos[uuid] || {}) };
+    if (String(texto).trim() === "" || !Number.isFinite(n) || n <= 0) delete deFinca[clave];
+    else deFinca[clave] = Math.round(Math.min(5, n) * 10000) / 10000;
+    if (Object.keys(deFinca).length) todos[uuid] = deFinca;
+    else delete todos[uuid];
+    onParamsChange({ ...params, ratioManual: todos });
+    setEditando(null);
+  };
+  const editable = puedeEditar && periodo === "semana" && typeof onParamsChange === "function";
+  const celdaRatio = (f, clave, base) => {
+    const k = `${f.uuid}|${clave}`;
+    const c = celdas.get(k);
+    if (!editable || !c || c.realF > 0) return base; // semana real o sin dato: solo lectura
+    const m = manualDe(f.uuid, clave);
+    const fijado = m !== undefined || c.manual > 0;
+    if (editando === k) {
+      return {
+        ...base,
+        contenido: (
+          <input
+            autoFocus
+            type="number"
+            step="0.0001"
+            min="0"
+            max="5"
+            className="form-control form-control-sm text-end p-0 px-1"
+            style={{ width: 78, fontSize: "0.78rem" }}
+            defaultValue={m ?? (valorDe("ratio", c) ? Number(valorDe("ratio", c).toFixed(4)) : "")}
+            placeholder="automático"
+            onBlur={(e) => fijarRatio(f.uuid, clave, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") setEditando(null);
+            }}
+          />
+        ),
+        editando: true,
+      };
+    }
+    return {
+      ...base,
+      contenido: m !== undefined ? ratioTxt(m) : base.contenido,
+      title: m !== undefined ? "Ratio fijado a mano (sin guardar aún si cambió). Clic para editar; déjalo vacío para volver al automático." : c.manual > 0 ? "Ratio fijado a mano. Clic para editar; déjalo vacío para volver al automático." : "Clic para fijar el ratio a mano",
+      style: { ...base.style, cursor: "text", ...(fijado ? { color: "#b45309", fontWeight: 700, background: "#fff7ed", boxShadow: "inset 0 -2px 0 #f59e0b" } : { textDecoration: "underline dotted #9ca3af", textUnderlineOffset: 3 }) },
+      onClick: () => setEditando(k),
+    };
+  };
+
   // Una fila de celdas (cinco por finca + cinco del total) para un periodo o para el pie.
-  const celdasFila = (obtener, totalFila, { fondo, borde = {}, color, fondoTotal, colorTotal } = {}) => [
+  const celdasFila = (obtener, totalFila, { fondo, borde = {}, color, fondoTotal, colorTotal, clave } = {}) => [
     ...fincas.flatMap((f) =>
       DATOS.map((d, di) => {
-        const c = celdaDe(d.id, obtener(f.uuid), { ...(di === 0 ? grupo : {}), ...borde, ...(fondo ? { background: fondo } : {}), ...(color ? { color } : {}) });
+        let c = celdaDe(d.id, obtener(f.uuid), { ...(di === 0 ? grupo : {}), ...borde, ...(fondo ? { background: fondo } : {}), ...(color ? { color } : {}) });
+        if (d.id === "ratio" && clave !== undefined) c = celdaRatio(f, clave, c);
         return (
-          <td key={`${f.uuid}-${d.id}`} style={c.style} title={c.title}>
+          <td key={`${f.uuid}-${d.id}`} style={c.style} title={c.title} onClick={c.onClick}>
             {c.contenido}
           </td>
         );
@@ -118,7 +180,7 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas })
     <div>
       <p className="small text-secondary mb-2">
         Cada finca se lee de izquierda a derecha: <strong>embolses × aprovechamiento = racimos</strong>, y <strong>racimos × ratio = cajas</strong>. En cursiva, un aprovechamiento sin dato real
-        todavía (usa el % aplicado a la finca).
+        todavía (usa el % aplicado a la finca).{puedeEditar && periodo === "semana" && " Haz clic en el ratio de una semana proyectada para fijarlo a mano y luego pulsa Guardar y calcular."}
       </p>
       <div className="table-responsive border rounded-3" style={{ maxHeight: "68vh" }}>
         <table className="table table-sm align-middle mb-0" style={{ whiteSpace: "nowrap", borderCollapse: "separate", borderSpacing: 0 }}>
@@ -191,7 +253,7 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas })
                       </span>
                     )}
                   </td>
-                  {celdasFila((uuid) => celdas.get(`${uuid}|${pr.clave}`), totalPeriodo(pr.clave), { fondo, borde: { borderTop: "1px solid #e5ece7" } })}
+                  {celdasFila((uuid) => celdas.get(`${uuid}|${pr.clave}`), totalPeriodo(pr.clave), { fondo, borde: { borderTop: "1px solid #e5ece7" }, clave: pr.clave })}
                 </tr>
               );
             })}
