@@ -2,18 +2,18 @@
 
 import { Fragment, useMemo } from "react";
 
-// Vista «Embolses, aprovechamiento, racimos, ratio y cajas»: cada semana (o mes) es un bloque de cinco filas que se lee de arriba abajo como el
-// cálculo: embolses × aprovechamiento = racimos; racimos × ratio = cajas. Columnas = fincas + total.
+// Vista «Embolses, aprovechamiento, racimos, ratio y cajas»: una fila por semana (o mes); cada finca (y el total) es un grupo de cinco columnas que
+// se lee de izquierda a derecha como el cálculo: embolses × aprovechamiento = racimos; racimos × ratio = cajas.
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const VERDE = "#166534";
 const BORDE = "#b9c9be";
 
 const DATOS = [
-  { id: "embolses", titulo: "Embolses", ayuda: "Embolses de la semana (real si ya pasó, proyectado si no)", color: "#0891b2" },
-  { id: "aprov", titulo: "Aprovechamiento", ayuda: "Cosechado ÷ (cosechado + repique + recusado) de la cinta que cumple 12 semanas en esta semana", color: "#7c3aed", derivado: true },
-  { id: "racimos", titulo: "Racimos", ayuda: "Racimos cosechados", color: "#d97706" },
-  { id: "ratio", titulo: "Ratio", ayuda: "Cajas por racimo (cajas ÷ racimos)", color: "#64748b", derivado: true },
-  { id: "cajas", titulo: "Cajas", ayuda: "Racimos × ratio", color: VERDE, resultado: true },
+  { id: "embolses", titulo: "Embolses", corto: "Embolses", ayuda: "Embolses de la semana (real si ya pasó, proyectado si no)", color: "#0891b2" },
+  { id: "aprov", titulo: "Aprovechamiento", corto: "Aprovech.", ayuda: "Cosechado ÷ (cosechado + repique + recusado) de la cinta que cumple 12 semanas en esta semana", color: "#7c3aed", derivado: true },
+  { id: "racimos", titulo: "Racimos", corto: "Racimos", ayuda: "Racimos cosechados", color: "#d97706" },
+  { id: "ratio", titulo: "Ratio", corto: "Ratio", ayuda: "Cajas por racimo (cajas ÷ racimos)", color: "#64748b", derivado: true },
+  { id: "cajas", titulo: "Cajas", corto: "Cajas", ayuda: "Racimos × ratio", color: VERDE, resultado: true },
 ];
 
 const num = (n, d = 0) => Number(n ?? 0).toLocaleString("es", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -60,166 +60,147 @@ const esEstimado = (dato, c) => dato === "aprov" && c && c.real === 0;
 export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas }) {
   const { fincas, celdas, suma } = useMemo(() => acumular(resultado, periodo, ocultas), [resultado, periodo, ocultas]);
   const periodos = periodo === "semana" ? resultado.porSemana.map((s) => ({ clave: s.semanaCodigo, titulo: s.semanaCodigo, real: s.real })) : MESES.map((m, i) => ({ clave: i, titulo: m }));
-  const fila = (clave) => fincas.map((f) => celdas.get(`${f.uuid}|${clave}`));
-  const totalPeriodo = (clave) => suma(fila(clave).filter(Boolean));
+  const totalPeriodo = (clave) => suma(fincas.map((f) => celdas.get(`${f.uuid}|${clave}`)).filter(Boolean));
   const totalFinca = (uuid) => suma(periodos.map((p) => celdas.get(`${uuid}|${p.clave}`)).filter(Boolean));
   const totalGeneral = suma([...celdas.values()]);
 
   const W1 = periodo === "semana" ? 92 : 64; // ancho de la columna de periodo
-  const W2 = 128; // ancho de la columna del dato
+  const ANCHO = { embolses: 74, aprov: 78, racimos: 72, ratio: 66, cajas: 78 };
   const encabezado = { background: VERDE, color: "#fff" };
-  const sombra = "2px 0 0 #cfdcd3";
+  // Cada finca es un grupo de cinco columnas; el borde izquierdo del grupo lo separa del siguiente.
+  const grupo = { borderLeft: `2px solid ${BORDE}` };
 
-  const celdaNumero = (dato, c, extra = {}) => {
+  const celdaDe = (dato, c, extra = {}) => {
     const v = valorDe(dato, c);
     const estimado = esEstimado(dato, c);
     const def = DATOS.find((d) => d.id === dato);
     return {
       contenido: texto(dato, v),
+      title: estimado ? "Sin movimientos reales en esta cinta: se usa el % de aprovechamiento aplicado a la finca" : undefined,
       style: {
         textAlign: "right",
         fontVariantNumeric: "tabular-nums",
-        padding: "0.2rem 0.65rem",
+        padding: "0.25rem 0.55rem",
+        minWidth: ANCHO[dato],
         color: def.derivado ? "#5b6b61" : "#1f2937",
         fontSize: def.derivado ? "0.78rem" : "0.84rem",
         fontWeight: def.resultado ? 700 : 500,
         fontStyle: estimado ? "italic" : undefined,
+        ...(def.resultado ? { background: "#eef7f1" } : {}),
         ...extra,
       },
-      title: estimado ? "Sin movimientos reales en esta cinta: se usa el % de aprovechamiento aplicado a la finca" : undefined,
     };
   };
+
+  // Una fila de celdas (cinco por finca + cinco del total) para un periodo o para el pie.
+  const celdasFila = (obtener, totalFila, { fondo, borde = {}, color, fondoTotal, colorTotal } = {}) => [
+    ...fincas.flatMap((f) =>
+      DATOS.map((d, di) => {
+        const c = celdaDe(d.id, obtener(f.uuid), { ...(di === 0 ? grupo : {}), ...borde, ...(fondo ? { background: fondo } : {}), ...(color ? { color } : {}) });
+        return (
+          <td key={`${f.uuid}-${d.id}`} style={c.style} title={c.title}>
+            {c.contenido}
+          </td>
+        );
+      }),
+    ),
+    ...DATOS.map((d, di) => {
+      const c = celdaDe(d.id, totalFila, { ...(di === 0 ? grupo : {}), ...borde, fontWeight: 700, background: fondoTotal || "#e3efe7", ...(colorTotal ? { color: colorTotal } : {}) });
+      return (
+        <td key={`total-${d.id}`} style={c.style} title={c.title}>
+          {c.contenido}
+        </td>
+      );
+    }),
+  ];
 
   return (
     <div>
       <p className="small text-secondary mb-2">
-        Cada semana se lee de arriba abajo: <strong>embolses × aprovechamiento = racimos</strong>, y <strong>racimos × ratio = cajas</strong>. En cursiva, un aprovechamiento sin dato real todavía
-        (usa el % aplicado a la finca).
+        Cada finca se lee de izquierda a derecha: <strong>embolses × aprovechamiento = racimos</strong>, y <strong>racimos × ratio = cajas</strong>. En cursiva, un aprovechamiento sin dato real
+        todavía (usa el % aplicado a la finca).
       </p>
       <div className="table-responsive border rounded-3" style={{ maxHeight: "68vh" }}>
         <table className="table table-sm align-middle mb-0" style={{ whiteSpace: "nowrap", borderCollapse: "separate", borderSpacing: 0 }}>
           <thead style={{ position: "sticky", top: 0, zIndex: 3 }}>
             <tr>
-              <th style={{ position: "sticky", left: 0, zIndex: 4, minWidth: W1, width: W1, ...encabezado, padding: "0.45rem 0.6rem" }}>{periodo === "semana" ? "Semana" : "Mes"}</th>
-              <th style={{ position: "sticky", left: W1, zIndex: 4, minWidth: W2, width: W2, ...encabezado, padding: "0.45rem 0.6rem", boxShadow: sombra }}>Dato</th>
+              <th rowSpan={2} style={{ position: "sticky", left: 0, zIndex: 4, minWidth: W1, width: W1, ...encabezado, padding: "0.45rem 0.6rem", verticalAlign: "middle", boxShadow: "2px 0 0 #cfdcd3" }}>
+                {periodo === "semana" ? "Semana" : "Mes"}
+              </th>
               {fincas.map((f) => (
                 <th
                   key={f.uuid}
+                  colSpan={DATOS.length}
                   role="button"
                   title="Clic para ver las gráficas de esta finca"
-                  className="text-end"
-                  style={{ ...encabezado, minWidth: 96, padding: "0.45rem 0.65rem", cursor: "pointer", fontWeight: 600 }}
+                  className="text-center"
+                  style={{ ...encabezado, ...grupo, padding: "0.4rem 0.6rem", cursor: "pointer", fontWeight: 700 }}
                   onClick={() => onGraficas({ uuids: [f.uuid], titulo: `Gráficas · ${f.nombre}` })}
                 >
                   {f.nombre}
                 </th>
               ))}
               <th
+                colSpan={DATOS.length}
                 role="button"
                 title="Clic para ver las gráficas del total de las fincas visibles"
-                className="text-end"
-                style={{ background: "#14532d", color: "#fff", minWidth: 104, padding: "0.45rem 0.65rem", cursor: "pointer", fontWeight: 700 }}
+                className="text-center"
+                style={{ background: "#14532d", color: "#fff", ...grupo, padding: "0.4rem 0.6rem", cursor: "pointer", fontWeight: 700 }}
                 onClick={() => onGraficas({ uuids: fincas.map((f) => f.uuid), titulo: "Gráficas · Total de las fincas visibles" })}
               >
                 Total
               </th>
             </tr>
+            <tr>
+              {[...fincas, { uuid: "total", total: true }].flatMap((f) =>
+                DATOS.map((d, di) => (
+                  <th
+                    key={`${f.uuid}-${d.id}`}
+                    title={d.ayuda}
+                    className="text-end"
+                    style={{
+                      background: f.total ? "#1e6b43" : "#2f7a4d",
+                      color: "#fff",
+                      fontSize: "0.72rem",
+                      fontWeight: 600,
+                      padding: "0.25rem 0.55rem",
+                      minWidth: ANCHO[d.id],
+                      borderBottom: `3px solid ${d.color}`,
+                      ...(di === 0 ? grupo : {}),
+                    }}
+                  >
+                    {d.corto}
+                  </th>
+                )),
+              )}
+            </tr>
           </thead>
           <tbody>
             {periodos.map((pr, bi) => {
-              const fondo = bi % 2 === 0 ? "#ffffff" : "#f4f8f5"; // bandas alternas por bloque
-              const tot = totalPeriodo(pr.clave);
+              const fondo = bi % 2 === 0 ? "#ffffff" : "#f6faf7"; // filas alternas
               return (
-                <Fragment key={pr.clave}>
-                  {DATOS.map((d, di) => {
-                    const bordeBloque = di === 0 ? { borderTop: `2px solid ${BORDE}` } : { borderTop: "1px solid #e5ece7" };
-                    const fondoFila = d.resultado ? "#e6f4ea" : fondo;
-                    return (
-                      <tr key={d.id}>
-                        {di === 0 && (
-                          <td
-                            rowSpan={DATOS.length}
-                            style={{ position: "sticky", left: 0, zIndex: 2, background: fondo, minWidth: W1, width: W1, verticalAlign: "top", padding: "0.4rem 0.6rem", borderTop: `2px solid ${BORDE}`, color: "#14532d" }}
-                          >
-                            <div className="fw-bold" style={{ fontSize: "0.88rem" }}>
-                              {pr.titulo}
-                            </div>
-                            {pr.real && (
-                              <span className="badge rounded-pill" style={{ background: "#dcfce7", color: "#166534", fontWeight: 600, fontSize: "0.65rem" }} title="Semana ya transcurrida: usa el dato real">
-                                Real
-                              </span>
-                            )}
-                          </td>
-                        )}
-                        <td
-                          title={d.ayuda}
-                          style={{
-                            position: "sticky",
-                            left: W1,
-                            zIndex: 2,
-                            background: fondoFila,
-                            minWidth: W2,
-                            width: W2,
-                            padding: "0.2rem 0.6rem",
-                            boxShadow: sombra,
-                            fontSize: d.derivado ? "0.76rem" : "0.82rem",
-                            fontWeight: d.resultado ? 700 : 500,
-                            color: d.derivado ? "#5b6b61" : "#1f2937",
-                            ...bordeBloque,
-                          }}
-                        >
-                          <span className="d-inline-block rounded-circle me-2" style={{ width: 8, height: 8, background: d.color, verticalAlign: "middle" }} />
-                          {d.titulo}
-                        </td>
-                        {fincas.map((f) => {
-                          const c = celdaNumero(d.id, celdas.get(`${f.uuid}|${pr.clave}`), { background: fondoFila, ...bordeBloque });
-                          return (
-                            <td key={f.uuid} style={c.style} title={c.title}>
-                              {c.contenido}
-                            </td>
-                          );
-                        })}
-                        {(() => {
-                          const c = celdaNumero(d.id, tot, { background: d.resultado ? "#cfe9d6" : "#eaf3ed", fontWeight: 700, ...bordeBloque });
-                          return (
-                            <td style={c.style} title={c.title}>
-                              {c.contenido}
-                            </td>
-                          );
-                        })()}
-                      </tr>
-                    );
-                  })}
-                </Fragment>
+                <tr key={pr.clave}>
+                  <td
+                    className="fw-bold"
+                    style={{ position: "sticky", left: 0, zIndex: 2, background: fondo, minWidth: W1, width: W1, padding: "0.25rem 0.6rem", color: "#14532d", borderTop: "1px solid #e5ece7", boxShadow: "2px 0 0 #cfdcd3" }}
+                  >
+                    {pr.titulo}
+                    {pr.real && (
+                      <span className="badge rounded-pill ms-1" style={{ background: "#dcfce7", color: "#166534", fontWeight: 600, fontSize: "0.62rem" }} title="Semana ya transcurrida: usa el dato real">
+                        Real
+                      </span>
+                    )}
+                  </td>
+                  {celdasFila((uuid) => celdas.get(`${uuid}|${pr.clave}`), totalPeriodo(pr.clave), { fondo, borde: { borderTop: "1px solid #e5ece7" } })}
+                </tr>
               );
             })}
           </tbody>
           <tfoot style={{ position: "sticky", bottom: 0, zIndex: 3 }}>
-            {DATOS.map((d, di) => (
-              <tr key={d.id}>
-                {di === 0 && (
-                  <td rowSpan={DATOS.length} style={{ position: "sticky", left: 0, zIndex: 4, ...encabezado, minWidth: W1, width: W1, padding: "0.4rem 0.6rem", fontWeight: 700, verticalAlign: "middle" }}>
-                    Total
-                  </td>
-                )}
-                <td style={{ position: "sticky", left: W1, zIndex: 4, background: "#d1ecdc", minWidth: W2, width: W2, padding: "0.2rem 0.6rem", boxShadow: sombra, fontSize: "0.8rem", fontWeight: 600, color: "#14532d", borderTop: di === 0 ? `2px solid ${VERDE}` : "1px solid #b7d8c3" }}>
-                  <span className="d-inline-block rounded-circle me-2" style={{ width: 8, height: 8, background: d.color, verticalAlign: "middle" }} />
-                  {d.titulo}
-                </td>
-                {fincas.map((f) => {
-                  const c = celdaNumero(d.id, totalFinca(f.uuid), { background: "#d1ecdc", fontWeight: 700, color: "#14532d", borderTop: di === 0 ? `2px solid ${VERDE}` : "1px solid #b7d8c3" });
-                  return (
-                    <td key={f.uuid} style={c.style} title={c.title}>
-                      {c.contenido}
-                    </td>
-                  );
-                })}
-                {(() => {
-                  const c = celdaNumero(d.id, totalGeneral, { background: "#14532d", color: "#fff", fontWeight: 700, borderTop: di === 0 ? `2px solid ${VERDE}` : "1px solid #2f6b46" });
-                  return <td style={c.style}>{c.contenido}</td>;
-                })()}
-              </tr>
-            ))}
+            <tr>
+              <td style={{ position: "sticky", left: 0, zIndex: 4, ...encabezado, minWidth: W1, width: W1, padding: "0.4rem 0.6rem", fontWeight: 700, boxShadow: "2px 0 0 #cfdcd3" }}>Total</td>
+              {celdasFila((uuid) => totalFinca(uuid), totalGeneral, { fondo: "#d1ecdc", color: "#14532d", borde: { borderTop: `2px solid ${VERDE}`, fontWeight: 700 }, fondoTotal: "#14532d", colorTotal: "#fff" })}
+            </tr>
           </tfoot>
         </table>
       </div>
@@ -227,7 +208,7 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas })
   );
 }
 
-// Excel con la misma disposición: cinco filas por semana (o mes) y los totales al final.
+// Excel con la misma disposición: una fila por semana (o mes); las cinco cifras en columnas bajo cada finca y bajo el total.
 export async function exportarJuntos({ resultado, periodo, ocultas, nombreEscenario }) {
   const { fincas, celdas, suma } = acumular(resultado, periodo, ocultas);
   const periodos = periodo === "semana" ? resultado.porSemana.map((s) => ({ clave: s.semanaCodigo, titulo: s.real ? `${s.semanaCodigo} *` : s.semanaCodigo })) : MESES.map((m, i) => ({ clave: i, titulo: m }));
@@ -237,36 +218,36 @@ export async function exportarJuntos({ resultado, periodo, ocultas, nombreEscena
   hoja.addRow([`Proyección ${resultado.meta.anio}${nombreEscenario ? ` · ${nombreEscenario}` : ""} · Embolses, aprovechamiento, racimos, ratio y cajas`]).font = { bold: true, size: 12 };
   hoja.addRow(["Embolses × aprovechamiento = racimos; racimos × ratio = cajas." + (periodo === "semana" ? " * Semana ya transcurrida: dato real." : "")]).font = { italic: true, color: { argb: "FF6B7280" } };
   hoja.addRow([]);
-  const enc = hoja.addRow([periodo === "semana" ? "Semana" : "Mes", "Dato", ...fincas.map((f) => f.nombre), "Total"]);
-  enc.font = { bold: true, color: { argb: "FFFFFFFF" } };
-  enc.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } }));
-  const redondeo = (v, d = 2) => (v === null || v === undefined ? null : Math.round(v * 10 ** d) / 10 ** d);
-  const agregarBloque = (titulo, porFinca, total, destacar = false) => {
-    DATOS.forEach((d, di) => {
-      const val = (c) => {
-        const v = valorDe(d.id, c);
-        return d.id === "ratio" ? redondeo(v, 4) : d.id === "aprov" ? redondeo(v, 4) : redondeo(v, 0);
-      };
-      const fila = hoja.addRow([di === 0 ? titulo : "", d.titulo, ...porFinca.map(val), val(total)]);
-      fila.eachCell({ includeEmpty: false }, (cell, n) => {
-        if (n <= 2) return;
-        cell.numFmt = d.id === "aprov" ? "0.0%" : d.id === "ratio" ? "0.0000" : "#,##0";
-      });
-      if (destacar) fila.font = { bold: true };
-      if (d.id === "cajas") fila.eachCell((cell) => (cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F4EA" } }));
-      if (di === 0) fila.eachCell((cell) => (cell.border = { top: { style: "thin", color: { argb: "FF9CA3AF" } } }));
+  const grupos = [...fincas.map((f) => f.nombre), "Total"];
+  const verde = (cell, argb = "FF166534") => (cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } });
+  const fila1 = hoja.addRow([periodo === "semana" ? "Semana" : "Mes", ...grupos.flatMap((g) => [g, "", "", "", ""])]);
+  const fila2 = hoja.addRow(["", ...grupos.flatMap(() => DATOS.map((d) => d.corto))]);
+  grupos.forEach((_, gi) => hoja.mergeCells(fila1.number, 2 + gi * DATOS.length, fila1.number, 1 + (gi + 1) * DATOS.length));
+  hoja.mergeCells(fila1.number, 1, fila2.number, 1);
+  for (const fila of [fila1, fila2]) {
+    fila.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    fila.alignment = { horizontal: "center", vertical: "middle" };
+    fila.eachCell((c) => verde(c));
+  }
+  const redondeo = (v, d) => (v === null || v === undefined ? null : Math.round(v * 10 ** d) / 10 ** d);
+  const valores = (c) => DATOS.map((d) => redondeo(valorDe(d.id, c), d.id === "aprov" || d.id === "ratio" ? 4 : 0));
+  const formatear = (fila) =>
+    fila.eachCell({ includeEmpty: false }, (cell, n) => {
+      if (n === 1) return;
+      const d = DATOS[(n - 2) % DATOS.length];
+      cell.numFmt = d.id === "aprov" ? "0.0%" : d.id === "ratio" ? "0.0000" : "#,##0";
     });
-  };
   for (const pr of periodos) {
     const por = fincas.map((f) => celdas.get(`${f.uuid}|${pr.clave}`));
-    agregarBloque(pr.titulo, por, suma(por.filter(Boolean)));
+    formatear(hoja.addRow([pr.titulo, ...por.flatMap(valores), ...valores(suma(por.filter(Boolean)))]));
   }
   const porFinca = fincas.map((f) => suma(periodos.map((p) => celdas.get(`${f.uuid}|${p.clave}`)).filter(Boolean)));
-  agregarBloque("Total", porFinca, suma([...celdas.values()]), true);
+  const pie = hoja.addRow(["Total", ...porFinca.flatMap(valores), ...valores(suma([...celdas.values()]))]);
+  formatear(pie);
+  pie.font = { bold: true };
   hoja.getColumn(1).width = 14;
-  hoja.getColumn(2).width = 17;
-  for (let i = 3; i <= fincas.length + 3; i += 1) hoja.getColumn(i).width = 14;
-  hoja.views = [{ state: "frozen", xSplit: 2, ySplit: enc.number }];
+  for (let i = 2; i <= 1 + grupos.length * DATOS.length; i += 1) hoja.getColumn(i).width = 12;
+  hoja.views = [{ state: "frozen", xSplit: 1, ySplit: fila2.number }];
 
   const blob = new Blob([await libro.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const a = document.createElement("a");
