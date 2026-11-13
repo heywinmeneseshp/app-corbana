@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2, FiTool, FiActivity } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiTool, FiActivity, FiBatteryCharging } from "react-icons/fi";
 import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
@@ -9,6 +9,7 @@ import ModalShell from "@/components/ModalShell";
 import InfoModulo from "@/components/InfoModulo";
 import { AYUDA_EQUIPOS } from "@/lib/ayudaEquipos";
 import LecturaEquipoModal from "@/components/inventario/LecturaEquipoModal";
+import PartesEquipoModal from "@/components/mantenimiento/PartesEquipoModal";
 
 const ESTADOS = ["OPERATIVO", "MANTENIMIENTO", "FUERA_SERVICIO", "INACTIVO", "DE_BAJA"];
 
@@ -29,6 +30,7 @@ function emptyForm() {
     marca: "",
     modelo: "",
     serie: "",
+    configuracion: "",
     fechaAdquisicion: "",
     ubicacionUuid: "",
     centroCostoUuid: "",
@@ -58,6 +60,7 @@ export default function EquiposInventarioPage() {
   const [tipoModalOpen, setTipoModalOpen] = useState(false);
 
   const [repuestosEquipo, setRepuestosEquipo] = useState(null);
+  const [partesEquipo, setPartesEquipo] = useState(null); // equipo cuyas partes con serie (baterías, control remoto...) se administran
   const [lecturasEquipo, setLecturasEquipo] = useState(null); // equipo cuyas lecturas (km / horas) se registran o consultan
 
   async function load() {
@@ -124,6 +127,7 @@ export default function EquiposInventarioPage() {
       marca: equipo.marca || "",
       modelo: equipo.modelo || "",
       serie: equipo.serie || "",
+      configuracion: equipo.configuracion || "",
       fechaAdquisicion: equipo.fechaAdquisicion || "",
       ubicacionUuid: equipo.ubicacion?.uuid || "",
       centroCostoUuid: equipo.centroCosto?.uuid || "",
@@ -148,6 +152,7 @@ export default function EquiposInventarioPage() {
         marca: form.marca || null,
         modelo: form.modelo || null,
         serie: form.serie || null,
+        configuracion: form.configuracion || null,
         fechaAdquisicion: form.fechaAdquisicion || null,
         ubicacionUuid: form.ubicacionUuid || null,
         centroCostoUuid: form.centroCostoUuid || null,
@@ -274,6 +279,9 @@ export default function EquiposInventarioPage() {
                               <FiActivity />
                             </button>
                           )}
+                          <button type="button" className="btn btn-sm btn-outline-secondary" title="Partes y accesorios con serie (baterías, control remoto...)" onClick={() => setPartesEquipo(eq)}>
+                            <FiBatteryCharging />
+                          </button>
                           <button type="button" className="btn btn-sm btn-outline-secondary" title="Repuestos compatibles" onClick={() => openRepuestos(eq)}>
                             <FiTool />
                           </button>
@@ -296,6 +304,7 @@ export default function EquiposInventarioPage() {
           </div>
         </div>
 
+        {partesEquipo && <PartesEquipoModal equipo={partesEquipo} onClose={() => setPartesEquipo(null)} />}
         {lecturasEquipo && <LecturaEquipoModal equipo={lecturasEquipo} onClose={() => setLecturasEquipo(null)} onGuardado={load} />}
 
         {modalOpen && (
@@ -395,6 +404,17 @@ export default function EquiposInventarioPage() {
                     maxLength={100}
                     value={form.serie}
                     onChange={(e) => setForm((f) => ({ ...f, serie: e.target.value }))}
+                  />
+                </div>
+                <div className="col-4">
+                  <label className="form-label small fw-medium">Configuración instalada</label>
+                  <input
+                    type="text"
+                    className="form-control rounded-3"
+                    maxLength={300}
+                    placeholder="Ej.: LS100, Esparcido 4.0"
+                    value={form.configuracion}
+                    onChange={(e) => setForm((f) => ({ ...f, configuracion: e.target.value }))}
                   />
                 </div>
                 <div className="col-4">
