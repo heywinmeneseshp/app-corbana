@@ -74,7 +74,7 @@ export default function CargueMasivoArticulosModal({ endpoint, onClose, onListo 
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       <div className="row g-3">
-        <div className="col-12 col-lg-5">
+        <div className="col-12 col-lg-6">
           <div className="border rounded-1 p-3 h-100">
             {paso(1, "Prepara el archivo")}
             <p className="small text-secondary mb-2">
@@ -90,7 +90,7 @@ export default function CargueMasivoArticulosModal({ endpoint, onClose, onListo 
           </div>
         </div>
 
-        <div className="col-12 col-lg-7">
+        <div className="col-12 col-lg-6">
           <div className="border rounded-1 p-3 h-100">
             {paso(2, resultado ? "Cargue terminado" : "Elige el archivo, revísalo y carga")}
             <input
