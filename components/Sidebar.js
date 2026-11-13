@@ -208,6 +208,8 @@ const NAV = [
     type: "section",
     key: "equipos",
     label: "Equipos",
+    // Orden fijo (no alfabético): sigue el flujo de trabajo — equipo, repuestos, plan, programación y orden.
+    ordenFijo: true,
     icon: GiFarmTractor,
     permKey: "equiposMenu",
     pathPrefix: "/inventarios/equipos",
@@ -429,9 +431,9 @@ export default function Sidebar() {
       if (entry.type === "link") {
         return { ...entry, visible: entry.permKey === null || perms[entry.permKey] };
       }
-      const items = entry.items
-        .filter((item) => perms[item.permKey])
-        .sort((a, b) => a.label.localeCompare(b.label, "es"));
+      const permitidos = entry.items.filter((item) => perms[item.permKey]);
+      // Las secciones con `ordenFijo` conservan el orden en que están escritas; el resto sale alfabético.
+      const items = entry.ordenFijo ? permitidos : permitidos.sort((a, b) => a.label.localeCompare(b.label, "es"));
       return { ...entry, items, visible: perms[entry.permKey] && items.length > 0 };
     });
   }, [perms]);
