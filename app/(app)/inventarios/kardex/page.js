@@ -20,6 +20,8 @@ export default function KardexPage() {
   const [items, setItems] = useState([]);
   const [articulos, setArticulos] = useState([]);
   const [almacenes, setAlmacenes] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [categoriaUuid, setCategoriaUuid] = useState(""); // solo acota la lista de artículos: el kárdex sigue siendo de un artículo
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [textoArticulo, setTextoArticulo] = useState("");
@@ -47,10 +49,12 @@ export default function KardexPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [p, a] = await Promise.all([
+        const [p, a, cats] = await Promise.all([
           apiFetchTodos("/inventarios/articulos?limit=100&estado=true"),
           apiFetch("/inventarios/almacenes?limit=100&estado=true"),
+          apiFetch("/inventarios/categorias?limit=100&estado=true").catch(() => ({ items: [] })),
         ]);
+        setCategorias(cats.items || []);
         const lista = p.items || [];
         setArticulos(lista);
         setAlmacenes(a.items || []);
@@ -72,7 +76,7 @@ export default function KardexPage() {
 
   function elegirArticulo(texto) {
     setTextoArticulo(texto);
-    const exacto = articulos.find((a) => a.nombre.toLowerCase() === texto.trim().toLowerCase() || (a.codigo && a.codigo.toLowerCase() === texto.trim().toLowerCase()));
+    const exacto = articulos.filter((a) => !categoriaUuid || a.categoria?.uuid === categoriaUuid).find((a) => a.nombre.toLowerCase() === texto.trim().toLowerCase() || (a.codigo && a.codigo.toLowerCase() === texto.trim().toLowerCase()));
     setFiltros((f) => ({ ...f, articuloUuid: exacto ? exacto.uuid : "" }));
   }
 
@@ -136,6 +140,27 @@ export default function KardexPage() {
 
         <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
           <div className="row g-2 align-items-end">
+            <div className="col-auto">
+              <label className="form-label small fw-medium mb-1">Categoría</label>
+              <select
+                className="form-select form-select-sm rounded-3"
+                style={{ minWidth: 190 }}
+                value={categoriaUuid}
+                onChange={(e) => {
+                  setCategoriaUuid(e.target.value);
+                  // El artículo elegido deja de valer si no es de la nueva categoría.
+                  setTextoArticulo("");
+                  setFiltros((f) => ({ ...f, articuloUuid: "" }));
+                }}
+              >
+                <option value="">Todas</option>
+                {categorias.map((c) => (
+                  <option key={c.uuid} value={c.uuid}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="col-12 col-md-4">
               <label className="form-label small fw-medium mb-1">
                 Artículo <span className="text-danger">*</span>
@@ -150,7 +175,9 @@ export default function KardexPage() {
                 onChange={(e) => elegirArticulo(e.target.value)}
               />
               <datalist id="kardex-articulos">
-                {articulos.map((p) => (
+                {articulos
+                  .filter((p) => !categoriaUuid || p.categoria?.uuid === categoriaUuid)
+                  .map((p) => (
                   <option key={p.uuid} value={p.nombre}>
                     {p.codigo || ""}
                   </option>
