@@ -29,6 +29,7 @@ export default function PlantillasChecklistModal({ onClose, onCambio }) {
   const [sel, setSel] = useState(null); // { uuid|null, nombre, descripcion, texto, estado }
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const [vista, setVista] = useState("editar"); // "editar" | "previa"
   const puedeEditar = hasPermission("inventario.planes.editar") || hasPermission("inventario.planes.crear");
 
   async function cargar() {
@@ -43,8 +44,19 @@ export default function PlantillasChecklistModal({ onClose, onCambio }) {
     cargar();
   }, []);
 
-  const abrir = (p) => setSel({ uuid: p.uuid, nombre: p.nombre, descripcion: p.descripcion || "", texto: aTexto(p.secciones), estado: p.estado });
-  const nueva = () => setSel({ uuid: null, nombre: "", descripcion: "", texto: "## Sección 1\nPrimer ítem\nSegundo ítem", estado: true });
+  const abrir = (p) => (setVista("editar"), setSel({ uuid: p.uuid, nombre: p.nombre, descripcion: p.descripcion || "", texto: aTexto(p.secciones), estado: p.estado }));
+  const nueva = () => (setVista("editar"), setSel({ uuid: null, nombre: "", descripcion: "", texto: "## Sección 1\nPrimer ítem\nSegundo ítem", estado: true }));
+
+  // Vista previa: lo que hay escrito en el editor, con el aspecto que tendrá el checklist dentro de una orden.
+  let previa = null;
+  let errorPrevia = "";
+  if (sel) {
+    try {
+      previa = aSecciones(sel.texto);
+    } catch (err) {
+      errorPrevia = err.message;
+    }
+  }
 
   async function guardar() {
     setError("");
@@ -130,11 +142,61 @@ export default function PlantillasChecklistModal({ onClose, onCambio }) {
                   <input className="form-control form-control-sm rounded-1" disabled={!puedeEditar} maxLength={1000} value={sel.descripcion} onChange={(e) => setSel({ ...sel, descripcion: e.target.value })} />
                 </div>
               </div>
-              <label className="form-label small fw-medium mb-1">Secciones e ítems</label>
-              <p className="form-text small mt-0 mb-1">
-                Una línea que empieza con <code>##</code> abre una sección; cada línea siguiente es un ítem.
-              </p>
-              <textarea className="form-control form-control-sm rounded-1 font-monospace" rows={16} disabled={!puedeEditar} value={sel.texto} onChange={(e) => setSel({ ...sel, texto: e.target.value })} style={{ fontSize: "0.78rem" }} />
+              <div className="d-flex align-items-center justify-content-between mb-1">
+                <label className="form-label small fw-medium mb-0">Secciones e ítems</label>
+                <ul className="nav nav-pills" style={{ fontSize: "0.78rem" }}>
+                  {[
+                    ["editar", "Editar"],
+                    ["previa", "Vista previa"],
+                  ].map(([id, etiqueta]) => (
+                    <li key={id} className="nav-item">
+                      <button type="button" className={`nav-link py-0 px-2 rounded-1 ${vista === id ? "active" : ""}`} style={vista === id ? { background: "#166534" } : undefined} onClick={() => setVista(id)}>
+                        {etiqueta}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {vista === "editar" ? (
+                <>
+                  <p className="form-text small mt-0 mb-1">
+                    Una línea que empieza con <code>##</code> abre una sección; cada línea siguiente es un ítem.
+                  </p>
+                  <textarea className="form-control form-control-sm rounded-1 font-monospace" rows={16} disabled={!puedeEditar} value={sel.texto} onChange={(e) => setSel({ ...sel, texto: e.target.value })} style={{ fontSize: "0.78rem" }} />
+                </>
+              ) : errorPrevia ? (
+                <div className="alert alert-warning py-2 small">No se puede mostrar la vista previa: {errorPrevia}</div>
+              ) : (
+                <div style={{ maxHeight: "26rem", overflowY: "auto" }}>
+                  <p className="form-text small mt-0 mb-2">
+                    Así se verá el checklist dentro de una orden: {previa.length} secciones, {previa.reduce((t, x) => t + x.items.length, 0)} ítems. Cada ítem se califica y lleva su observación.
+                  </p>
+                  {previa.map((sec, si) => (
+                    <div key={`${si}-${sec.seccion}`} className="border rounded-1 mb-2">
+                      <div className="px-2 py-1 fw-semibold small" style={{ background: "#166534", color: "#fff" }}>
+                        {si + 1}. {sec.seccion} <span className="fw-normal opacity-75">· {sec.items.length} ítems</span>
+                      </div>
+                      <table className="table table-sm align-middle mb-0 small">
+                        <tbody>
+                          {sec.items.map((it, ii) => (
+                            <tr key={`${ii}-${it}`}>
+                              <td className="text-secondary" style={{ width: "2rem" }}>
+                                {si + 1}.{ii + 1}
+                              </td>
+                              <td>{it}</td>
+                              <td style={{ width: "8.5rem" }}>
+                                <span className="badge rounded-1 fw-normal" style={{ background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0" }}>
+                                  Pendiente
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              )}
               {puedeEditar && (
                 <div className="d-flex gap-2 mt-2">
                   <button type="button" className="btn btn-brand btn-sm rounded-1 d-inline-flex align-items-center gap-1" disabled={guardando} onClick={guardar}>
