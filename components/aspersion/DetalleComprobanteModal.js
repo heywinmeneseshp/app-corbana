@@ -114,6 +114,9 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
 
           <Seccion titulo="Aplicación">
             <Dato label={c.medio === "DRON" ? "Piloto del dron" : "Piloto"}>{c.pilotoColaborador?.nombre || c.piloto}</Dato>
+            {c.pilotoVisible && c.pilotoColaborador && c.pilotoVisible.uuid !== c.pilotoColaborador.uuid && (
+              <Dato label="Piloto certificado (PDF)">{c.pilotoVisible.nombre}</Dato>
+            )}
             {(c.participantes || []).some((p) => p.rol === "ASISTENTE") && (
               <Dato label="Asistentes">
                 {c.participantes
