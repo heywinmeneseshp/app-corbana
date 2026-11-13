@@ -8,7 +8,7 @@ import { cargarAreasMasivo } from "@/lib/proyeccion/api";
 // semana que se elige es la de PRIMERA COSECHA; el sistema calcula la semana de entrada (cuando se empieza a embolsar) restando
 // 7 semanas. Las hectáreas reales de los lotes no se tocan. Las altas entran con la rampa del escenario.
 const SEMANAS_A_PRIMER_CORTE = 7; // edad mínima de corte de 8 semanas: el primer racimo se corta 7 semanas después del embolse
-export default function PlanHectareas({ escenarioUuid, areas, onChange, fincas, semanas, deshabilitado, onCargado, rampaPorDefecto = { pct: 50, semanas: 12 } }) {
+export default function PlanHectareas({ escenarioUuid, areas, onChange, fincas, semanas, deshabilitado, onCargado, rampaPorDefecto = { pct: 50, semanas: 12 }, resultado = null }) {
   const inputArchivo = useRef(null);
   const vacio = () => ({ fincaUuid: "", semanaUuid: "", hectareas: "", nota: "", cierre: false, rampaPct: String(rampaPorDefecto.pct), rampaSemanas: String(rampaPorDefecto.semanas) });
   const [nueva, setNueva] = useState(vacio);
@@ -101,6 +101,30 @@ export default function PlanHectareas({ escenarioUuid, areas, onChange, fincas, 
     const anio = Number(String(semanas[i].codigo).split("-")[1]) || 0;
     return `S${String(destino - semanas.length + 1).padStart(2, "0")}-${anio + 1}`;
   };
+  // Hectáreas totales en producción «en teoría» tras cada fila: las de partida de la finca (las reales de hoy, o las fijadas en Parámetros) más
+  // las entradas del plan en orden de semana, al 100 % (sin rampa). Una baja resta y «Deja de producir» deja la finca en 0. Se toman de la
+  // última proyección calculada; sin cálculo no se muestran.
+  const totalTeorico = (() => {
+    const base = new Map((resultado?.aprovechamiento || []).map((x) => [x.fincaUuid, x.hectareasBase]));
+    const clave = (a) => {
+      const [n, y] = String(a.semanaCodigo).replace("S", "").split("-");
+      return (Number(y) || 0) * 100 + (Number(n) || 0);
+    };
+    const porFinca = new Map();
+    for (const a of areas) porFinca.set(a.fincaUuid, [...(porFinca.get(a.fincaUuid) || []), a]);
+    const res = new Map(); // uuid de la fila -> { total, base }
+    for (const [fincaUuid, lista] of porFinca) {
+      if (!base.has(fincaUuid)) continue;
+      // Misma semana: primero el cierre («deja de producir»), como en el cálculo del servidor; luego el orden en que se agregaron.
+      const orden = lista.map((a, i) => ({ a, i })).sort((x, y) => clave(x.a) - clave(y.a) || Number(y.a.hectareas === 0) - Number(x.a.hectareas === 0) || x.i - y.i);
+      let total = Number(base.get(fincaUuid)) || 0;
+      for (const { a } of orden) {
+        total = a.hectareas === 0 ? 0 : Math.max(0, total + Number(a.hectareas));
+        res.set(a.uuid, { total, base: Number(base.get(fincaUuid)) || 0 });
+      }
+    }
+    return res;
+  })();
   const ordenadas = [...areas].sort((a, b) => String(a.fincaNombre).localeCompare(String(b.fincaNombre), "es") || String(a.semanaCodigo).localeCompare(String(b.semanaCodigo)));
 
   return (
@@ -230,6 +254,7 @@ export default function PlanHectareas({ escenarioUuid, areas, onChange, fincas, 
               <th title="Semana en que se empieza a embolsar (7 semanas antes de la primera cosecha)">Semana de embolse</th>
               <th title="Primera semana en que se corta el primer racimo: 7 semanas después de la entrada (edad mínima de corte de 8 semanas)">Primera cosecha</th>
               <th className="text-end">Hectáreas</th>
+              <th className="text-end" title="Hectáreas totales en producción de la finca en teoría después de esta fila: las de partida más las entradas del plan hasta esa semana, al 100 % (sin rampa)">Total en producción</th>
               <th className="text-center" title="% del embolse por hectárea con el que arranca la entrada">Arranque</th>
               <th className="text-center" title="Semanas hasta llegar al 100 % del embolse por hectárea">Semanas al 100 %</th>
               <th>Nota</th>
@@ -239,7 +264,7 @@ export default function PlanHectareas({ escenarioUuid, areas, onChange, fincas, 
           <tbody>
             {ordenadas.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-secondary py-3">
+                <td colSpan={9} className="text-center text-secondary py-3">
                   Sin hectáreas nuevas: la proyección usa las hectáreas actuales de cada finca.
                 </td>
               </tr>
@@ -251,6 +276,9 @@ export default function PlanHectareas({ escenarioUuid, areas, onChange, fincas, 
                 <td>{primeraCosecha(a) || <span className="text-secondary">—</span>}</td>
                 <td className={`text-end ${a.hectareas < 0 ? "text-danger" : ""}`}>
                   {a.hectareas === 0 ? <span className="badge text-bg-danger fw-normal">Deja de producir (0 ha)</span> : `${a.hectareas > 0 ? "+" : ""}${a.hectareas}`}
+                </td>
+                <td className="text-end fw-semibold" title={totalTeorico.get(a.uuid) ? `Partida ${totalTeorico.get(a.uuid).base.toLocaleString("es", { maximumFractionDigits: 1 })} ha + entradas del plan hasta esta semana` : "Calcula la proyección para ver el total"}>
+                  {totalTeorico.get(a.uuid) ? totalTeorico.get(a.uuid).total.toLocaleString("es", { maximumFractionDigits: 1 }) : <span className="text-secondary fw-normal">—</span>}
                 </td>
                 <td className="text-center small">{a.hectareas > 0 ? `${a.rampaPct ?? rampaPorDefecto.pct} %` : <span className="text-secondary">—</span>}</td>
                 <td className="text-center small">{a.hectareas > 0 ? (a.rampaSemanas ?? rampaPorDefecto.semanas) : <span className="text-secondary">—</span>}</td>

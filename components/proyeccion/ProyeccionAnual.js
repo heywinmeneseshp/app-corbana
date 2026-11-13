@@ -328,6 +328,7 @@ export default function ProyeccionAnual() {
               semanas={semanas}
               deshabilitado={!puedeEditar}
               rampaPorDefecto={{ pct: draft.params.rampaPct, semanas: draft.params.rampaSemanas }}
+              resultado={resultado}
               onCargado={async () => {
                 await cargarEscenario(uuid);
                 await calcular(uuid);
