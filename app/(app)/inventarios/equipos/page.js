@@ -6,6 +6,8 @@ import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import InfoModulo from "@/components/InfoModulo";
+import { AYUDA_EQUIPOS } from "@/lib/ayudaEquipos";
 import LecturaEquipoModal from "@/components/inventario/LecturaEquipoModal";
 
 const ESTADOS = ["OPERATIVO", "MANTENIMIENTO", "FUERA_SERVICIO", "INACTIVO", "DE_BAJA"];
@@ -193,7 +195,9 @@ export default function EquiposInventarioPage() {
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">Equipos</h1>
+            <h1 className="fw-bold h3 mb-1">
+              Equipos <InfoModulo titulo="Equipos: cómo funcionan" secciones={AYUDA_EQUIPOS} />
+            </h1>
             <p className="text-secondary mb-0">Tractores, vehículos, maquinaria y bombas — con repuestos compatibles.</p>
           </div>
           {hasPermission("inventario.equipos.crear") && (

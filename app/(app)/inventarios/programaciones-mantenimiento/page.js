@@ -7,6 +7,8 @@ import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import InfoModulo from "@/components/InfoModulo";
+import { AYUDA_PROGRAMACIONES } from "@/lib/ayudaEquipos";
 import BotonConfiguracion from "@/components/BotonConfiguracion";
 import DestinatariosInformeModal from "@/components/reportes/DestinatariosInformeModal";
 import { esAdministrador } from "@/lib/laborEstados";
@@ -129,7 +131,9 @@ export default function ProgramacionesMantenimientoPage() {
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">Programaciones de mantenimiento</h1>
+            <h1 className="fw-bold h3 mb-1">
+              Programaciones de mantenimiento <InfoModulo titulo="Programaciones de mantenimiento: cómo funcionan" secciones={AYUDA_PROGRAMACIONES} />
+            </h1>
             <p className="text-secondary mb-0">Calendario de mantenimientos por equipo. Desde cada una se abre la orden de trabajo.</p>
           </div>
           <div className="d-flex align-items-center gap-2">

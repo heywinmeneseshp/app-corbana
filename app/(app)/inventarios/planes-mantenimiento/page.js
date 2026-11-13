@@ -7,6 +7,8 @@ import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import InfoModulo from "@/components/InfoModulo";
+import { AYUDA_PLANES } from "@/lib/ayudaEquipos";
 import { TIPOS_MANTENIMIENTO, UNIDADES_PERIODICIDAD, etiqueta } from "@/lib/mantenimiento";
 
 const vacio = () => ({ equipoUuid: "", nombre: "", descripcion: "", tipo: "PREVENTIVO", periodicidadValor: "30", periodicidadUnidad: "DIAS", lecturaBase: "", estado: true });
@@ -112,7 +114,9 @@ export default function PlanesMantenimientoPage() {
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">Planes de mantenimiento</h1>
+            <h1 className="fw-bold h3 mb-1">
+              Planes de mantenimiento <InfoModulo titulo="Planes de mantenimiento: cómo funcionan" secciones={AYUDA_PLANES} />
+            </h1>
             <p className="text-secondary mb-0">Qué mantenimiento se le hace a cada equipo y cada cuánto.</p>
           </div>
           {hasPermission("inventario.planes.crear") && (

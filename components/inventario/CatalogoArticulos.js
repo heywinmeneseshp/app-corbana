@@ -1,5 +1,7 @@
 "use client";
 
+import InfoModulo from "@/components/InfoModulo";
+import { AYUDA_REPUESTOS } from "@/lib/ayudaEquipos";
 import { useEffect, useState } from "react";
 import { FiPlus, FiEdit2, FiTrash2, FiDownload, FiArchive, FiRotateCcw, FiX, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
@@ -34,6 +36,7 @@ const MODOS = {
     singular: "repuesto",
     plural: "repuestos",
     conCategoria: false,
+    ayuda: AYUDA_REPUESTOS,
   },
 };
 
@@ -307,7 +310,9 @@ export default function CatalogoArticulos({ modo = "articulos" }) {
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">{cfg.titulo}</h1>
+            <h1 className="fw-bold h3 mb-1">
+              {cfg.titulo} {cfg.ayuda && <InfoModulo titulo={`${cfg.titulo}: cómo funcionan`} secciones={cfg.ayuda} />}
+            </h1>
             <p className="text-secondary mb-0">{cfg.descripcion}</p>
           </div>
           <div className="d-flex gap-2">

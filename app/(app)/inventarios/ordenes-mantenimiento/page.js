@@ -6,6 +6,8 @@ import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import InfoModulo from "@/components/InfoModulo";
+import { AYUDA_ORDENES } from "@/lib/ayudaEquipos";
 import { TIPOS_MANTENIMIENTO, PRIORIDADES, ESTADOS_ORDEN, Insignia, TextoPrioridad, etiqueta, formatoFecha, hoyIso, dinero } from "@/lib/mantenimiento";
 
 const clave = () => Math.random().toString(36).slice(2);
@@ -227,7 +229,9 @@ export default function OrdenesMantenimientoPage() {
       <div className="p-4 p-md-5">
         <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div>
-            <h1 className="fw-bold h3 mb-1">Órdenes de mantenimiento</h1>
+            <h1 className="fw-bold h3 mb-1">
+              Órdenes de mantenimiento <InfoModulo titulo="Órdenes de mantenimiento: cómo funcionan" secciones={AYUDA_ORDENES} />
+            </h1>
             <p className="text-secondary mb-0">Trabajos sobre los equipos: repuestos, mano de obra y servicios. Al cerrar, los repuestos salen del inventario.</p>
           </div>
           {hasPermission("inventario.ordenes.crear") && (
