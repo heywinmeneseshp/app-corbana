@@ -338,7 +338,7 @@ function SelectorColumnas({ fincas, ocultas, onChange }) {
       {abierto && (
         <>
           <div className="position-fixed top-0 start-0 w-100 h-100" style={{ zIndex: 1040 }} onClick={() => setAbierto(false)} />
-          <div className="position-absolute end-0 mt-1 bg-white border rounded-3 shadow p-2" style={{ zIndex: 1041, width: 240, maxHeight: "55vh", overflowY: "auto" }}>
+          <div className="position-absolute start-0 mt-1 bg-white border rounded-3 shadow p-2" style={{ zIndex: 1041, width: 240, maxWidth: "calc(100vw - 2rem)", maxHeight: "55vh", overflowY: "auto" }}>
             <div className="d-flex justify-content-between mb-1">
               <button type="button" className="btn btn-sm btn-link p-0" onClick={() => onChange(new Set())}>
                 Mostrar todas
