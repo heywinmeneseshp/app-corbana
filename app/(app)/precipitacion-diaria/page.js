@@ -45,21 +45,24 @@ export default function PrecipitacionDiariaPage() {
     return semanas.filter((s) => new Date(s.fechaInicio) <= hoy);
   }, [semanas]);
 
-  // Un solo input por campo (con <datalist> para autocompletar) en vez de
-  // buscador + select separados. El input guarda el TEXTO visible; el
-  // uuid/id real se resuelve buscando ese texto exacto en la lista cargada
-  // (codigo/nombre son únicos en el backend, así que alcanza como llave).
-  const [fincaTexto, setFincaTexto] = useState("");
-  const [rolTexto, setRolTexto] = useState("");
+  // Nueva configuración en bloque: se marcan varias fincas y varios roles y se crea cada combinación de una vez (misma semana de inicio).
+  const [fincasSel, setFincasSel] = useState(new Set());
+  const [rolesSel, setRolesSel] = useState(new Set());
+  const [filtroFincas, setFiltroFincas] = useState("");
   const [semanaTexto, setSemanaTexto] = useState("");
 
   const labelFinca = (f) => `${f.codigo} — ${f.nombre}`;
-  const labelRol = (r) => r.nombre;
   const labelSemana = (s) => s.codigo;
-
-  const fincaSeleccionada = fincas.find((f) => labelFinca(f) === fincaTexto);
-  const rolSeleccionado = roles.find((r) => labelRol(r) === rolTexto);
   const semanaSeleccionada = semanas.find((s) => labelSemana(s) === semanaTexto);
+  const fincasVisibles = fincas.filter((f) => labelFinca(f).toLowerCase().includes(filtroFincas.trim().toLowerCase()));
+  const alternar = (setFn, valor) =>
+    setFn((prev) => {
+      const n = new Set(prev);
+      if (n.has(valor)) n.delete(valor);
+      else n.add(valor);
+      return n;
+    });
+  const [resumenCreacion, setResumenCreacion] = useState("");
 
   // Filtro compartido (Finca/rango de fechas/Usuario) — un solo lugar para
   // "Últimos registros" e "Inconsistencias con Clima", que ahora comparten
@@ -147,32 +150,6 @@ export default function PrecipitacionDiariaPage() {
   // las opciones del <datalist> mientras se escribe (semanas no tiene
   // ?search todavía, se filtra solo del lado del navegador vía datalist
   // sobre las primeras 100 ya cargadas).
-  useEffect(() => {
-    // Si el texto ya coincide con una finca real (la eligió del datalist),
-    // no hace falta volver a buscar — el label combina código + nombre y
-    // ese texto completo no matchea contra ninguna columna por separado, así
-    // que la búsqueda volvería vacía y borraría la selección ya hecha.
-    if (fincas.some((f) => labelFinca(f) === fincaTexto)) return;
-    const t = setTimeout(() => {
-      apiFetch(`/fincas?limit=100&soloOperativas=true${fincaTexto ? `&search=${encodeURIComponent(fincaTexto)}` : ""}`)
-        .then((data) => setFincas(data.items))
-        .catch(() => {});
-    }, 300);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fincaTexto]);
-
-  useEffect(() => {
-    if (roles.some((r) => labelRol(r) === rolTexto)) return;
-    const t = setTimeout(() => {
-      apiFetch(`/roles?limit=100${rolTexto ? `&search=${encodeURIComponent(rolTexto)}` : ""}`)
-        .then((data) => setRoles(data.items))
-        .catch(() => {});
-    }, 300);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rolTexto]);
-
   const handleResolver = async (uuid, fuente, mmEditado) => {
     setResolviendo(uuid);
     setError("");
@@ -215,26 +192,31 @@ export default function PrecipitacionDiariaPage() {
   const handleCrear = async (e) => {
     e.preventDefault();
     setError("");
-    if (!fincaSeleccionada || !rolSeleccionado || !semanaSeleccionada) {
-      setError("Elige una opción válida de la lista en cada campo.");
+    setResumenCreacion("");
+    if (fincasSel.size === 0 || rolesSel.size === 0 || !semanaSeleccionada) {
+      setError("Marca al menos una finca y un rol, y elige una semana válida de la lista.");
       return;
     }
     setCreando(true);
+    let creadas = 0;
+    const omitidas = [];
     try {
-      await apiFetch("/precipitacion-diaria/config", {
-        method: "POST",
-        body: JSON.stringify({
-          fincaUuid: fincaSeleccionada.uuid,
-          rolId: rolSeleccionado.id,
-          semanaInicioUuid: semanaSeleccionada.uuid,
-        }),
-      });
-      setFincaTexto("");
-      setRolTexto("");
+      for (const fincaUuid of fincasSel) {
+        for (const rolId of rolesSel) {
+          try {
+            await apiFetch("/precipitacion-diaria/config", { method: "POST", body: JSON.stringify({ fincaUuid, rolId, semanaInicioUuid: semanaSeleccionada.uuid }) });
+            creadas += 1;
+          } catch (err) {
+            const f = fincas.find((x) => x.uuid === fincaUuid);
+            omitidas.push(`${f ? f.nombre : "Finca"}: ${err.message}`);
+          }
+        }
+      }
+      setFincasSel(new Set());
+      setRolesSel(new Set());
       setSemanaTexto("");
       await recargarConfigs();
-    } catch (err) {
-      setError(err.message);
+      setResumenCreacion(`${creadas} configuración(es) creada(s)${omitidas.length ? `; ${omitidas.length} no se crearon (probablemente ya existían): ${omitidas.slice(0, 3).join(" · ")}${omitidas.length > 3 ? "…" : ""}` : "."}`);
     } finally {
       setCreando(false);
     }
@@ -539,67 +521,70 @@ export default function PrecipitacionDiariaPage() {
         {modalConfig && (
           <ModalShell title="Configuración de captura obligatoria" onClose={() => setModalConfig(false)} width="80%">
             <div className="mb-4">
-              <h2 className="h6 fw-semibold mb-3">Nueva configuración</h2>
-              <form onSubmit={handleCrear} className="row g-2 align-items-end">
-                <div className="col-md-4">
-                  <label className="form-label small fw-medium">Finca</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    list="fincas-datalist"
-                    placeholder="Escribe para buscar..."
-                    autoComplete="off"
-                    value={fincaTexto}
-                    onChange={(e) => setFincaTexto(e.target.value)}
-                    required
-                  />
-                  <datalist id="fincas-datalist">
-                    {fincas.map((f) => (
-                      <option key={f.uuid} value={labelFinca(f)} />
-                    ))}
-                  </datalist>
+              <h2 className="h6 fw-semibold mb-3">Nueva configuración (varias fincas y roles a la vez)</h2>
+              <form onSubmit={handleCrear}>
+                <div className="row g-3">
+                  <div className="col-12 col-lg-6">
+                    <div className="d-flex align-items-center justify-content-between mb-1">
+                      <label className="form-label small fw-medium mb-0">Fincas ({fincasSel.size} marcada(s))</label>
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm p-0"
+                        onClick={() => setFincasSel(fincasSel.size === fincasVisibles.length ? new Set() : new Set(fincasVisibles.map((f) => f.uuid)))}
+                      >
+                        {fincasSel.size === fincasVisibles.length && fincasVisibles.length > 0 ? "Quitar todas" : "Marcar todas"}
+                      </button>
+                    </div>
+                    <input type="text" className="form-control form-control-sm mb-1" placeholder="Filtrar fincas..." value={filtroFincas} onChange={(e) => setFiltroFincas(e.target.value)} />
+                    <div className="border rounded-2 p-2" style={{ maxHeight: "12rem", overflowY: "auto" }}>
+                      {fincasVisibles.length === 0 && <div className="small text-secondary">Sin fincas.</div>}
+                      {fincasVisibles.map((f) => (
+                        <div className="form-check" key={f.uuid}>
+                          <input type="checkbox" className="form-check-input" id={`pd-f-${f.uuid}`} checked={fincasSel.has(f.uuid)} onChange={() => alternar(setFincasSel, f.uuid)} />
+                          <label className="form-check-label small" htmlFor={`pd-f-${f.uuid}`}>
+                            {labelFinca(f)}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="col-12 col-lg-3">
+                    <label className="form-label small fw-medium mb-1">Roles ({rolesSel.size} marcado(s))</label>
+                    <div className="border rounded-2 p-2" style={{ maxHeight: "14.5rem", overflowY: "auto" }}>
+                      {roles.map((r) => (
+                        <div className="form-check" key={r.id}>
+                          <input type="checkbox" className="form-check-input" id={`pd-r-${r.id}`} checked={rolesSel.has(r.id)} onChange={() => alternar(setRolesSel, r.id)} />
+                          <label className="form-check-label small" htmlFor={`pd-r-${r.id}`}>
+                            {r.nombre}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="col-12 col-lg-3">
+                    <label className="form-label small fw-medium mb-1">A partir de la semana</label>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm"
+                      list="semanas-datalist"
+                      placeholder="Escribe para buscar..."
+                      autoComplete="off"
+                      value={semanaTexto}
+                      onChange={(e) => setSemanaTexto(e.target.value)}
+                      required
+                    />
+                    <datalist id="semanas-datalist">
+                      {semanas.map((s) => (
+                        <option key={s.uuid} value={labelSemana(s)} />
+                      ))}
+                    </datalist>
+                    <button type="submit" className="btn btn-brand btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-1 mt-3" disabled={creando || fincasSel.size === 0 || rolesSel.size === 0}>
+                      <FiPlus /> {creando ? "Creando..." : `Agregar ${fincasSel.size * rolesSel.size || ""} configuración(es)`}
+                    </button>
+                    <div className="form-text small">Se crea una por cada finca y rol marcados.</div>
+                  </div>
                 </div>
-                <div className="col-md-3">
-                  <label className="form-label small fw-medium">Rol</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    list="roles-datalist"
-                    placeholder="Escribe para buscar..."
-                    autoComplete="off"
-                    value={rolTexto}
-                    onChange={(e) => setRolTexto(e.target.value)}
-                    required
-                  />
-                  <datalist id="roles-datalist">
-                    {roles.map((r) => (
-                      <option key={r.id} value={labelRol(r)} />
-                    ))}
-                  </datalist>
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label small fw-medium">A partir de la semana</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    list="semanas-datalist"
-                    placeholder="Escribe para buscar..."
-                    autoComplete="off"
-                    value={semanaTexto}
-                    onChange={(e) => setSemanaTexto(e.target.value)}
-                    required
-                  />
-                  <datalist id="semanas-datalist">
-                    {semanas.map((s) => (
-                      <option key={s.uuid} value={labelSemana(s)} />
-                    ))}
-                  </datalist>
-                </div>
-                <div className="col-md-2">
-                  <button type="submit" className="btn btn-brand btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-1" disabled={creando}>
-                    <FiPlus /> {creando ? "..." : "Agregar"}
-                  </button>
-                </div>
+                {resumenCreacion && <div className="alert alert-info py-2 small mt-3 mb-0">{resumenCreacion}</div>}
               </form>
             </div>
 
