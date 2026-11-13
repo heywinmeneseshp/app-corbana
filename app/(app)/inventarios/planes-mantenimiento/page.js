@@ -2,16 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { FiPlus, FiEdit2, FiTrash2, FiCalendar } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiCalendar, FiList } from "react-icons/fi";
 import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import InfoModulo from "@/components/InfoModulo";
+import PlantillasChecklistModal from "@/components/mantenimiento/PlantillasChecklistModal";
 import { AYUDA_PLANES } from "@/lib/ayudaEquipos";
 import { TIPOS_MANTENIMIENTO, UNIDADES_PERIODICIDAD, etiqueta } from "@/lib/mantenimiento";
 
-const vacio = () => ({ equipoUuid: "", nombre: "", descripcion: "", tipo: "PREVENTIVO", periodicidadValor: "30", periodicidadUnidad: "DIAS", lecturaBase: "", estado: true });
+const vacio = () => ({ equipoUuid: "", nombre: "", descripcion: "", tipo: "PREVENTIVO", periodicidadValor: "30", periodicidadUnidad: "DIAS", lecturaBase: "", plantillaUuid: "", estado: true });
 
 const POR_LECTURA = ["KILOMETROS", "HORAS", "HOROMETRO"];
 const COLOR_LECTURA = { AL_DIA: "text-success", PROXIMO: "text-warning", VENCIDO: "text-danger" };
@@ -28,6 +29,9 @@ export default function PlanesMantenimientoPage() {
   const [modal, setModal] = useState(null); // null | { editing, form }
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [plantillas, setPlantillas] = useState([]); // plantillas de checklist para elegir en el formulario
+  const [plantillasAbierto, setPlantillasAbierto] = useState(false);
+  const cargarPlantillas = () => apiFetch("/inventarios/checklist-plantillas").then((l) => setPlantillas((l || []).filter((p) => p.estado))).catch(() => {});
 
   async function load(f = filtros) {
     setLoading(true);
@@ -49,6 +53,7 @@ export default function PlanesMantenimientoPage() {
       .then((r) => setEquipos(r.items || []))
       .catch((err) => setError(err.message));
     load();
+    cargarPlantillas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -71,6 +76,7 @@ export default function PlanesMantenimientoPage() {
             periodicidadValor: String(plan.periodicidadValor),
             periodicidadUnidad: plan.periodicidadUnidad,
             lecturaBase: plan.lecturaBase === null || plan.lecturaBase === undefined ? "" : String(plan.lecturaBase),
+            plantillaUuid: plan.plantilla?.uuid || "",
             estado: plan.estado,
           }
         : vacio(),
@@ -86,6 +92,7 @@ export default function PlanesMantenimientoPage() {
     try {
       const body = { ...modal.form, periodicidadValor: Number(modal.form.periodicidadValor), descripcion: modal.form.descripcion || null };
       // Planes por km / horas: desde qué lectura se cuenta (vacío = la lectura actual del equipo).
+      body.plantillaUuid = body.plantillaUuid || null;
       if (POR_LECTURA.includes(body.periodicidadUnidad) && String(body.lecturaBase).trim() !== "") body.lecturaBase = Number(String(body.lecturaBase).replace(",", "."));
       else delete body.lecturaBase;
       if (modal.editing) await apiFetch(`/inventarios/planes-mantenimiento/${modal.editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
@@ -119,11 +126,16 @@ export default function PlanesMantenimientoPage() {
             </h1>
             <p className="text-secondary mb-0">Qué mantenimiento se le hace a cada equipo y cada cuánto.</p>
           </div>
-          {hasPermission("inventario.planes.crear") && (
-            <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => abrir(null)}>
-              <FiPlus /> Nuevo plan
+          <div className="d-flex align-items-center gap-2">
+            <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => setPlantillasAbierto(true)} title="Listas de ítems que se califican en cada mantenimiento">
+              <FiList /> Plantillas de checklist
             </button>
-          )}
+            {hasPermission("inventario.planes.crear") && (
+              <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => abrir(null)}>
+                <FiPlus /> Nuevo plan
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
@@ -204,6 +216,7 @@ export default function PlanesMantenimientoPage() {
                       <td>
                         <div className="fw-medium">{p.nombre}</div>
                         {p.descripcion && <div className="text-secondary">{p.descripcion}</div>}
+                        {p.plantilla && <div className="text-secondary">Checklist: {p.plantilla.nombre}</div>}
                       </td>
                       <td>{etiqueta(TIPOS_MANTENIMIENTO, p.tipo)}</td>
                       <td className="text-nowrap">
@@ -251,6 +264,8 @@ export default function PlanesMantenimientoPage() {
             </table>
           </div>
         </div>
+
+        {plantillasAbierto && <PlantillasChecklistModal onClose={() => setPlantillasAbierto(false)} onCambio={() => (cargarPlantillas(), load())} />}
 
         {modal && (
           <ModalShell title={modal.editing ? "Editar plan" : "Nuevo plan"} onClose={() => setModal(null)}>
@@ -337,6 +352,20 @@ export default function PlanesMantenimientoPage() {
                   />
                 </div>
               )}
+              <div className="mb-2">
+                <label className="form-label small fw-medium mb-1">
+                  Plantilla de checklist <span className="text-secondary fw-normal">— opcional</span>
+                </label>
+                <select className="form-select form-select-sm rounded-3" value={modal.form.plantillaUuid} onChange={(e) => setForm({ plantillaUuid: e.target.value })}>
+                  <option value="">Sin checklist</option>
+                  {plantillas.map((p) => (
+                    <option key={p.uuid} value={p.uuid}>
+                      {p.nombre} ({p.totalItems} ítems)
+                    </option>
+                  ))}
+                </select>
+                <div className="form-text small">Las órdenes de este plan nacen con estos ítems para calificarlos uno a uno.</div>
+              </div>
               <p className="form-text small">
                 Con días o meses, al cerrar una orden de este plan se agenda sola la siguiente. Con kilómetros u horas, el sistema cuenta desde la lectura del último mantenimiento: cuando el conductor registra el
                 kilometraje u horas del equipo, avisa cuando está por cumplirse y agenda la programación.

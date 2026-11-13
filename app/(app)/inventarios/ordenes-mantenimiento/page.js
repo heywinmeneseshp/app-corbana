@@ -7,6 +7,8 @@ import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import InfoModulo from "@/components/InfoModulo";
+import OrdenChecklist from "@/components/mantenimiento/OrdenChecklist";
+import OrdenHallazgos from "@/components/mantenimiento/OrdenHallazgos";
 import { AYUDA_ORDENES } from "@/lib/ayudaEquipos";
 import { TIPOS_MANTENIMIENTO, PRIORIDADES, ESTADOS_ORDEN, Insignia, TextoPrioridad, etiqueta, formatoFecha, hoyIso, dinero } from "@/lib/mantenimiento";
 
@@ -222,6 +224,9 @@ export default function OrdenesMantenimientoPage() {
   }
 
   const editable = !modal?.editing || !["CERRADA", "CANCELADA"].includes(modal.editing.estado);
+  // Pestañas de una orden ya creada: General (el formulario), Checklist y Hallazgos. El formulario se oculta, no se desmonta, para no perder lo escrito.
+  const tabOrden = modal?.editing ? modal.tab || "general" : "general";
+  const irA = (tab) => setModal((m) => ({ ...m, tab }));
   const planesDelEquipo = modal ? planes.filter((p) => !modal.form.equipoUuid || p.equipo?.uuid === modal.form.equipoUuid) : [];
 
   return (
@@ -382,7 +387,24 @@ export default function OrdenesMantenimientoPage() {
             onClose={() => setModal(null)}
             size="xl"
           >
-            <form onSubmit={guardar}>
+            {modal.editing && (
+              <ul className="nav nav-tabs mb-3">
+                {[
+                  ["general", "General"],
+                  ["checklist", "Checklist"],
+                  ["hallazgos", "Hallazgos"],
+                ].map(([id, label]) => (
+                  <li key={id} className="nav-item">
+                    <button type="button" className={`nav-link btn-sm py-1 ${tabOrden === id ? "active" : ""}`} onClick={() => irA(id)}>
+                      {label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {modal.editing && tabOrden === "checklist" && <OrdenChecklist ordenUuid={modal.editing.uuid} cerrada={!editable} onCambio={() => setModal((m) => ({ ...m, refrescar: (m.refrescar || 0) + 1 }))} />}
+            {modal.editing && tabOrden === "hallazgos" && <OrdenHallazgos ordenUuid={modal.editing.uuid} refrescar={modal.refrescar || 0} />}
+            <form onSubmit={guardar} style={tabOrden !== "general" ? { display: "none" } : undefined}>
               <fieldset disabled={!editable}>
                 <div className="row g-2 mb-2">
                   <div className="col-12 col-md-6">
