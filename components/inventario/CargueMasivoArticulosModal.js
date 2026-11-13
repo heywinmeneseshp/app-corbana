@@ -91,7 +91,7 @@ export default function CargueMasivoArticulosModal({ endpoint, onClose, onListo 
         </div>
 
         <div className="col-12 col-lg-7">
-          <div className="border rounded-1 p-3 mb-3">
+          <div className="border rounded-1 p-3 h-100">
             {paso(2, resultado ? "Cargue terminado" : "Elige el archivo, revísalo y carga")}
             <input
               ref={inputRef}
