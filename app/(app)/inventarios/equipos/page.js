@@ -50,25 +50,8 @@ export default function EquiposInventarioPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  // Vista compacta: filas de una sola línea y acciones sin borde. Se recuerda en el navegador.
-  const [compacta, setCompacta] = useState(true);
-  useEffect(() => {
-    try {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (localStorage.getItem("equipos_vista_compacta") === "0") setCompacta(false);
-    } catch {
-      /* sin almacenamiento: se queda compacta */
-    }
-  }, []);
-  const alternarCompacta = () =>
-    setCompacta((v) => {
-      try {
-        localStorage.setItem("equipos_vista_compacta", v ? "0" : "1");
-      } catch {
-        /* no pasa nada */
-      }
-      return !v;
-    });
+  // La tabla siempre es compacta: filas de una sola línea, letra pequeña y acciones solo con icono.
+  const compacta = true;
   // Botones de acción de la fila: siempre sin borde (solo el icono, con su color).
   const bt = (tono) => `btn btn-link btn-sm p-1 text-${tono}`;
 
@@ -243,12 +226,6 @@ export default function EquiposInventarioPage() {
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && load()}
           />
-          <div className="form-check form-switch mb-0">
-            <input className="form-check-input" type="checkbox" role="switch" id="equipos-compacta" checked={compacta} onChange={alternarCompacta} />
-            <label className="form-check-label small" htmlFor="equipos-compacta">
-              Vista compacta
-            </label>
-          </div>
         </div>
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
@@ -259,7 +236,7 @@ export default function EquiposInventarioPage() {
             <style>{`
               .equipos-compacta { white-space: nowrap; }
               .equipos-compacta th, .equipos-compacta td { padding: 0.15rem 0.55rem !important; font-size: 0.76rem !important; line-height: 1.25; }
-              .equipos-compacta th { font-weight: 600; }
+              .equipos-compacta th { font-weight: 600; padding: 0.6rem 0.55rem !important; font-size: 0.78rem !important; vertical-align: middle; }
               .equipos-compacta .badge { font-size: 0.66rem !important; padding: 0.2em 0.45em; }
               .equipos-compacta .btn-link { padding: 0.1rem 0.4rem !important; }
               .equipos-compacta .btn-link svg { width: 18px; height: 18px; }
