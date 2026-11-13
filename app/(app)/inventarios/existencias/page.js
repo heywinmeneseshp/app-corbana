@@ -14,6 +14,7 @@ export default function ExistenciasPage() {
   const [items, setItems] = useState([]);
   const [almacenes, setAlmacenes] = useState([]);
   const [articulos, setArticulos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [unidades, setUnidades] = useState([]);
   const [conversiones, setConversiones] = useState([]);
   // Unidad elegida por fila (clave almacén+artículo) para ver el saldo convertido; sin elegir = la del artículo.
@@ -21,7 +22,7 @@ export default function ExistenciasPage() {
   const [loading, setLoading] = useState(true);
   const [descargando, setDescargando] = useState(""); // "" | "excel" | "pdf"
   const [error, setError] = useState("");
-  const [filtros, setFiltros] = useState({ almacenUuid: "", articuloUuid: "", fecha: "" });
+  const [filtros, setFiltros] = useState({ almacenUuid: "", articuloUuid: "", categoriaUuid: "", fecha: "" });
   const [meta, setMeta] = useState({ page: 1, limit: 100, total: 0, totalPages: 1 });
   // Texto escrito en los campos con sugerencias (datalist); al coincidir exactamente con una opción se fija el filtro.
   const [textoAlmacen, setTextoAlmacen] = useState("");
@@ -75,6 +76,7 @@ export default function ExistenciasPage() {
       if (formato === "pdf") {
         const partes = [];
         if (textoAlmacen && filtros.almacenUuid) partes.push(`Almacén: ${textoAlmacen}`);
+        if (filtros.categoriaUuid) partes.push(`Categoría: ${categorias.find((c) => c.uuid === filtros.categoriaUuid)?.nombre || ""}`);
         if (textoArticulo && filtros.articuloUuid) partes.push(`Artículo: ${textoArticulo}`);
         descargarExistenciasPdf(filas, { filtros: partes.join(" · "), fecha: filtros.fecha });
         return;
@@ -102,12 +104,14 @@ export default function ExistenciasPage() {
 
   async function loadCombos() {
     try {
-      const [a, p, u, c] = await Promise.all([
+      const [a, p, u, c, cats] = await Promise.all([
         apiFetch("/inventarios/almacenes?limit=100&estado=true"),
         apiFetchTodos("/inventarios/articulos?limit=100&estado=true"),
         apiFetch("/inventarios/unidades?limit=100&estado=true"),
         apiFetch("/inventarios/unidades/conversiones").catch(() => []),
+        apiFetch("/inventarios/categorias?limit=100&estado=true").catch(() => ({ items: [] })),
       ]);
+      setCategorias(cats.items || []);
       setAlmacenes(a.items || []);
       setArticulos(p.items || []);
       setUnidades(u.items || []);
@@ -154,6 +158,26 @@ export default function ExistenciasPage() {
               </datalist>
             </div>
             <div className="col-auto">
+              <label className="form-label small fw-medium mb-1">Categoría</label>
+              <select
+                className="form-select form-select-sm rounded-3"
+                style={{ minWidth: 200 }}
+                value={filtros.categoriaUuid}
+                onChange={(e) => {
+                  // El artículo elegido deja de valer si no es de la nueva categoría.
+                  setTextoArticulo("");
+                  setFiltros((f) => ({ ...f, categoriaUuid: e.target.value, articuloUuid: "" }));
+                }}
+              >
+                <option value="">Todas</option>
+                {categorias.map((c) => (
+                  <option key={c.uuid} value={c.uuid}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-auto">
               <label className="form-label small fw-medium mb-1">Artículo</label>
               <input
                 list="existencias-articulos"
@@ -167,7 +191,9 @@ export default function ExistenciasPage() {
                 }}
               />
               <datalist id="existencias-articulos">
-                {articulos.map((p) => (
+                {articulos
+                  .filter((p) => !filtros.categoriaUuid || p.categoria?.uuid === filtros.categoriaUuid)
+                  .map((p) => (
                   <option key={p.uuid} value={etiquetaArticulo(p)} />
                 ))}
               </datalist>
