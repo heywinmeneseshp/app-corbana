@@ -9,7 +9,11 @@ import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import { TIPOS_MANTENIMIENTO, UNIDADES_PERIODICIDAD, etiqueta } from "@/lib/mantenimiento";
 
-const vacio = () => ({ equipoUuid: "", nombre: "", descripcion: "", tipo: "PREVENTIVO", periodicidadValor: "30", periodicidadUnidad: "DIAS", estado: true });
+const vacio = () => ({ equipoUuid: "", nombre: "", descripcion: "", tipo: "PREVENTIVO", periodicidadValor: "30", periodicidadUnidad: "DIAS", lecturaBase: "", estado: true });
+
+const POR_LECTURA = ["KILOMETROS", "HORAS", "HOROMETRO"];
+const COLOR_LECTURA = { AL_DIA: "text-success", PROXIMO: "text-warning", VENCIDO: "text-danger" };
+const fmtN = (n) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("es", { maximumFractionDigits: 1 }));
 
 // Planes de mantenimiento: qué se le hace a cada equipo y cada cuánto. Al cerrar una orden de un plan por días/meses se agenda sola la
 // siguiente programación.
@@ -64,6 +68,7 @@ export default function PlanesMantenimientoPage() {
             tipo: plan.tipo,
             periodicidadValor: String(plan.periodicidadValor),
             periodicidadUnidad: plan.periodicidadUnidad,
+            lecturaBase: plan.lecturaBase === null || plan.lecturaBase === undefined ? "" : String(plan.lecturaBase),
             estado: plan.estado,
           }
         : vacio(),
@@ -78,6 +83,9 @@ export default function PlanesMantenimientoPage() {
     setFormError("");
     try {
       const body = { ...modal.form, periodicidadValor: Number(modal.form.periodicidadValor), descripcion: modal.form.descripcion || null };
+      // Planes por km / horas: desde qué lectura se cuenta (vacío = la lectura actual del equipo).
+      if (POR_LECTURA.includes(body.periodicidadUnidad) && String(body.lecturaBase).trim() !== "") body.lecturaBase = Number(String(body.lecturaBase).replace(",", "."));
+      else delete body.lecturaBase;
       if (modal.editing) await apiFetch(`/inventarios/planes-mantenimiento/${modal.editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       else await apiFetch("/inventarios/planes-mantenimiento", { method: "POST", body: JSON.stringify(body) });
       setModal(null);
@@ -163,6 +171,7 @@ export default function PlanesMantenimientoPage() {
                   <th>Plan</th>
                   <th>Tipo</th>
                   <th>Cada</th>
+                  <th>Próximo mantenimiento</th>
                   <th>Estado</th>
                   <th className="text-end">Acciones</th>
                 </tr>
@@ -170,14 +179,14 @@ export default function PlanesMantenimientoPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={6} className="text-center text-secondary py-4">
+                    <td colSpan={7} className="text-center text-secondary py-4">
                       Cargando...
                     </td>
                   </tr>
                 )}
                 {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center text-secondary py-4">
+                    <td colSpan={7} className="text-center text-secondary py-4">
                       No hay planes. Crea el primero con «Nuevo plan».
                     </td>
                   </tr>
@@ -195,6 +204,22 @@ export default function PlanesMantenimientoPage() {
                       <td>{etiqueta(TIPOS_MANTENIMIENTO, p.tipo)}</td>
                       <td className="text-nowrap">
                         {p.periodicidadValor} {etiqueta(UNIDADES_PERIODICIDAD, p.periodicidadUnidad)}
+                      </td>
+                      <td className="text-nowrap">
+                        {p.estadoLectura && p.estadoLectura !== "SIN_BASE" ? (
+                          <>
+                            <div>
+                              a los {fmtN(p.proximaLectura)} {p.unidad}
+                            </div>
+                            <div className={`${COLOR_LECTURA[p.estadoLectura] || ""} fw-medium`}>
+                              {p.estadoLectura === "VENCIDO" ? `Vencido hace ${fmtN(Math.abs(p.faltan))} ${p.unidad}` : `Faltan ${fmtN(p.faltan)} ${p.unidad}`}
+                            </div>
+                          </>
+                        ) : p.estadoLectura === "SIN_BASE" ? (
+                          <span className="text-secondary">Sin lectura base</span>
+                        ) : (
+                          <span className="text-secondary">—</span>
+                        )}
                       </td>
                       <td>{p.estado ? <span className="text-success">Activo</span> : <span className="text-secondary">Inactivo</span>}</td>
                       <td className="text-end text-nowrap">
@@ -291,8 +316,26 @@ export default function PlanesMantenimientoPage() {
                   </select>
                 </div>
               </div>
+              {POR_LECTURA.includes(modal.form.periodicidadUnidad) && (
+                <div className="mb-2">
+                  <label className="form-label small fw-medium mb-1">
+                    Último mantenimiento a los ({modal.form.periodicidadUnidad === "KILOMETROS" ? "km" : "horas"}) <span className="text-secondary fw-normal">— opcional</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="form-control form-control-sm rounded-3"
+                    style={{ maxWidth: "12rem" }}
+                    value={modal.form.lecturaBase}
+                    onChange={(e) => setForm({ lecturaBase: e.target.value })}
+                    placeholder="Lectura actual del equipo"
+                  />
+                </div>
+              )}
               <p className="form-text small">
-                Con días o meses, al cerrar una orden de este plan se agenda sola la siguiente. Con horas o kilómetros la programación es manual.
+                Con días o meses, al cerrar una orden de este plan se agenda sola la siguiente. Con kilómetros u horas, el sistema cuenta desde la lectura del último mantenimiento: cuando el conductor registra el
+                kilometraje u horas del equipo, avisa cuando está por cumplirse y agenda la programación.
               </p>
               <div className="form-check mb-3">
                 <input type="checkbox" className="form-check-input" id="plan-estado" checked={modal.form.estado} onChange={(e) => setForm({ estado: e.target.checked })} />

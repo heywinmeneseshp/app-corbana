@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2, FiTool } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiTool, FiActivity } from "react-icons/fi";
 import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import LecturaEquipoModal from "@/components/inventario/LecturaEquipoModal";
 
 const ESTADOS = ["OPERATIVO", "MANTENIMIENTO", "FUERA_SERVICIO", "INACTIVO", "DE_BAJA"];
 
@@ -55,6 +56,7 @@ export default function EquiposInventarioPage() {
   const [tipoModalOpen, setTipoModalOpen] = useState(false);
 
   const [repuestosEquipo, setRepuestosEquipo] = useState(null);
+  const [lecturasEquipo, setLecturasEquipo] = useState(null); // equipo cuyas lecturas (km / horas) se registran o consultan
 
   async function load() {
     setLoading(true);
@@ -263,6 +265,11 @@ export default function EquiposInventarioPage() {
                       </td>
                       <td>
                         <div className="d-flex justify-content-end gap-2 flex-nowrap">
+                          {(hasPermission("inventario.equipos.lecturas") || hasPermission("inventario.equipos.editar") || hasPermission("inventario.equipos.ver")) && (
+                            <button type="button" className="btn btn-sm btn-outline-secondary" title="Registrar o ver lecturas de kilometraje / horas" onClick={() => setLecturasEquipo(eq)}>
+                              <FiActivity />
+                            </button>
+                          )}
                           <button type="button" className="btn btn-sm btn-outline-secondary" title="Repuestos compatibles" onClick={() => openRepuestos(eq)}>
                             <FiTool />
                           </button>
@@ -284,6 +291,8 @@ export default function EquiposInventarioPage() {
             </table>
           </div>
         </div>
+
+        {lecturasEquipo && <LecturaEquipoModal equipo={lecturasEquipo} onClose={() => setLecturasEquipo(null)} onGuardado={load} />}
 
         {modalOpen && (
           <ModalShell title={editing ? "Editar equipo" : "Nuevo equipo"} onClose={() => setModalOpen(false)}>

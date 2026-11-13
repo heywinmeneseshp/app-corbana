@@ -7,6 +7,9 @@ import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
+import BotonConfiguracion from "@/components/BotonConfiguracion";
+import DestinatariosInformeModal from "@/components/reportes/DestinatariosInformeModal";
+import { esAdministrador } from "@/lib/laborEstados";
 import { PRIORIDADES, ESTADOS_PROGRAMACION, Insignia, TextoPrioridad, formatoFecha, hoyIso } from "@/lib/mantenimiento";
 
 const vacio = () => ({ equipoUuid: "", planUuid: "", fechaProgramada: hoyIso(), responsableUuid: "", estado: "PROGRAMADA", prioridad: "MEDIA", observaciones: "" });
@@ -21,6 +24,7 @@ export default function ProgramacionesMantenimientoPage() {
   const [usuarios, setUsuarios] = useState([]);
   const [filtros, setFiltros] = useState({ equipoUuid: "", estado: "", fechaDesde: "", fechaHasta: "" });
   const [soloAbiertas, setSoloAbiertas] = useState(true);
+  const [avisosAbierto, setAvisosAbierto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [modal, setModal] = useState(null);
@@ -128,11 +132,14 @@ export default function ProgramacionesMantenimientoPage() {
             <h1 className="fw-bold h3 mb-1">Programaciones de mantenimiento</h1>
             <p className="text-secondary mb-0">Calendario de mantenimientos por equipo. Desde cada una se abre la orden de trabajo.</p>
           </div>
-          {hasPermission("inventario.programaciones.crear") && (
-            <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => abrir(null)}>
-              <FiPlus /> Nueva programación
-            </button>
-          )}
+          <div className="d-flex align-items-center gap-2">
+            {hasPermission("inventario.programaciones.crear") && (
+              <button type="button" className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2" onClick={() => abrir(null)}>
+                <FiPlus /> Nueva programación
+              </button>
+            )}
+            {esAdministrador() && <BotonConfiguracion title="Avisos de mantenimiento por kilometraje / horas" onClick={() => setAvisosAbierto(true)} />}
+          </div>
         </div>
 
         <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
@@ -254,6 +261,20 @@ export default function ProgramacionesMantenimientoPage() {
             </table>
           </div>
         </div>
+
+        {avisosAbierto && (
+          <DestinatariosInformeModal
+            onClose={() => setAvisosAbierto(false)}
+            ruta="/inventarios/programaciones-mantenimiento/avisos-destinatarios"
+            titulo="Avisos de mantenimiento por kilometraje y horas"
+            descripcion={
+              <>
+                Cuando el conductor registra el kilometraje u horas de un equipo y un plan por <strong>km u horas</strong> queda <strong>próximo</strong> (faltan 10 % o menos del intervalo) o{" "}
+                <strong>vencido</strong>, se agenda la programación y llega un correo una sola vez por cada estado. Lo reciben los correos, roles y usuarios que elijas aquí; sin ninguno, no se envía.
+              </>
+            }
+          />
+        )}
 
         {modal && (
           <ModalShell title={modal.editing ? "Editar programación" : "Nueva programación"} onClose={() => setModal(null)}>
