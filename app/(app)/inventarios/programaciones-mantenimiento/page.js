@@ -14,6 +14,13 @@ import DestinatariosInformeModal from "@/components/reportes/DestinatariosInform
 import { esAdministrador } from "@/lib/laborEstados";
 import { PRIORIDADES, ESTADOS_PROGRAMACION, Insignia, TextoPrioridad, formatoFecha, hoyIso } from "@/lib/mantenimiento";
 
+const DESC_ALERTAS = (
+  <>
+    Cuando un mantenimiento <strong>programado</strong> está por vencer (según los días de anticipación) o ya venció, y cuando un plan por <strong>km u horas</strong> queda próximo o vencido, llega un
+    correo una sola vez por cada estado. Lo recibe el <strong>responsable</strong> (el de la programación o, si no tiene, el del equipo) y, <strong>en copia</strong>, las personas que elijas aquí.
+  </>
+);
+
 const vacio = () => ({ equipoUuid: "", planUuid: "", fechaProgramada: hoyIso(), responsableUuid: "", estado: "PROGRAMADA", prioridad: "MEDIA", observaciones: "" });
 const ABIERTAS = ["PENDIENTE", "PROGRAMADA", "EN_CURSO"];
 
@@ -142,7 +149,7 @@ export default function ProgramacionesMantenimientoPage() {
                 <FiPlus /> Nueva programación
               </button>
             )}
-            {esAdministrador() && <BotonConfiguracion title="Avisos de mantenimiento por kilometraje / horas" onClick={() => setAvisosAbierto(true)} />}
+            {esAdministrador() && <BotonConfiguracion title="Alertas de mantenimiento: responsable y personas en copia" onClick={() => setAvisosAbierto(true)} />}
           </div>
         </div>
 
@@ -268,15 +275,11 @@ export default function ProgramacionesMantenimientoPage() {
 
         {avisosAbierto && (
           <DestinatariosInformeModal
+            alertas
             onClose={() => setAvisosAbierto(false)}
             ruta="/inventarios/programaciones-mantenimiento/avisos-destinatarios"
-            titulo="Avisos de mantenimiento por kilometraje y horas"
-            descripcion={
-              <>
-                Cuando el conductor registra el kilometraje u horas de un equipo y un plan por <strong>km u horas</strong> queda <strong>próximo</strong> (faltan 10 % o menos del intervalo) o{" "}
-                <strong>vencido</strong>, se agenda la programación y llega un correo una sola vez por cada estado. Lo reciben los correos, roles y usuarios que elijas aquí; sin ninguno, no se envía.
-              </>
-            }
+            titulo="Alertas de mantenimiento"
+            descripcion={DESC_ALERTAS}
           />
         )}
 

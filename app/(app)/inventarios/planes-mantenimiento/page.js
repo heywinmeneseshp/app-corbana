@@ -2,15 +2,25 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { FiPlus, FiEdit2, FiTrash2, FiCalendar, FiList } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiCalendar, FiList, FiPlay } from "react-icons/fi";
 import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
 import InfoModulo from "@/components/InfoModulo";
+import BotonConfiguracion from "@/components/BotonConfiguracion";
+import DestinatariosInformeModal from "@/components/reportes/DestinatariosInformeModal";
+import { esAdministrador } from "@/lib/laborEstados";
 import PlantillasChecklistModal from "@/components/mantenimiento/PlantillasChecklistModal";
 import { AYUDA_PLANES } from "@/lib/ayudaEquipos";
 import { TIPOS_MANTENIMIENTO, UNIDADES_PERIODICIDAD, etiqueta } from "@/lib/mantenimiento";
+
+const DESC_ALERTAS = (
+  <>
+    Cuando un mantenimiento <strong>programado</strong> está por vencer (según los días de anticipación) o ya venció, y cuando un plan por <strong>km u horas</strong> queda próximo o vencido, llega un
+    correo una sola vez por cada estado. Lo recibe el <strong>responsable</strong> (el de la programación o, si no tiene, el del equipo) y, <strong>en copia</strong>, las personas que elijas aquí.
+  </>
+);
 
 const vacio = () => ({ equipoUuid: "", equiposUuids: [], nombre: "", descripcion: "", tipo: "PREVENTIVO", periodicidadValor: "30", periodicidadUnidad: "DIAS", lecturaBase: "", fechaUltimo: "", plantillaUuid: "", estado: true });
 
@@ -31,6 +41,7 @@ export default function PlanesMantenimientoPage() {
   const [formError, setFormError] = useState("");
   const [plantillas, setPlantillas] = useState([]); // plantillas de checklist para elegir en el formulario
   const [plantillasAbierto, setPlantillasAbierto] = useState(false);
+  const [alertasAbierto, setAlertasAbierto] = useState(false);
   const cargarPlantillas = () => apiFetch("/inventarios/checklist-plantillas").then((l) => setPlantillas((l || []).filter((p) => p.estado))).catch(() => {});
 
   async function load(f = filtros) {
@@ -155,6 +166,7 @@ export default function PlanesMantenimientoPage() {
                 <FiPlus /> Nuevo plan
               </button>
             )}
+            {esAdministrador() && <BotonConfiguracion title="Alertas de mantenimiento: responsable y personas en copia" onClick={() => setAlertasAbierto(true)} />}
           </div>
         </div>
 
@@ -260,6 +272,15 @@ export default function PlanesMantenimientoPage() {
                       </td>
                       <td>{p.estado ? <span className="text-success">Activo</span> : <span className="text-secondary">Inactivo</span>}</td>
                       <td className="text-end text-nowrap">
+                        {hasPermission("inventario.ordenes.crear") && (
+                          <Link
+                            href={`/inventarios/ordenes-mantenimiento?nueva=1&equipoUuid=${p.equipo?.uuid || ""}&planUuid=${p.uuid}`}
+                            className="btn btn-sm btn-link p-1 text-success"
+                            title="Ejecutar ahora: abre la orden de mantenimiento de este plan, sin programarla antes"
+                          >
+                            <FiPlay />
+                          </Link>
+                        )}
                         <Link
                           href={`/inventarios/programaciones-mantenimiento?nueva=1&equipoUuid=${p.equipo?.uuid || ""}&planUuid=${p.uuid}`}
                           className="btn btn-sm btn-link p-1 text-secondary"
@@ -284,6 +305,8 @@ export default function PlanesMantenimientoPage() {
             </table>
           </div>
         </div>
+
+        {alertasAbierto && <DestinatariosInformeModal alertas onClose={() => setAlertasAbierto(false)} ruta="/inventarios/programaciones-mantenimiento/avisos-destinatarios" titulo="Alertas de mantenimiento" descripcion={DESC_ALERTAS} />}
 
         {plantillasAbierto && <PlantillasChecklistModal onClose={() => setPlantillasAbierto(false)} onCambio={() => (cargarPlantillas(), load())} />}
 

@@ -14,12 +14,15 @@ export default function DestinatariosInformeModal({
   ruta = "/dashboard/informe-semanal/destinatarios",
   titulo = "Destinatarios del informe semanal",
   descripcion = null,
+  alertas = false, // muestra los parámetros de alerta de mantenimiento: días de anticipación y aviso al responsable
 }) {
   const [roles, setRoles] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [correosTexto, setCorreosTexto] = useState("");
   const [rolesSel, setRolesSel] = useState([]);
   const [usuariosSel, setUsuariosSel] = useState([]);
+  const [diasAnticipacion, setDiasAnticipacion] = useState("7");
+  const [avisarResponsable, setAvisarResponsable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
@@ -37,6 +40,8 @@ export default function DestinatariosInformeModal({
         setRoles(rolesItems);
         setUsuarios(usuariosItems);
         setCorreosTexto((d.correos || []).join(", "));
+        if (d.diasAnticipacion !== undefined) setDiasAnticipacion(String(d.diasAnticipacion));
+        if (d.avisarResponsable !== undefined) setAvisarResponsable(d.avisarResponsable !== false);
         setRolesSel(rolesItems.filter((x) => (d.rolesUuids || []).includes(x.uuid)).map((x) => ({ uuid: x.uuid, label: x.nombre })));
         setUsuariosSel(
           usuariosItems.filter((x) => (d.usuariosUuids || []).includes(x.uuid)).map((x) => ({ uuid: x.uuid, label: nombreUsuario(x), sublabel: x.email })),
@@ -61,6 +66,7 @@ export default function DestinatariosInformeModal({
             .filter(Boolean),
           rolesUuids: rolesSel.map((x) => x.uuid),
           usuariosUuids: usuariosSel.map((x) => x.uuid),
+          ...(alertas ? { diasAnticipacion: Number(diasAnticipacion) || 0, avisarResponsable } : {}),
         }),
       });
       setGuardado(true);
@@ -87,7 +93,47 @@ export default function DestinatariosInformeModal({
       ) : (
         <form onSubmit={guardar}>
           {error && <div className="alert alert-danger py-2 small">{error}</div>}
-          <label className="form-label small fw-medium">Roles</label>
+          {alertas && (
+            <div className="border rounded-3 p-3 mb-3" style={{ background: "#f8fafc" }}>
+              <div className="row g-3 align-items-center">
+                <div className="col-12 col-md-6">
+                  <label className="form-label small fw-medium mb-1">Avisar con anticipación de (días)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="60"
+                    className="form-control form-control-sm rounded-3"
+                    style={{ maxWidth: "8rem" }}
+                    value={diasAnticipacion}
+                    onChange={(e) => {
+                      setDiasAnticipacion(e.target.value);
+                      setGuardado(false);
+                    }}
+                  />
+                  <div className="form-text small">Un mantenimiento programado se avisa cuando faltan estos días o menos, y otra vez si vence.</div>
+                </div>
+                <div className="col-12 col-md-6">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      id="alerta-responsable"
+                      checked={avisarResponsable}
+                      onChange={(e) => {
+                        setAvisarResponsable(e.target.checked);
+                        setGuardado(false);
+                      }}
+                    />
+                    <label className="form-check-label small fw-medium" htmlFor="alerta-responsable">
+                      Avisar al responsable
+                    </label>
+                  </div>
+                  <div className="form-text small">El de la programación o, si no tiene, el del equipo. Las personas de abajo van en copia.</div>
+                </div>
+              </div>
+            </div>
+          )}
+          <label className="form-label small fw-medium">{alertas ? "En copia — roles" : "Roles"}</label>
           <TagPicker
             items={roles.map((x) => ({ uuid: x.uuid, label: x.nombre }))}
             selected={rolesSel}
@@ -98,7 +144,7 @@ export default function DestinatariosInformeModal({
             placeholder="Buscar rol para agregar..."
           />
           <div className="mt-3">
-            <label className="form-label small fw-medium">Usuarios</label>
+            <label className="form-label small fw-medium">{alertas ? "En copia — usuarios" : "Usuarios"}</label>
             <TagPicker
               items={usuarios.map((x) => ({ uuid: x.uuid, label: nombreUsuario(x), sublabel: x.email }))}
               selected={usuariosSel}
@@ -110,7 +156,7 @@ export default function DestinatariosInformeModal({
             />
           </div>
           <div className="mt-3">
-            <label className="form-label small fw-medium">Correos sueltos</label>
+            <label className="form-label small fw-medium">{alertas ? "En copia — correos sueltos" : "Correos sueltos"}</label>
             <input
               type="text"
               className="form-control form-control-sm rounded-3"
