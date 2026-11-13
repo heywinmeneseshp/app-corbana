@@ -37,6 +37,8 @@ export default function HectareasAsperjadas({ vista = "tabla" }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [abiertos, setAbiertos] = useState(new Set());
+  const [modo, setModo] = useState("pago"); // "pago" (formato de pago, por colaborador) | "dias" (resumen por día)
+  const [rolPago, setRolPago] = useState("PILOTO");
 
   useEffect(() => {
     let activo = true;
@@ -97,12 +99,26 @@ export default function HectareasAsperjadas({ vista = "tabla" }) {
       return n;
     });
 
+  // Formato de pago: por colaborador, sus filas (día y finca) y su total. Es lo mismo que se ve en pantalla y sale en el Excel.
+  const bloquesPago = (rol) => {
+    const porPersona = new Map();
+    for (const d of detalle.filter((x) => x.rol === rol)) {
+      const x = porPersona.get(d.colaborador.uuid) || { nombre: d.colaborador.nombre, filas: [], suma: 0 };
+      x.filas.push(d);
+      x.suma += d.hectareas;
+      porPersona.set(d.colaborador.uuid, x);
+    }
+    return [...porPersona.values()]
+      .sort((x, y) => x.nombre.localeCompare(y.nombre, "es"))
+      .map((x) => ({ ...x, filas: [...x.filas].sort((a, b) => (a.fecha === b.fecha ? a.finca.localeCompare(b.finca, "es") : a.fecha < b.fecha ? -1 : 1)) }));
+  };
+  const fmtFechaCorta = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+
   // Excel de pago: una pestaña para los pilotos y otra para los asistentes, agrupado por colaborador con su «TOTAL HAS ASPERJADAS».
   async function exportar() {
     const wb = new ExcelJS.Workbook();
     const borde = { style: "thin", color: { argb: "FF9CA3AF" } };
     const bordes = { top: borde, left: borde, bottom: borde, right: borde };
-    const fmtFecha = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
     const COLS = [
       ["FECHA", 13],
       ["SEMANA", 9],
@@ -124,19 +140,10 @@ export default function HectareasAsperjadas({ vista = "tabla" }) {
         c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         c.border = bordes;
       });
-      const filas = detalle.filter((d) => d.rol === rol);
-      const porPersona = new Map();
-      for (const d of filas) {
-        const x = porPersona.get(d.colaborador.uuid) || { nombre: d.colaborador.nombre, filas: [] };
-        x.filas.push(d);
-        porPersona.set(d.colaborador.uuid, x);
-      }
-      const personas = [...porPersona.values()].sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
-      for (const persona of personas) {
-        let suma = 0;
-        for (const d of [...persona.filas].sort((x, y) => (x.fecha === y.fecha ? x.finca.localeCompare(y.finca, "es") : x.fecha < y.fecha ? -1 : 1))) {
-          const fila = ws.addRow([fmtFecha(d.fecha), d.semana ?? "", d.finca.toUpperCase(), d.fincaCodigo, "", persona.nombre.toUpperCase(), d.documento, Math.round(d.hectareas * 100) / 100]);
-          suma += d.hectareas;
+      for (const persona of bloquesPago(rol)) {
+        const suma = persona.suma;
+        for (const d of persona.filas) {
+          const fila = ws.addRow([fmtFechaCorta(d.fecha), d.semana ?? "", d.finca.toUpperCase(), d.fincaCodigo, "", persona.nombre.toUpperCase(), d.documento, Math.round(d.hectareas * 100) / 100]);
           fila.eachCell((c, n) => {
             c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE7E6E6" } };
             c.border = bordes;
@@ -229,6 +236,80 @@ export default function HectareasAsperjadas({ vista = "tabla" }) {
         </p>
       ) : vista === "tabla" ? (
         <>
+          <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <div className="btn-group btn-group-sm" role="group">
+              {[
+                ["pago", "Formato de pago"],
+                ["dias", "Resumen por día"],
+              ].map(([id, etiqueta]) => (
+                <button key={id} type="button" className={`btn ${modo === id ? "btn-success" : "btn-outline-secondary"}`} onClick={() => setModo(id)}>
+                  {etiqueta}
+                </button>
+              ))}
+            </div>
+            {modo === "pago" && (
+              <div className="btn-group btn-group-sm" role="group">
+                {[
+                  ["PILOTO", "Pilotos"],
+                  ["ASISTENTE", "Asistentes"],
+                ].map(([id, etiqueta]) => (
+                  <button key={id} type="button" className={`btn ${rolPago === id ? "btn-dark" : "btn-outline-secondary"}`} onClick={() => setRolPago(id)}>
+                    {etiqueta}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {modo === "pago" ? (
+            <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+              <div className="table-responsive">
+                <table className="table table-sm mb-0 align-middle text-center" style={{ fontSize: "0.78rem" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#ffff00" }}>
+                      {["FECHA", "SEMANA", "FINCA", "CÓDIGO FINCA", "CÓDIGO TRABAJADOR", "NOMBRE DEL TRABAJADOR", "C.C.", "HA FINCAS"].map((h) => (
+                        <th key={h} className="fw-bold" style={{ backgroundColor: "#ffff00" }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bloquesPago(rolPago).length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="text-secondary py-3">
+                          No hay {rolPago === "PILOTO" ? "pilotos" : "asistentes"} con hectáreas en este periodo.
+                        </td>
+                      </tr>
+                    )}
+                    {bloquesPago(rolPago).map((persona) => (
+                      <Fragment key={persona.nombre}>
+                        {persona.filas.map((d, i) => (
+                          <tr key={`${persona.nombre}-${i}`} style={{ backgroundColor: "#e7e6e6" }}>
+                            <td className="text-nowrap">{fmtFechaCorta(d.fecha)}</td>
+                            <td>{d.semana ?? ""}</td>
+                            <td>{d.finca.toUpperCase()}</td>
+                            <td>{d.fincaCodigo}</td>
+                            <td />
+                            <td className="text-start">{persona.nombre.toUpperCase()}</td>
+                            <td>{d.documento}</td>
+                            <td>{ha(d.hectareas)}</td>
+                          </tr>
+                        ))}
+                        <tr className="fw-bold" style={{ backgroundColor: "#a9d08e" }}>
+                          <td colSpan={7} className="text-end">
+                            TOTAL HAS ASPERJADAS:
+                          </td>
+                          <td>{ha(persona.suma)}</td>
+                        </tr>
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <>
           {/* Totales del periodo por colaborador (base para el pago). */}
           <div className="d-flex flex-wrap gap-2 mb-3">
             <div className="rounded-3 px-3 py-2" style={{ backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0" }}>
@@ -305,6 +386,8 @@ export default function HectareasAsperjadas({ vista = "tabla" }) {
               </table>
             </div>
           </div>
+            </>
+          )}
         </>
       ) : (
         <div className="row g-3">
