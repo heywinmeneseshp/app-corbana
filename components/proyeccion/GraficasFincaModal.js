@@ -205,7 +205,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
         {comparaciones.length > 0 && " Las líneas de colores son las comparaciones que agregaste."}
         {hayPromedioPorFinca && " Cuando comparas varias fincas (o todas), embolses, cajas y hectáreas se muestran como promedio por finca para que la escala sea comparable."}
       </p>
-      <div className="d-flex flex-wrap align-items-center gap-3 mb-3 p-2 rounded-3" style={{ background: "#f1f6f2" }}>
+      <div className="d-flex flex-wrap align-items-center gap-3 mb-2 px-2 py-1 rounded-1" style={{ background: "#f1f6f2" }}>
         <span className="small fw-semibold">Años</span>
         {anios.map((y, i) => (
           <div key={y} className="form-check mb-0">
@@ -225,7 +225,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
               id="gf-excluir"
               type="text"
               inputMode="numeric"
-              className="form-control form-control-sm rounded-3 text-center"
+              className="form-control form-control-sm rounded-1 text-center"
               style={{ width: "4rem" }}
               placeholder="0"
               value={excluirTexto}
@@ -246,87 +246,65 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
         </div>
       </div>
 
-      <div className="card border-0 shadow-sm rounded-4 p-3 mb-3">
-        <label className="form-label small fw-semibold mb-2 d-flex align-items-center gap-2">
-          <FiSliders size={14} className="text-secondary" /> Comparar con otra finca u otro año
-        </label>
-        <div className="d-flex flex-wrap gap-3 align-items-end">
-          <div>
-            <label className="form-label small text-secondary mb-1">Finca</label>
-            <div className="d-flex gap-1">
-              <select className="form-select form-select-sm rounded-3" style={{ width: "15rem" }} value={fincaParaAgregar} onChange={(e) => setFincaParaAgregar(e.target.value)}>
-                <option value="">Todas las fincas (promedio por finca)</option>
-                {fincasLista
-                  .filter((f) => !fincasPendientes.some((p) => p.uuid === f.uuid))
-                  .map((f) => (
-                    <option key={f.uuid} value={f.uuid}>
-                      {f.nombre}
-                    </option>
-                  ))}
-              </select>
-              <button type="button" className="btn btn-sm btn-outline-secondary rounded-3" title="Sumar esta finca a la comparación (se promedian en una sola línea)" disabled={!fincaParaAgregar} onClick={agregarFincaAlCombo}>
-                <FiPlus />
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="form-label small text-secondary mb-1">Año</label>
-            <div className="d-flex gap-1">
-              <select className="form-select form-select-sm rounded-3" style={{ width: "10rem" }} value={String(anioElegido)} onChange={(e) => setAnioElegido(e.target.value === PROY ? PROY : Number(e.target.value))}>
-                {aniosDisponibles
-                  .filter((a) => !aniosPendientes.includes(a))
-                  .map((a) => (
-                    <option key={a} value={String(a)}>
-                      {etiquetaAnio(a)}
-                    </option>
-                  ))}
-              </select>
-              <button type="button" className="btn btn-sm btn-outline-secondary rounded-3" title="Sumar este año a la comparación (se promedian en una sola línea)" onClick={agregarAnioAlCombo}>
-                <FiPlus />
-              </button>
-            </div>
-          </div>
-          <button type="button" className="btn btn-sm btn-brand rounded-3 d-flex align-items-center gap-1" onClick={agregarComparacion}>
-            <FiPlus /> Agregar comparación
+      <div className="border rounded-1 px-2 py-2 mb-2 bg-white">
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          <span className="small fw-semibold d-flex align-items-center gap-1 me-1">
+            <FiSliders size={13} className="text-secondary" /> Comparar con
+          </span>
+          <select className="form-select form-select-sm rounded-1" style={{ width: "14rem" }} value={fincaParaAgregar} onChange={(e) => setFincaParaAgregar(e.target.value)} aria-label="Finca">
+            <option value="">Todas las fincas (prom. por finca)</option>
+            {fincasLista
+              .filter((f) => !fincasPendientes.some((p) => p.uuid === f.uuid))
+              .map((f) => (
+                <option key={f.uuid} value={f.uuid}>
+                  {f.nombre}
+                </option>
+              ))}
+          </select>
+          <button type="button" className="btn btn-sm btn-outline-secondary rounded-1 px-2" title="Sumar esta finca a la comparación (se promedian en una sola línea)" disabled={!fincaParaAgregar} onClick={agregarFincaAlCombo}>
+            <FiPlus />
           </button>
+          <select className="form-select form-select-sm rounded-1" style={{ width: "9rem" }} value={String(anioElegido)} onChange={(e) => setAnioElegido(e.target.value === PROY ? PROY : Number(e.target.value))} aria-label="Año">
+            {aniosDisponibles
+              .filter((a) => !aniosPendientes.includes(a))
+              .map((a) => (
+                <option key={a} value={String(a)}>
+                  {etiquetaAnio(a)}
+                </option>
+              ))}
+          </select>
+          <button type="button" className="btn btn-sm btn-outline-secondary rounded-1 px-2" title="Sumar este año a la comparación (se promedian en una sola línea)" onClick={agregarAnioAlCombo}>
+            <FiPlus />
+          </button>
+          <button type="button" className="btn btn-sm btn-brand rounded-1 d-flex align-items-center gap-1" onClick={agregarComparacion}>
+            <FiPlus /> Agregar
+          </button>
+          {fincasPendientes.map((f) => (
+            <span key={f.uuid} className="badge rounded-1 d-inline-flex align-items-center gap-1 py-1 px-2 fw-normal" style={{ backgroundColor: "var(--brand-100)", color: "var(--brand-800)" }} title="Finca a promediar con las demás en una sola línea">
+              {f.nombre}
+              <button type="button" className="btn-close" style={{ fontSize: "0.45rem" }} onClick={() => setFincasPendientes((prev) => prev.filter((x) => x.uuid !== f.uuid))} aria-label="Quitar"></button>
+            </span>
+          ))}
+          {aniosPendientes.map((a) => (
+            <span key={a} className="badge rounded-1 d-inline-flex align-items-center gap-1 py-1 px-2 fw-normal" style={{ backgroundColor: "var(--brand-100)", color: "var(--brand-800)" }} title="Año a promediar con los demás en una sola línea">
+              {etiquetaAnio(a)}
+              <button type="button" className="btn-close" style={{ fontSize: "0.45rem" }} onClick={() => setAniosPendientes((prev) => prev.filter((x) => x !== a))} aria-label="Quitar"></button>
+            </span>
+          ))}
         </div>
-
-        {fincasPendientes.length > 0 && (
-          <div className="d-flex flex-wrap align-items-center gap-2 mt-3">
-            <span className="text-secondary small">Fincas a promediar juntas en una sola línea:</span>
-            {fincasPendientes.map((f) => (
-              <span key={f.uuid} className="badge rounded-pill d-inline-flex align-items-center gap-2 py-2 px-3" style={{ backgroundColor: "var(--brand-100)", color: "var(--brand-800)" }}>
-                {f.nombre}
-                <button type="button" className="btn-close" style={{ fontSize: "0.5rem" }} onClick={() => setFincasPendientes((prev) => prev.filter((x) => x.uuid !== f.uuid))} aria-label="Quitar"></button>
-              </span>
-            ))}
-          </div>
-        )}
-        {aniosPendientes.length > 0 && (
-          <div className="d-flex flex-wrap align-items-center gap-2 mt-2">
-            <span className="text-secondary small">Años a promediar en una sola línea:</span>
-            {aniosPendientes.map((a) => (
-              <span key={a} className="badge rounded-pill d-inline-flex align-items-center gap-2 py-2 px-3" style={{ backgroundColor: "var(--brand-100)", color: "var(--brand-800)" }}>
-                {etiquetaAnio(a)}
-                <button type="button" className="btn-close" style={{ fontSize: "0.5rem" }} onClick={() => setAniosPendientes((prev) => prev.filter((x) => x !== a))} aria-label="Quitar"></button>
-              </span>
-            ))}
-          </div>
-        )}
-
         {comparaciones.length > 0 && (
-          <div className="d-flex flex-wrap gap-2 mt-3 pt-3 border-top">
+          <div className="d-flex flex-wrap gap-1 mt-2 pt-2 border-top">
             {comparaciones.map((c) => (
-              <span key={c.id} className="badge rounded-pill d-inline-flex align-items-center gap-2 py-2 px-3 text-white" style={{ backgroundColor: c.color }}>
+              <span key={c.id} className="badge rounded-1 d-inline-flex align-items-center gap-2 py-1 px-2 text-white fw-normal" style={{ backgroundColor: c.color }}>
                 {c.fincaLabel} · {c.anioLabel}
-                <button type="button" className="btn-close btn-close-white" style={{ fontSize: "0.5rem" }} onClick={() => quitarComparacion(c.id)} aria-label="Quitar"></button>
+                <button type="button" className="btn-close btn-close-white" style={{ fontSize: "0.45rem" }} onClick={() => quitarComparacion(c.id)} aria-label="Quitar"></button>
               </span>
             ))}
           </div>
         )}
       </div>
 
-      <div className="mb-3 px-2">
+      <div className="mb-2 px-2">
         <RangoSemanasSlider value={rangoSemanas} onChange={setRangoSemanas} />
       </div>
       <div className="row g-3">
@@ -334,7 +312,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
           const g = g0.id === "cajas" ? { ...g0, titulo: `Cajas producidas (${resultado.meta.tasaConversion ?? 18.6})` } : g0;
           return (
           <div key={g.id} className={g.ancha ? "col-12" : "col-12 col-lg-6"}>
-            <div className="border rounded-3 p-2">
+            <div className="border rounded-1 p-2">
               <div className="fw-semibold small mb-1 ps-1">{g.titulo}</div>
               <div style={{ height: "clamp(240px, 32vh, 380px)" }}>
                 <ResponsiveContainer width="100%" height="100%">
