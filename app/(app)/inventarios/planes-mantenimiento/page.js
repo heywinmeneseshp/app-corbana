@@ -12,7 +12,7 @@ import PlantillasChecklistModal from "@/components/mantenimiento/PlantillasCheck
 import { AYUDA_PLANES } from "@/lib/ayudaEquipos";
 import { TIPOS_MANTENIMIENTO, UNIDADES_PERIODICIDAD, etiqueta } from "@/lib/mantenimiento";
 
-const vacio = () => ({ equipoUuid: "", nombre: "", descripcion: "", tipo: "PREVENTIVO", periodicidadValor: "30", periodicidadUnidad: "DIAS", lecturaBase: "", plantillaUuid: "", estado: true });
+const vacio = () => ({ equipoUuid: "", equiposUuids: [], nombre: "", descripcion: "", tipo: "PREVENTIVO", periodicidadValor: "30", periodicidadUnidad: "DIAS", lecturaBase: "", plantillaUuid: "", estado: true });
 
 const POR_LECTURA = ["KILOMETROS", "HORAS", "HOROMETRO"];
 const COLOR_LECTURA = { AL_DIA: "text-success", PROXIMO: "text-warning", VENCIDO: "text-danger" };
@@ -96,7 +96,23 @@ export default function PlanesMantenimientoPage() {
       if (POR_LECTURA.includes(body.periodicidadUnidad) && String(body.lecturaBase).trim() !== "") body.lecturaBase = Number(String(body.lecturaBase).replace(",", "."));
       else delete body.lecturaBase;
       if (modal.editing) await apiFetch(`/inventarios/planes-mantenimiento/${modal.editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
-      else await apiFetch("/inventarios/planes-mantenimiento", { method: "POST", body: JSON.stringify(body) });
+      else {
+        // Un mismo plan para varios equipos: se crea un plan por equipo (cada uno cuenta desde su propia lectura).
+        const destinos = modal.form.equiposUuids;
+        if (destinos.length === 0) throw new Error("Elige al menos un equipo.");
+        const { equiposUuids: _e, ...base } = body;
+        const creados = [];
+        for (const uuid of destinos) {
+          try {
+            await apiFetch("/inventarios/planes-mantenimiento", { method: "POST", body: JSON.stringify({ ...base, equipoUuid: uuid }) });
+            creados.push(uuid);
+          } catch (err) {
+            const eq = equipos.find((x) => x.uuid === uuid);
+            const previos = creados.length ? ` Ya se crearon ${creados.length} plan(es) antes de este error.` : "";
+            throw new Error(`${eq ? eq.codigo : "Equipo"}: ${err.message}.${previos}`);
+          }
+        }
+      }
       setModal(null);
       load();
     } catch (err) {
@@ -272,16 +288,50 @@ export default function PlanesMantenimientoPage() {
             <form onSubmit={guardar}>
               <div className="mb-2">
                 <label className="form-label small fw-medium mb-1">
-                  Equipo <span className="text-danger">*</span>
+                  {modal.editing ? "Equipo" : "Equipos"} <span className="text-danger">*</span>
                 </label>
-                <select className="form-select form-select-sm rounded-3" required value={modal.form.equipoUuid} onChange={(e) => setForm({ equipoUuid: e.target.value })}>
-                  <option value="">Selecciona...</option>
-                  {equipos.map((eq) => (
-                    <option key={eq.uuid} value={eq.uuid}>
-                      {eq.codigo} — {eq.nombre}
-                    </option>
-                  ))}
-                </select>
+                {modal.editing ? (
+                  <select className="form-select form-select-sm rounded-3" required value={modal.form.equipoUuid} onChange={(e) => setForm({ equipoUuid: e.target.value })}>
+                    <option value="">Selecciona...</option>
+                    {equipos.map((eq) => (
+                      <option key={eq.uuid} value={eq.uuid}>
+                        {eq.codigo} — {eq.nombre}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <>
+                    <div className="border rounded-3 p-2" style={{ maxHeight: "9rem", overflowY: "auto" }}>
+                      <div className="form-check border-bottom pb-1 mb-1">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id="plan-eq-todos"
+                          checked={equipos.length > 0 && modal.form.equiposUuids.length === equipos.length}
+                          onChange={(e) => setForm({ equiposUuids: e.target.checked ? equipos.map((x) => x.uuid) : [] })}
+                        />
+                        <label className="form-check-label small fw-medium" htmlFor="plan-eq-todos">
+                          Todos
+                        </label>
+                      </div>
+                      {equipos.map((eq) => (
+                        <div className="form-check" key={eq.uuid}>
+                          <input
+                            type="checkbox"
+                            className="form-check-input"
+                            id={`plan-eq-${eq.uuid}`}
+                            checked={modal.form.equiposUuids.includes(eq.uuid)}
+                            onChange={(e) => setForm({ equiposUuids: e.target.checked ? [...modal.form.equiposUuids, eq.uuid] : modal.form.equiposUuids.filter((u) => u !== eq.uuid) })}
+                          />
+                          <label className="form-check-label small" htmlFor={`plan-eq-${eq.uuid}`}>
+                            {eq.codigo} — {eq.nombre}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="form-text small">Se crea un plan por cada equipo elegido; cada uno cuenta desde su propia lectura.</div>
+                  </>
+                )}
               </div>
               <div className="mb-2">
                 <label className="form-label small fw-medium mb-1">
