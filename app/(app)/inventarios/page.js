@@ -101,6 +101,7 @@ export default function InventariosDashboardPage() {
               </div>
             )}
 
+            <style>{`.link-inv:hover { text-decoration: underline !important; }`}</style>
             <div className="row g-3">
               <div className="col-12 col-lg-5">
                 <div className="card border-0 shadow-sm rounded-4 h-100">
@@ -114,7 +115,7 @@ export default function InventariosDashboardPage() {
                     </p>
                   ) : (
                     <div className="table-responsive">
-                      <table className="table table-sm mb-0 align-middle small">
+                      <table className="table table-sm mb-0 align-middle" style={{ fontSize: "0.74rem" }}>
                         <thead className="table-light">
                           <tr>
                             <th>Artículo</th>
@@ -126,7 +127,7 @@ export default function InventariosDashboardPage() {
                           {data.bajoStockLista.map((a) => (
                             <tr key={a.uuid}>
                               <td>
-                                <Link href={`/inventarios/kardex?articuloUuid=${a.uuid}`} className="text-decoration-none">
+                                <Link href={`/inventarios/kardex?articuloUuid=${a.uuid}`} className="text-dark text-decoration-none link-inv">
                                   {a.nombre}
                                 </Link>
                                 {a.codigo && <span className="text-secondary ms-1">({a.codigo})</span>}
@@ -148,7 +149,7 @@ export default function InventariosDashboardPage() {
                 <div className="card border-0 shadow-sm rounded-4 h-100">
                   <div className="p-3 pb-2 d-flex align-items-center justify-content-between">
                     <h2 className="h6 fw-bold mb-0">Últimos movimientos</h2>
-                    <Link href="/inventarios/movimientos" className="small text-decoration-none">
+                    <Link href="/inventarios/movimientos" className="small text-secondary text-decoration-none link-inv">
                       Ver todos
                     </Link>
                   </div>
@@ -156,7 +157,7 @@ export default function InventariosDashboardPage() {
                     <p className="small text-secondary px-3 pb-3 mb-0">Aún no hay movimientos.</p>
                   ) : (
                     <div className="table-responsive">
-                      <table className="table table-sm mb-0 align-middle small">
+                      <table className="table table-sm mb-0 align-middle" style={{ fontSize: "0.74rem" }}>
                         <thead className="table-light">
                           <tr>
                             <th>Fecha</th>
@@ -173,7 +174,7 @@ export default function InventariosDashboardPage() {
                               <td className="fw-medium">{m.documento}</td>
                               <td className={esEntrada(m.tipo) ? "text-success" : "text-danger"}>{ETIQUETA_TIPO[m.tipo] || m.tipo}</td>
                               <td>
-                                <Link href={`/inventarios/kardex?articuloUuid=${m.articuloUuid}`} className="text-decoration-none">
+                                <Link href={`/inventarios/kardex?articuloUuid=${m.articuloUuid}`} className="text-dark text-decoration-none link-inv">
                                   {m.articulo}
                                 </Link>
                               </td>
