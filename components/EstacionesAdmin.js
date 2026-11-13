@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FiCheck, FiEdit2, FiMapPin, FiPlus, FiTrash2, FiWifi, FiX } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchTodos } from "@/lib/api";
 
 // Alta y administración de las estaciones meteorológicas (WeatherLink): nombre, credenciales (se guardan cifradas y nunca se muestran de nuevo) y las
 // fincas que usan los datos de cada estación para su temperatura y humedad en las gráficas de clima. Solo Administrador.
@@ -25,7 +25,7 @@ export default function EstacionesAdmin({ onCambio }) {
   const cargar = useCallback(async () => {
     setError("");
     try {
-      const [est, fin] = await Promise.all([apiFetch("/estacion-meteorologica/estaciones"), apiFetch("/fincas?limit=200")]);
+      const [est, fin] = await Promise.all([apiFetch("/estacion-meteorologica/estaciones"), apiFetchTodos("/fincas?limit=100")]);
       setEstaciones(est || []);
       setFincas((fin?.items || []).filter((f) => f.estado !== false).sort((a, b) => a.nombre.localeCompare(b.nombre, "es")));
     } catch (err) {
