@@ -9,6 +9,7 @@ const VERDE = "#166534";
 const BORDE = "#b9c9be";
 
 const DATOS = [
+  { id: "ha", titulo: "Hectáreas", corto: "Hectáreas", ayuda: "Hectáreas en producción (en un mes o en el total del año, el promedio de sus semanas)", color: "#0d9488" },
   { id: "embolses", titulo: "Embolses", corto: "Embolses", ayuda: "Embolses de la semana (real si ya pasó, proyectado si no)", color: "#0891b2" },
   { id: "aprov", titulo: "Aprovechamiento", corto: "Aprovech.", ayuda: "Cosechado ÷ (cosechado + repique + recusado) de la cinta que cumple 12 semanas en esta semana", color: "#7c3aed", derivado: true },
   { id: "racimos", titulo: "Racimos", corto: "Racimos", ayuda: "Racimos cosechados", color: "#d97706" },
@@ -20,6 +21,7 @@ const num = (n, d = 0) => Number(n ?? 0).toLocaleString("es", { minimumFractionD
 const mesDe = (fecha) => new Date(new Date(`${fecha}T00:00:00Z`).getTime() + 3 * 86400000).getUTCMonth(); // mes del jueves
 const razon = (a, b) => (b > 0 ? a / b : null);
 const pct = (v) => (v === null || v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
+const haTxt = (v) => (v === null || v === undefined ? "—" : num(v, 1));
 const ratioTxt = (v) => (v === null || v === undefined ? "—" : num(v, 4));
 
 // Acumula, por finca y periodo, lo que hace falta para mostrar las cinco cifras (el ratio y el aprovechamiento salen de cocientes de sumas).
@@ -31,8 +33,10 @@ function acumular(resultado, periodo, ocultas) {
     nombres.set(f.fincaUuid, f.fincaNombre);
     const clave = periodo === "semana" ? f.semanaCodigo : mesDe(f.fechaInicio);
     const k = `${f.fincaUuid}|${clave}`;
-    const c = celdas.get(k) || { embolses: 0, racimos: 0, cajas: 0, an: 0, ad: 0, real: 0, filas: 0, realF: 0, manual: 0 };
+    const c = celdas.get(k) || { embolses: 0, racimos: 0, cajas: 0, an: 0, ad: 0, real: 0, filas: 0, realF: 0, manual: 0, ha: 0, haN: 0 };
     c.embolses += f.embolses || 0;
+    c.ha += f.hectareasEfectivas || 0;
+    c.haN += 1;
     c.racimos += f.racimos || 0;
     c.cajas += f.cajas || 0;
     c.an += f.aprovechamientoNum || 0;
@@ -44,13 +48,23 @@ function acumular(resultado, periodo, ocultas) {
     celdas.set(k, c);
   }
   const fincas = [...nombres.entries()].map(([uuid, nombre]) => ({ uuid, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-  const CLAVES = ["embolses", "racimos", "cajas", "an", "ad", "real", "filas", "realF", "manual"];
-  const suma = (lista) =>
+  const CLAVES = ["embolses", "racimos", "cajas", "an", "ad", "real", "filas", "realF", "manual", "ha", "haN"];
+  const vacia = () => Object.fromEntries(CLAVES.map((k) => [k, 0]));
+  // Entre fincas (mismo periodo) todo se suma, también las hectáreas de cada finca (su promedio si la celda abarca varias semanas).
+  const sumaFincas = (lista) =>
+    lista.reduce((t, c) => {
+      for (const k of CLAVES) if (k !== "ha" && k !== "haN") t[k] += c[k];
+      t.ha += c.haN > 0 ? c.ha / c.haN : 0;
+      t.haN = 1;
+      return t;
+    }, vacia());
+  // Entre periodos (misma finca) todo se suma salvo las hectáreas, que son un nivel: se promedian (ha / haN).
+  const sumaPeriodos = (lista) =>
     lista.reduce((t, c) => {
       for (const k of CLAVES) t[k] += c[k];
       return t;
-    }, Object.fromEntries(CLAVES.map((k) => [k, 0])));
-  return { fincas, celdas, suma };
+    }, vacia());
+  return { fincas, celdas, sumaFincas, sumaPeriodos };
 }
 
 // Valor de una de las cinco cifras en una celda ya acumulada.
@@ -58,22 +72,23 @@ function valorDe(dato, c) {
   if (!c) return null;
   if (dato === "aprov") return razon(c.an, c.ad);
   if (dato === "ratio") return razon(c.cajas, c.racimos);
+  if (dato === "ha") return c.haN > 0 ? c.ha / c.haN : null;
   return c[dato];
 }
-const texto = (dato, v) => (v === null || v === undefined ? "—" : dato === "aprov" ? pct(v) : dato === "ratio" ? ratioTxt(v) : num(v));
+const texto = (dato, v) => (v === null || v === undefined ? "—" : dato === "aprov" ? pct(v) : dato === "ratio" ? ratioTxt(v) : dato === "ha" ? haTxt(v) : num(v));
 // El aprovechamiento es «estimado» cuando ninguna cinta de la celda tiene movimientos reales (se usó el % aplicado de la finca).
 const esEstimado = (dato, c) => dato === "aprov" && c && c.real === 0;
 
 export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, params, onParamsChange, puedeEditar = false }) {
   const [editando, setEditando] = useState(null); // `${fincaUuid}|${semana}` de la celda de ratio que se está editando
-  const { fincas, celdas, suma } = useMemo(() => acumular(resultado, periodo, ocultas), [resultado, periodo, ocultas]);
+  const { fincas, celdas, sumaFincas, sumaPeriodos } = useMemo(() => acumular(resultado, periodo, ocultas), [resultado, periodo, ocultas]);
   const periodos = periodo === "semana" ? resultado.porSemana.map((s) => ({ clave: s.semanaCodigo, titulo: s.semanaCodigo, real: s.real })) : MESES.map((m, i) => ({ clave: i, titulo: m }));
-  const totalPeriodo = (clave) => suma(fincas.map((f) => celdas.get(`${f.uuid}|${clave}`)).filter(Boolean));
-  const totalFinca = (uuid) => suma(periodos.map((p) => celdas.get(`${uuid}|${p.clave}`)).filter(Boolean));
-  const totalGeneral = suma([...celdas.values()]);
+  const totalPeriodo = (clave) => sumaFincas(fincas.map((f) => celdas.get(`${f.uuid}|${clave}`)).filter(Boolean));
+  const totalFinca = (uuid) => sumaPeriodos(periodos.map((p) => celdas.get(`${uuid}|${p.clave}`)).filter(Boolean));
+  const totalGeneral = sumaFincas(fincas.map((f) => totalFinca(f.uuid)));
 
   const W1 = periodo === "semana" ? 92 : 64; // ancho de la columna de periodo
-  const ANCHO = { embolses: 74, aprov: 78, racimos: 72, ratio: 66, cajas: 78 };
+  const ANCHO = { ha: 78, embolses: 74, aprov: 78, racimos: 72, ratio: 66, cajas: 78 };
   const encabezado = { background: VERDE, color: "#fff" };
   // Cada finca es un grupo de cinco columnas; el borde izquierdo del grupo lo separa del siguiente.
   const grupo = { borderLeft: `2px solid ${BORDE}` };
@@ -153,6 +168,70 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
     };
   };
 
+  // Ratio TOTAL de una semana: se reparte entre las fincas con semana proyectada, escalando el ratio de cada una por el mismo factor para que el total
+  // de la semana (cajas / racimos) quede en el valor escrito. Las fincas con semana real no se tocan. Vacío = vuelve al automático.
+  const fijarRatioTotal = (clave, texto) => {
+    setEditando(null);
+    const todos = { ...(params?.ratioManual || {}) };
+    const filasSemana = fincas.map((f) => ({ f, c: celdas.get(`${f.uuid}|${clave}`) })).filter((x) => x.c);
+    const proyectadas = filasSemana.filter((x) => x.c.realF === 0 && x.c.racimos > 0 && x.c.cajas > 0);
+    if (proyectadas.length === 0) return;
+    const poner = (uuid, valor) => {
+      const deFinca = { ...(todos[uuid] || {}) };
+      if (valor === null) delete deFinca[clave];
+      else deFinca[clave] = valor;
+      if (Object.keys(deFinca).length) todos[uuid] = deFinca;
+      else delete todos[uuid];
+    };
+    const n = Number(String(texto).replace(",", "."));
+    if (String(texto).trim() === "" || !Number.isFinite(n) || n <= 0) {
+      for (const { f } of proyectadas) poner(f.uuid, null);
+    } else {
+      const racimosTotal = filasSemana.reduce((t, x) => t + x.c.racimos, 0);
+      const cajasReal = filasSemana.filter((x) => x.c.realF > 0).reduce((t, x) => t + x.c.cajas, 0);
+      const cajasProy = proyectadas.reduce((t, x) => t + x.c.cajas, 0);
+      const k = (n * racimosTotal - cajasReal) / cajasProy;
+      const nuevos = proyectadas.map(({ f, c }) => [f.uuid, Math.round((c.cajas / c.racimos) * k * 10000) / 10000]);
+      if (!(k > 0) || nuevos.some(([, v]) => !(v >= 0.0001 && v <= 5))) return; // valor imposible para esta semana: se ignora
+      for (const [uuid, v] of nuevos) poner(uuid, v);
+    }
+    onParamsChange({ ...params, ratioManual: todos });
+  };
+  const celdaRatioTotal = (clave, tot, base) => {
+    if (!editable || !tot || tot.realF >= tot.filas || tot.filas === 0) return base; // todas las fincas con semana real: solo lectura
+    const k = `total|${clave}`;
+    const fijado = tot.manual > 0;
+    if (editando === k) {
+      return {
+        ...base,
+        contenido: (
+          <input
+            autoFocus
+            type="number"
+            step="0.0001"
+            min="0"
+            max="5"
+            className="form-control form-control-sm text-end p-0 px-1"
+            style={{ width: 78, fontSize: "0.78rem" }}
+            defaultValue={valorDe("ratio", tot) ? Number(valorDe("ratio", tot).toFixed(4)) : ""}
+            placeholder="automático"
+            onBlur={(e) => fijarRatioTotal(clave, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") setEditando(null);
+            }}
+          />
+        ),
+      };
+    }
+    return {
+      ...base,
+      title: "Clic para fijar el ratio total de la semana: se reparte entre las fincas con semana proyectada, manteniendo sus diferencias. Déjalo vacío para volver al automático.",
+      style: { ...base.style, cursor: "text", ...(fijado ? { color: "#b45309", boxShadow: "inset 0 -2px 0 #f59e0b" } : { textDecoration: "underline dotted #9ca3af", textUnderlineOffset: 3 }) },
+      onClick: () => setEditando(k),
+    };
+  };
+
   // Una fila de celdas (cinco por finca + cinco del total) para un periodo o para el pie.
   const celdasFila = (obtener, totalFila, { fondo, borde = {}, color, fondoTotal, colorTotal, clave } = {}) => [
     ...fincas.flatMap((f) =>
@@ -167,9 +246,10 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
       }),
     ),
     ...DATOS.map((d, di) => {
-      const c = celdaDe(d.id, totalFila, { ...(di === 0 ? grupo : {}), ...borde, fontWeight: 700, background: fondoTotal || "#e3efe7", ...(colorTotal ? { color: colorTotal } : {}) });
+      let c = celdaDe(d.id, totalFila, { ...(di === 0 ? grupo : {}), ...borde, fontWeight: 700, background: fondoTotal || "#e3efe7", ...(colorTotal ? { color: colorTotal } : {}) });
+      if (d.id === "ratio" && clave !== undefined) c = celdaRatioTotal(clave, totalFila, c);
       return (
-        <td key={`total-${d.id}`} style={c.style} title={c.title}>
+        <td key={`total-${d.id}`} style={c.style} title={c.title} onClick={c.onClick}>
           {c.contenido}
         </td>
       );
@@ -272,7 +352,7 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
 
 // Excel con la misma disposición: una fila por semana (o mes); las cinco cifras en columnas bajo cada finca y bajo el total.
 export async function exportarJuntos({ resultado, periodo, ocultas, nombreEscenario }) {
-  const { fincas, celdas, suma } = acumular(resultado, periodo, ocultas);
+  const { fincas, celdas, sumaFincas, sumaPeriodos } = acumular(resultado, periodo, ocultas);
   const periodos = periodo === "semana" ? resultado.porSemana.map((s) => ({ clave: s.semanaCodigo, titulo: s.real ? `${s.semanaCodigo} *` : s.semanaCodigo })) : MESES.map((m, i) => ({ clave: i, titulo: m }));
   const ExcelJS = (await import("exceljs")).default;
   const libro = new ExcelJS.Workbook();
@@ -282,7 +362,7 @@ export async function exportarJuntos({ resultado, periodo, ocultas, nombreEscena
   hoja.addRow([]);
   const grupos = [...fincas.map((f) => f.nombre), "Total"];
   const verde = (cell, argb = "FF166534") => (cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } });
-  const fila1 = hoja.addRow([periodo === "semana" ? "Semana" : "Mes", ...grupos.flatMap((g) => [g, "", "", "", ""])]);
+  const fila1 = hoja.addRow([periodo === "semana" ? "Semana" : "Mes", ...grupos.flatMap((g) => [g, ...Array(DATOS.length - 1).fill("")])]);
   const fila2 = hoja.addRow(["", ...grupos.flatMap(() => DATOS.map((d) => d.corto))]);
   grupos.forEach((_, gi) => hoja.mergeCells(fila1.number, 2 + gi * DATOS.length, fila1.number, 1 + (gi + 1) * DATOS.length));
   hoja.mergeCells(fila1.number, 1, fila2.number, 1);
@@ -292,19 +372,19 @@ export async function exportarJuntos({ resultado, periodo, ocultas, nombreEscena
     fila.eachCell((c) => verde(c));
   }
   const redondeo = (v, d) => (v === null || v === undefined ? null : Math.round(v * 10 ** d) / 10 ** d);
-  const valores = (c) => DATOS.map((d) => redondeo(valorDe(d.id, c), d.id === "aprov" || d.id === "ratio" ? 4 : 0));
+  const valores = (c) => DATOS.map((d) => redondeo(valorDe(d.id, c), d.id === "aprov" || d.id === "ratio" ? 4 : d.id === "ha" ? 2 : 0));
   const formatear = (fila) =>
     fila.eachCell({ includeEmpty: false }, (cell, n) => {
       if (n === 1) return;
       const d = DATOS[(n - 2) % DATOS.length];
-      cell.numFmt = d.id === "aprov" ? "0.0%" : d.id === "ratio" ? "0.0000" : "#,##0";
+      cell.numFmt = d.id === "aprov" ? "0.0%" : d.id === "ratio" ? "0.0000" : d.id === "ha" ? "#,##0.0" : "#,##0";
     });
   for (const pr of periodos) {
     const por = fincas.map((f) => celdas.get(`${f.uuid}|${pr.clave}`));
-    formatear(hoja.addRow([pr.titulo, ...por.flatMap(valores), ...valores(suma(por.filter(Boolean)))]));
+    formatear(hoja.addRow([pr.titulo, ...por.flatMap(valores), ...valores(sumaFincas(por.filter(Boolean)))]));
   }
-  const porFinca = fincas.map((f) => suma(periodos.map((p) => celdas.get(`${f.uuid}|${p.clave}`)).filter(Boolean)));
-  const pie = hoja.addRow(["Total", ...porFinca.flatMap(valores), ...valores(suma([...celdas.values()]))]);
+  const porFinca = fincas.map((f) => sumaPeriodos(periodos.map((p) => celdas.get(`${f.uuid}|${p.clave}`)).filter(Boolean)));
+  const pie = hoja.addRow(["Total", ...porFinca.flatMap(valores), ...valores(sumaFincas(porFinca))]);
   formatear(pie);
   pie.font = { bold: true };
   hoja.getColumn(1).width = 14;
