@@ -231,7 +231,7 @@ const NAV = [
     pathPrefix: "/configuracion",
     items: [
       { key: "configLogistica", label: "Conexión con Logística", icon: FiShare2, permKey: "configuracion", href: "/configuracion/logistica" },
-      { key: "configVersionApp", label: "Versión App Móvil", icon: FiSmartphone, permKey: "configuracion", href: "/configuracion/version-app" },
+      { key: "configVersionApp", label: "Versión de las apps", icon: FiSmartphone, permKey: "configuracion", href: "/configuracion/version-app" },
       { key: "configCargue", label: "Cargue Masivo", icon: FiUploadCloud, permKey: "configuracion", href: "/configuracion/cargue" },
       { key: "configImportarPendientes", label: "Importar Pendientes App Móvil", icon: FiUploadCloud, permKey: "configuracion", href: "/configuracion/importar-pendientes" },
       { key: "configComunicados", label: "Comunicados", icon: FiSend, permKey: "configuracion", href: "/configuracion/comunicados" },

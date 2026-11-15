@@ -8,7 +8,7 @@ import { apiFetch } from "@/lib/api";
 // actualización que ven los usuarios al abrirla — antes vivía en Maestros →
 // Versión App Móvil, movido acá porque es una configuración de la
 // instalación, no un maestro de datos.
-export default function VersionAppForm() {
+export default function VersionAppForm({ app = "movil" }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -20,7 +20,7 @@ export default function VersionAppForm() {
   const [releaseNotes, setReleaseNotes] = useState("");
 
   useEffect(() => {
-    apiFetch("/configuraciones/app-version")
+    apiFetch(`/configuraciones/app-version?app=${app}`)
       .then((data) => {
         setLatestVersion(data.latestVersion || "");
         setMinSupportedVersion(data.minSupportedVersion || "");
@@ -29,7 +29,8 @@ export default function VersionAppForm() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,7 +38,7 @@ export default function VersionAppForm() {
     setSaved(false);
     setSaving(true);
     try {
-      await apiFetch("/configuraciones/app-version", {
+      await apiFetch(`/configuraciones/app-version?app=${app}`, {
         method: "PUT",
         body: JSON.stringify({ latestVersion, minSupportedVersion, downloadUrl, releaseNotes }),
       });
