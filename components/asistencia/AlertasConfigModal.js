@@ -64,7 +64,7 @@ export default function AlertasConfigModal({ onClose }) {
       </div>
       <div className="fw-semibold small mb-1">Jornada incompleta</div>
       <p className="small text-secondary mb-2">
-        Los usuarios de estos roles y los usuarios elegidos reciben copia del correo que le llega a cada colaborador con la jornada incompleta, según sus fincas y
+        El aviso de jornada incompleta <strong>no le llega al colaborador</strong>: lo reciben solo los usuarios de estos roles y los usuarios elegidos, según sus fincas y
         lugares asignados (sin ninguno asignado, de todos).
       </p>
       {cargando ? (
