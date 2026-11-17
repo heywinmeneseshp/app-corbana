@@ -35,6 +35,10 @@ export default function RegistrarEmbolsePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Lote que intentó embolsar sin área en producción: se pide el área ahí mismo y se reintenta.
+  const [areaFaltante, setAreaFaltante] = useState(null); // { loteUuid, loteNombre }
+  const [areaValor, setAreaValor] = useState("");
+  const [guardandoArea, setGuardandoArea] = useState(false);
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
@@ -149,9 +153,34 @@ export default function RegistrarEmbolsePage() {
       setSuccess(`${rows.length} embolse(s) registrado(s) correctamente (${totalRacimos} racimos).`);
       setRows([emptyRow()]);
     } catch (err) {
+      const falta = (err.errores || []).find((e) => e.codigo === "AREA_PRODUCCION_CERO");
+      if (falta) {
+        setAreaFaltante({ loteUuid: falta.loteUuid, loteNombre: falta.loteNombre });
+        setAreaValor("");
+      }
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Guarda el área en producción del lote (en la semana del embolse) y reintenta el registro.
+  async function guardarAreaYReintentar() {
+    const area = Number(String(areaValor).replace(",", "."));
+    if (!(area > 0)) {
+      setError("Escribe el área en producción del lote (mayor que 0 ha).");
+      return;
+    }
+    setGuardandoArea(true);
+    setError("");
+    try {
+      await apiFetch(`/lotes/${areaFaltante.loteUuid}/area-produccion`, { method: "POST", body: JSON.stringify({ area, semanaUuid: semanaEmbolseUuid }) });
+      setAreaFaltante(null);
+      setGuardandoArea(false);
+      await handleSubmit();
+    } catch (err) {
+      setError(err.message);
+      setGuardandoArea(false);
     }
   }
 
@@ -164,6 +193,21 @@ export default function RegistrarEmbolsePage() {
         </div>
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
+        {areaFaltante && (
+          <div className="border border-warning rounded-3 p-3 mb-3" style={{ background: "#fffbeb" }}>
+            <div className="fw-semibold small mb-1">El lote {areaFaltante.loteNombre} no tiene área en producción</div>
+            <p className="small text-secondary mb-2">Un lote solo puede embolsar si tiene área en producción (el área que tiene racimos embolsados). Escríbela para continuar con el registro.</p>
+            <div className="d-flex flex-wrap align-items-end gap-2">
+              <div>
+                <label className="form-label small fw-medium mb-1">Área en producción (ha)</label>
+                <input type="number" min="0" step="0.01" className="form-control form-control-sm" style={{ width: "10rem" }} value={areaValor} onChange={(e) => setAreaValor(e.target.value)} />
+              </div>
+              <button type="button" className="btn btn-brand btn-sm" disabled={guardandoArea || saving} onClick={guardarAreaYReintentar}>
+                {guardandoArea ? "Guardando..." : "Guardar área y registrar embolse"}
+              </button>
+            </div>
+          </div>
+        )}
         {success && (
           <div className="alert alert-success py-2 small d-flex align-items-center gap-2">
             <FiCheckCircle /> {success}
