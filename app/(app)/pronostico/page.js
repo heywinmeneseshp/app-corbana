@@ -634,6 +634,7 @@ function PronosticoSemanal() {
             const o = ratioOverrides[rowKey(r)];
             return o ? { ...r, ratio: o.ratio, cajas20kg: o.cajas20kg } : r;
           })}
+          seriesAnuales={data.seriesAnuales || {}}
           metrica={graficas}
           onClose={() => setGraficas(null)}
         />
