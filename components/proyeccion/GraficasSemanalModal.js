@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import ModalShell from "@/components/ModalShell";
 
@@ -36,6 +36,22 @@ export default function GraficasSemanalModal({ filas, seriesAnuales = {}, metric
   const [grupo, setGrupo] = useState(grupos[0]?.clave);
   const [ocultos, setOcultos] = useState(new Set()); // años ocultos
   const [verPromedio, setVerPromedio] = useState(true);
+  // Últimas semanas del año en curso que no se muestran porque aún no están completas en la app (cada gráfica cuenta desde su último dato).
+  // Se recuerda en este navegador.
+  const [omitir, setOmitir] = useState(() => {
+    try {
+      return Math.min(20, Math.max(0, Number(localStorage.getItem("proyeccion.semanal.omitirUltimas")) || 0));
+    } catch {
+      return 0;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("proyeccion.semanal.omitirUltimas", String(omitir));
+    } catch {
+      // sin almacenamiento local: dura mientras la ventana esté abierta
+    }
+  }, [omitir]);
 
   const serie = useMemo(() => seriesAnuales[grupo] || { anio: null, anios: {} }, [seriesAnuales, grupo]);
   const anioBase = serie.anio;
@@ -69,6 +85,15 @@ export default function GraficasSemanalModal({ filas, seriesAnuales = {}, metric
       for (const ind of INDICADORES) if (ind.fila) fila[`${pref}_${ind.id}`] = ind.fila(r);
       if (!r.real && r.anio === anioBase) for (const a of r.ageBreakdown || []) fila[`edadProy${a.edad}`] = a.racimos;
     });
+    // Omitir las últimas semanas con dato del año en curso, en cada serie real (incluidas las edades).
+    if (omitir > 0) {
+      const claves = [...INDICADORES.filter((ind) => ind.real).map((ind) => `${anioBase}_${ind.id}`), ...EDADES.map((e) => `edad${e}`)];
+      for (const clave of claves) {
+        let ultima = 0;
+        for (const [n, fila] of porN) if (fila[clave] != null) ultima = Math.max(ultima, n);
+        for (const [n, fila] of porN) if (n > ultima - omitir) delete fila[clave];
+      }
+    }
     // Promedio de los años anteriores marcados.
     const previos = anios.filter((y) => y !== anioBase && !ocultos.has(y));
     for (const fila of porN.values()) {
@@ -79,7 +104,7 @@ export default function GraficasSemanalModal({ filas, seriesAnuales = {}, metric
       }
     }
     return [...porN.values()];
-  }, [serie, anios, anioBase, delGrupo, ocultos]);
+  }, [serie, anios, anioBase, delGrupo, ocultos, omitir]);
 
   const orden = [...INDICADORES].sort((a, b) => (a.id === metrica ? -1 : b.id === metrica ? 1 : 0));
   const hayPrevios = anios.some((y) => y !== anioBase && !ocultos.has(y));
@@ -115,6 +140,21 @@ export default function GraficasSemanalModal({ filas, seriesAnuales = {}, metric
               </label>
             </div>
           ))}
+          <div className="d-flex align-items-center gap-2">
+            <label className="small mb-0" htmlFor="gs-omitir" title={`Oculta en cada gráfica las últimas semanas con dato de ${anioBase}, porque todavía no están completas en la app`}>
+              Omitir últimas semanas de {anioBase}
+            </label>
+            <input
+              id="gs-omitir"
+              type="number"
+              min="0"
+              max="20"
+              className="form-control form-control-sm rounded-1 text-center"
+              style={{ width: "4rem" }}
+              value={omitir}
+              onChange={(e) => setOmitir(Math.min(20, Math.max(0, Number(e.target.value) || 0)))}
+            />
+          </div>
           {anios.length > 1 && (
             <div className="form-check mb-0">
               <input type="checkbox" className="form-check-input" id="gs-prom" checked={verPromedio} onChange={() => setVerPromedio((v) => !v)} />
