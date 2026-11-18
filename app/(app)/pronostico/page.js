@@ -689,6 +689,7 @@ function PronosticoSemanal() {
                   <ThGrafica metrica="cajas" onGraficas={setGraficas} className="text-end">Cajas 20k</ThGrafica>
                   <th className="text-end" title="Por defecto, la estimación de cajas de las fincas externas; se puede editar">Cajas adicionales</th>
                   <th className="text-end">Total cajas</th>
+                  <th className="text-end" title="Suma de lo que estimaron las fincas para esa semana (Estimaciones finca), incluidas las externas">Estimación Finca</th>
                   {data?.meta?.simulacion && <th className="text-end">Cajas reales</th>}
                   {data?.meta?.simulacion && <th className="text-end">Dif.</th>}
                   <th>Confianza</th>
@@ -696,10 +697,10 @@ function PronosticoSemanal() {
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 14 : 12} className="text-center text-secondary py-4">Cargando...</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 15 : 13} className="text-center text-secondary py-4">Cargando...</td></tr>
                 )}
                 {!loading && (!data || data.rows.length === 0) && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 14 : 12} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 15 : 13} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
                 )}
                 {!loading && data && data.rows.map((row, idx) => {
                   const key = rowKey(row);
@@ -712,7 +713,7 @@ function PronosticoSemanal() {
                     <Fragment key={key}>
                     {esNuevaFinca && (
                       <tr>
-                        <td colSpan={data?.meta?.simulacion ? 14 : 12} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
+                        <td colSpan={data?.meta?.simulacion ? 15 : 13} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
                           {row.fincaCodigo} — {row.fincaNombre}
                         </td>
                       </tr>
@@ -804,6 +805,9 @@ function PronosticoSemanal() {
                         )}
                       </td>
                       <td className="text-end fw-bold">{(row.cajasTotal ?? cajasMostradas).toLocaleString("es", { maximumFractionDigits: 0 })}</td>
+                      <td className="text-end" title={row.estimacionFinca != null ? `Diferencia con el total: ${(row.estimacionFinca - (row.cajasTotal ?? cajasMostradas)).toLocaleString("es", { maximumFractionDigits: 0 })} cajas` : "Sin estimación registrada para esta semana"}>
+                        {row.estimacionFinca != null ? row.estimacionFinca.toLocaleString("es", { maximumFractionDigits: 0 }) : "—"}
+                      </td>
                       {data?.meta?.simulacion && (
                         <>
                           <td className="text-end">{row.cajasReales != null ? row.cajasReales.toLocaleString("es", { maximumFractionDigits: 0 }) : "—"}</td>
@@ -825,7 +829,7 @@ function PronosticoSemanal() {
                     {abiertas.has(key) && (
                       <tr>
                         <td />
-                        <td colSpan={data?.meta?.simulacion ? 13 : 11} className="py-2" style={{ background: "#f8fafc" }}>
+                        <td colSpan={data?.meta?.simulacion ? 14 : 12} className="py-2" style={{ background: "#f8fafc" }}>
                           <table className="table table-sm mb-0" style={{ fontSize: "0.72rem", maxWidth: 560, background: "transparent" }}>
                             <thead>
                               <tr className="text-secondary">
