@@ -202,6 +202,7 @@ function PronosticoSemanal() {
   const [pctNoCosechadoAplicado, setPctNoCosechadoAplicado] = useState(null);
 
   const [editandoRatio, setEditandoRatio] = useState(null);
+  const [editandoAdicional, setEditandoAdicional] = useState(null);
   // El ratio editado se guarda para todos (solo en semanas proyectadas) y se refleja en la tabla, las cajas y el gráfico de ratio.
   const puedeEditarRatio = hasPermission("proyeccion.editar");
   // Indicador cuyas gráficas se muestran (null = cerrado).
@@ -317,6 +318,32 @@ function PronosticoSemanal() {
     setPctNoCosechadoAplicado(null);
   }
 
+  // Guarda las cajas adicionales de una semana (vacío o 0 = quitar) y actualiza solo esa fila, sin recargar.
+  async function guardarAdicional(row, texto) {
+    const limpio = String(texto).trim().replace(",", ".");
+    const cajas = limpio === "" ? 0 : Number(limpio);
+    if (Number.isNaN(cajas) || cajas < 0) {
+      setError("Las cajas adicionales deben ser un número mayor o igual a 0.");
+      return;
+    }
+    if (Math.abs(cajas - (row.cajasAdicionales || 0)) < 0.005) return;
+    try {
+      await apiFetch("/pronostico/cajas-adicionales", { method: "PUT", body: JSON.stringify({ fincaUuid: row.fincaUuid || null, semanaCodigo: row.semanaCodigo, cajas: cajas || null }) });
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              rows: prev.rows.map((r) =>
+                r.fincaUuid === row.fincaUuid && r.semanaCodigo === row.semanaCodigo ? { ...r, cajasAdicionales: cajas, cajasTotal: Math.round((r.cajas20kg + cajas) * 100) / 100 } : r,
+              ),
+            }
+          : prev,
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   // Guarda el ratio editado de una semana proyectada (vacío = volver al calculado) y recarga la proyección.
   async function guardarRatio(row, texto) {
     const limpio = String(texto).trim().replace(",", ".");
@@ -345,6 +372,7 @@ function PronosticoSemanal() {
             ...r,
             ratio,
             cajas20kg: Math.round(r.racimosCosechados * ratio * 100) / 100,
+            cajasTotal: Math.round((r.racimosCosechados * ratio + (r.cajasAdicionales || 0)) * 100) / 100,
             cajasCiLow: factor != null && r.cajasCiLow != null ? Math.round(r.cajasCiLow * factor * 100) / 100 : r.cajasCiLow,
             cajasCiHigh: factor != null && r.cajasCiHigh != null ? Math.round(r.cajasCiHigh * factor * 100) / 100 : r.cajasCiHigh,
             ratioManual: true,
@@ -635,6 +663,8 @@ function PronosticoSemanal() {
                   <ThGrafica metrica="ratio" onGraficas={setGraficas} className="text-end">Ratio</ThGrafica>
                   <ThGrafica metrica="aprovechamiento" onGraficas={setGraficas} className="text-end">Aprovechamiento</ThGrafica>
                   <ThGrafica metrica="cajas" onGraficas={setGraficas} className="text-end">Cajas 20k</ThGrafica>
+                  <th className="text-end" title="Cajas que se agregan a mano en cada semana">Cajas adicionales</th>
+                  <th className="text-end">Total cajas</th>
                   {data?.meta?.simulacion && <th className="text-end">Cajas reales</th>}
                   {data?.meta?.simulacion && <th className="text-end">Dif.</th>}
                   <th>Confianza</th>
@@ -642,10 +672,10 @@ function PronosticoSemanal() {
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 12 : 10} className="text-center text-secondary py-4">Cargando...</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 14 : 12} className="text-center text-secondary py-4">Cargando...</td></tr>
                 )}
                 {!loading && (!data || data.rows.length === 0) && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 12 : 10} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 14 : 12} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
                 )}
                 {!loading && data && data.rows.map((row, idx) => {
                   const key = rowKey(row);
@@ -658,7 +688,7 @@ function PronosticoSemanal() {
                     <Fragment key={key}>
                     {esNuevaFinca && (
                       <tr>
-                        <td colSpan={data?.meta?.simulacion ? 12 : 10} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
+                        <td colSpan={data?.meta?.simulacion ? 14 : 12} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
                           {row.fincaCodigo} — {row.fincaNombre}
                         </td>
                       </tr>
@@ -712,6 +742,36 @@ function PronosticoSemanal() {
                       </td>
                       <td className="text-end">{(row.aprovechamiento * 100).toFixed(1)}%</td>
                       <td className="text-end fw-bold">{cajasMostradas.toLocaleString("es", { maximumFractionDigits: 0 })}</td>
+                      <td className="text-end" style={{ minWidth: "6rem" }}>
+                        {editandoAdicional === key ? (
+                          <input
+                            type="number"
+                            autoFocus
+                            className="form-control form-control-sm text-end rounded-3"
+                            defaultValue={row.cajasAdicionales || ""}
+                            step="1"
+                            min="0"
+                            onBlur={(e) => {
+                              setEditandoAdicional(null);
+                              guardarAdicional(row, e.target.value);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") e.target.blur();
+                              if (e.key === "Escape") setEditandoAdicional(null);
+                            }}
+                          />
+                        ) : (
+                          <span
+                            role={puedeEditarRatio ? "button" : undefined}
+                            title={puedeEditarRatio ? "Clic para escribir las cajas adicionales de esta semana (se guardan)" : undefined}
+                            onClick={() => puedeEditarRatio && setEditandoAdicional(key)}
+                            style={{ cursor: puedeEditarRatio ? "pointer" : "default", borderBottom: puedeEditarRatio ? "1px dashed #94a3b8" : undefined, color: row.cajasAdicionales ? "#b45309" : "#94a3b8", fontWeight: row.cajasAdicionales ? 600 : undefined }}
+                          >
+                            {row.cajasAdicionales ? row.cajasAdicionales.toLocaleString("es", { maximumFractionDigits: 0 }) : "0"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-end fw-bold">{(row.cajasTotal ?? cajasMostradas).toLocaleString("es", { maximumFractionDigits: 0 })}</td>
                       {data?.meta?.simulacion && (
                         <>
                           <td className="text-end">{row.cajasReales != null ? row.cajasReales.toLocaleString("es", { maximumFractionDigits: 0 }) : "—"}</td>
@@ -733,7 +793,7 @@ function PronosticoSemanal() {
                     {abiertas.has(key) && (
                       <tr>
                         <td />
-                        <td colSpan={data?.meta?.simulacion ? 11 : 9} className="py-2" style={{ background: "#f8fafc" }}>
+                        <td colSpan={data?.meta?.simulacion ? 13 : 11} className="py-2" style={{ background: "#f8fafc" }}>
                           <table className="table table-sm mb-0" style={{ fontSize: "0.72rem", maxWidth: 560, background: "transparent" }}>
                             <thead>
                               <tr className="text-secondary">
