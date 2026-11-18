@@ -47,16 +47,59 @@ export default function ProfilePage() {
     saveSession({ accessToken: localStorage.getItem("corbana_access_token"), refreshToken: localStorage.getItem("corbana_refresh_token"), user: merged });
   }
 
+  // La firma se acepta en cualquier formato de imagen que el navegador pueda abrir (PNG, JPG, WEBP, GIF, BMP...) y se convierte aquí a
+  // PNG: se reduce si es muy grande y, si la imagen no trae transparencia (p. ej. una foto o un escaneo en JPG), el fondo blanco se
+  // vuelve transparente para que la firma quede limpia sobre el documento.
+  async function firmaComoPng(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = () => reject(new Error("No se pudo abrir la imagen. Usa PNG, JPG o WEBP (las fotos HEIC del iPhone conviértelas a JPG)."));
+        i.src = url;
+      });
+      const escala = Math.min(1, 1200 / img.naturalWidth, 600 / img.naturalHeight);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * escala));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * escala));
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const datos = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const px = datos.data;
+      let tieneTransparencia = false;
+      for (let i = 3; i < px.length; i += 4) {
+        if (px[i] < 250) {
+          tieneTransparencia = true;
+          break;
+        }
+      }
+      if (!tieneTransparencia) {
+        for (let i = 0; i < px.length; i += 4) {
+          const brillo = (px[i] + px[i + 1] + px[i + 2]) / 3;
+          if (brillo > 225) px[i + 3] = 0; // fondo claro -> transparente
+          else if (brillo > 190) px[i + 3] = Math.round(((225 - brillo) / 35) * 255); // borde suave
+        }
+        ctx.putImageData(datos, 0, 0);
+      }
+      return await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
   async function handleSubirFirma(file) {
     setFirmaMensaje("");
     setError("");
     if (!file) return;
-    if (file.type !== "image/png") return setError("La firma debe ser una imagen PNG (idealmente con fondo transparente).");
-    if (file.size > 1024 * 1024) return setError("La imagen de la firma no puede pesar más de 1 MB.");
+    if (!file.type.startsWith("image/")) return setError("La firma debe ser una imagen (PNG, JPG, WEBP...).");
     setSubiendoFirma(true);
     try {
+      const png = await firmaComoPng(file);
+      if (!png) throw new Error("No se pudo convertir la imagen de la firma.");
+      if (png.size > 1024 * 1024) throw new Error("La imagen de la firma es demasiado grande incluso después de reducirla; recórtala alrededor de la firma.");
       const fd = new FormData();
-      fd.append("firma", file, file.name);
+      fd.append("firma", png, "firma.png");
       const userData = await apiFetchFormData("/auth/me/firma", fd, { method: "PUT" });
       guardarEnSesion(userData);
       await cargarVistaFirma();
@@ -237,7 +280,7 @@ export default function ProfilePage() {
             <FiEdit3 size={18} /> Mi firma
           </h5>
           <p className="small text-secondary mb-3">
-            Sube una imagen <strong>PNG</strong> de tu firma (idealmente con fondo transparente, máximo 1 MB). Se usa para firmar los documentos y se guarda en la carpeta de Google Drive de Corbana.
+            Sube una imagen de tu firma (<strong>PNG, JPG, WEBP</strong> u otro formato común). Se convierte a PNG y, si tiene fondo blanco, el fondo se vuelve transparente. Se usa para firmar los documentos y se guarda en la carpeta de Google Drive de Corbana.
           </p>
           <div
             className="border rounded-3 d-flex align-items-center justify-content-center mb-3"
@@ -250,7 +293,7 @@ export default function ProfilePage() {
               <span className="small text-secondary">{user?.tieneFirma ? "Cargando firma..." : "Todavía no has subido tu firma"}</span>
             )}
           </div>
-          <input ref={inputFirmaRef} type="file" accept="image/png" className="d-none" onChange={(e) => handleSubirFirma(e.target.files?.[0])} />
+          <input ref={inputFirmaRef} type="file" accept="image/*" className="d-none" onChange={(e) => handleSubirFirma(e.target.files?.[0])} />
           <div className="d-flex flex-wrap align-items-center gap-2">
             <button type="button" disabled={subiendoFirma} className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-1" onClick={() => inputFirmaRef.current?.click()}>
               <FiUpload /> {subiendoFirma ? "Guardando..." : user?.tieneFirma ? "Cambiar firma" : "Subir firma"}
