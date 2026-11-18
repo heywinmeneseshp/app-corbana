@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FiActivity, FiDownload, FiRefreshCw, FiChevronDown, FiChevronUp, FiAlertTriangle, FiBarChart2 } from "react-icons/fi";
+import { FiActivity, FiDownload, FiRefreshCw, FiChevronDown, FiChevronUp, FiAlertTriangle, FiBarChart2, FiChevronRight } from "react-icons/fi";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import ProyeccionAnual from "@/components/proyeccion/ProyeccionAnual";
@@ -32,6 +32,28 @@ const ORIGEN_EDAD = {
   estimado: { color: "#f59e0b", texto: "estimado por hectáreas" },
   mixto: { color: "#65a30d", texto: "saldo real y estimado" },
 };
+
+function DistribucionEdad({ ageBreakdown }) {
+  const max = Math.max(1, ...ageBreakdown.map((a) => a.racimos));
+  return (
+    <div className="d-flex align-items-end gap-1" style={{ height: 28 }} title={
+      ageBreakdown.map((a) => `Edad ${a.edad}: ${a.racimos.toLocaleString("es")} racimos${a.origen ? ` (${ORIGEN_EDAD[a.origen]?.texto || a.origen})` : ""}`).join(" · ")
+    }>
+      {ageBreakdown.map((a) => (
+        <div
+          key={a.edad}
+          style={{
+            width: 6,
+            height: Math.max(2, Math.round((a.racimos / max) * 24)),
+            backgroundColor: ORIGEN_EDAD[a.origen]?.color || "#16a34a",
+            opacity: 0.85,
+            borderRadius: 1,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 const EDADES_COSECHA = [8, 9, 10, 11, 12];
 
@@ -104,6 +126,15 @@ function PronosticoSemanal() {
   const [editandoRatio, setEditandoRatio] = useState(null);
   // Indicador cuyas gráficas se muestran (null = cerrado).
   const [graficas, setGraficas] = useState(null);
+  // Semanas desplegadas (detalle de racimos por edad).
+  const [abiertas, setAbiertas] = useState(new Set());
+  const alternarSemana = (key) =>
+    setAbiertas((prev) => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -451,16 +482,13 @@ function PronosticoSemanal() {
             <table className="table table-sm table-hover mb-0 align-middle" style={{ fontSize: "0.74rem" }}>
               <thead className="table-light">
                 <tr>
+                  <th style={{ width: 24 }} />
                   <th>Semana</th>
                   {mostrarColumnaFinca && <th>Finca</th>}
                   <ThGrafica metrica="hectareas" onGraficas={setGraficas} className="text-end">Hectáreas</ThGrafica>
                   <ThGrafica metrica="racimos" onGraficas={setGraficas} className="text-end">Racimos cosechados</ThGrafica>
                   <ThGrafica metrica="racimosHa" onGraficas={setGraficas} className="text-end">Racimos/ha</ThGrafica>
-                  {EDADES_COSECHA.map((e) => (
-                    <ThGrafica key={e} metrica="edades" onGraficas={setGraficas} className="text-end">
-                      Edad {e}
-                    </ThGrafica>
-                  ))}
+                  <ThGrafica metrica="edades" onGraficas={setGraficas}>Distribución por edad</ThGrafica>
                   <ThGrafica metrica="aprovechamiento" onGraficas={setGraficas} className="text-end">Aprovechamiento</ThGrafica>
                   <ThGrafica metrica="ratio" onGraficas={setGraficas} className="text-end">Ratio</ThGrafica>
                   <ThGrafica metrica="cajas" onGraficas={setGraficas} className="text-end">Cajas 20k</ThGrafica>
@@ -471,10 +499,10 @@ function PronosticoSemanal() {
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 16 : 14} className="text-center text-secondary py-4">Cargando...</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 13 : 11} className="text-center text-secondary py-4">Cargando...</td></tr>
                 )}
                 {!loading && (!data || data.rows.length === 0) && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 16 : 14} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 13 : 11} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
                 )}
                 {!loading && data && data.rows.map((row, idx) => {
                   const key = rowKey(row);
@@ -487,25 +515,21 @@ function PronosticoSemanal() {
                     <Fragment key={key}>
                     {esNuevaFinca && (
                       <tr>
-                        <td colSpan={data?.meta?.simulacion ? 16 : 14} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
+                        <td colSpan={data?.meta?.simulacion ? 13 : 11} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
                           {row.fincaCodigo} — {row.fincaNombre}
                         </td>
                       </tr>
                     )}
                     <tr>
-                      <td>{row.semanaCodigo}</td>
+                      <td className="text-secondary" role="button" style={{ cursor: "pointer" }} title="Ver los racimos por edad de esta semana" onClick={() => alternarSemana(key)}>
+                        {abiertas.has(key) ? <FiChevronDown /> : <FiChevronRight />}
+                      </td>
+                      <td role="button" style={{ cursor: "pointer" }} onClick={() => alternarSemana(key)}>{row.semanaCodigo}</td>
                       {mostrarColumnaFinca && <td>{row.fincaNombre}</td>}
                       <td className="text-end">{row.hectareas != null ? row.hectareas.toLocaleString("es", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "—"}</td>
                       <td className="text-end">{row.racimosCosechados.toLocaleString("es")}</td>
                       <td className="text-end">{row.hectareas > 0 ? (row.racimosCosechados / row.hectareas).toLocaleString("es", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "—"}</td>
-                      {EDADES_COSECHA.map((e) => {
-                        const a = (row.ageBreakdown || []).find((x) => x.edad === e);
-                        return (
-                          <td key={e} className="text-end" style={{ color: a?.origen === "estimado" ? "#b45309" : a?.origen === "mixto" ? "#65a30d" : undefined }} title={a?.origen ? ORIGEN_EDAD[a.origen]?.texto : ""}>
-                            {a ? a.racimos.toLocaleString("es") : "—"}
-                          </td>
-                        );
-                      })}
+                      <td><DistribucionEdad ageBreakdown={row.ageBreakdown} /></td>
                       <td className="text-end" style={{ minWidth: "5rem" }}>
                         {editandoRatio === key ? (
                           <input
@@ -555,6 +579,48 @@ function PronosticoSemanal() {
                         </span>
                       </td>
                     </tr>
+                    {abiertas.has(key) && (
+                      <tr>
+                        <td />
+                        <td colSpan={data?.meta?.simulacion ? 12 : 10} className="py-2" style={{ background: "#f8fafc" }}>
+                          <table className="table table-sm mb-0" style={{ fontSize: "0.72rem", maxWidth: 560, background: "transparent" }}>
+                            <thead>
+                              <tr className="text-secondary">
+                                <th>Edad</th>
+                                <th>Cinta (semana de embolse)</th>
+                                <th className="text-end">Racimos</th>
+                                <th className="text-end">% de la semana</th>
+                                <th>Origen</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {EDADES_COSECHA.map((e) => {
+                                const a = (row.ageBreakdown || []).find((x) => x.edad === e);
+                                const n = ((row.numeroSemana - e) % 52 + 52) % 52 + 1;
+                                return (
+                                  <tr key={e}>
+                                    <td>{e} semanas</td>
+                                    <td className="text-secondary">S{n}</td>
+                                    <td className="text-end fw-medium">{a ? a.racimos.toLocaleString("es") : "—"}</td>
+                                    <td className="text-end text-secondary">{a && row.racimosCosechados > 0 ? `${((a.racimos / row.racimosCosechados) * 100).toFixed(1)}%` : "—"}</td>
+                                    <td>
+                                      {a?.origen ? (
+                                        <span className="d-inline-flex align-items-center gap-1">
+                                          <span style={{ width: 8, height: 8, borderRadius: 2, background: ORIGEN_EDAD[a.origen]?.color || "#16a34a", display: "inline-block" }} />
+                                          {ORIGEN_EDAD[a.origen]?.texto || a.origen}
+                                        </span>
+                                      ) : (
+                                        "—"
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
                     </Fragment>
                   );
                 })}
