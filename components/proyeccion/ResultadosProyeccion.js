@@ -237,7 +237,7 @@ function Grafico({ resultado, metrica }) {
         <LineChart data={datos} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+          <YAxis tick={{ fontSize: 11 }} domain={["dataMin", "dataMax"]} tickCount={6} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
           <Tooltip formatter={(v) => (v == null ? "—" : fmt(v))} labelFormatter={(l) => `Semana ${l}`} />
           <Legend />
           <Line type="monotone" dataKey="proyeccion" name={`${resultado.meta.anio} proyectado`} stroke={COLORES.proyeccion} strokeWidth={2.5} dot={false} />

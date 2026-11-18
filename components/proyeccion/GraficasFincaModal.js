@@ -341,7 +341,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
                   <LineChart data={datosVista} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="semana" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} width={g.dec ? 44 : 50} domain={["auto", "auto"]} tickFormatter={(v) => (g.dec ? fmt(v, g.dec === 3 ? 2 : 0) : v >= 10000 ? `${Math.round(v / 1000)}k` : fmt(v))} />
+                    <YAxis tick={{ fontSize: 10 }} width={g.dec ? 44 : 50} domain={["dataMin", "dataMax"]} tickCount={6} tickFormatter={(v) => (g.dec ? fmt(v, g.dec === 3 ? 2 : 0) : v >= 10000 ? `${Math.round(v / 1000)}k` : fmt(v))} />
                     <Tooltip formatter={(v, nombre) => [fmt(v, g.dec), nombre]} labelFormatter={(l) => `Semana ${l}`} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     {anios.map((y, i) => !excluidos.has(y) && (
