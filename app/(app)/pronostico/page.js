@@ -2,11 +2,12 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FiActivity, FiDownload, FiRefreshCw, FiChevronDown, FiChevronUp, FiAlertTriangle } from "react-icons/fi";
+import { FiActivity, FiDownload, FiRefreshCw, FiChevronDown, FiChevronUp, FiAlertTriangle, FiBarChart2 } from "react-icons/fi";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import RequirePermission from "@/components/RequirePermission";
 import ProyeccionAnual from "@/components/proyeccion/ProyeccionAnual";
 import GraficoRatio from "@/components/precalibracion/GraficoRatio";
+import GraficasSemanalModal from "@/components/proyeccion/GraficasSemanalModal";
 import { hasPermission } from "@/lib/auth";
 
 const SEMANAS_OPCIONES = [4, 8, 12, 26, 52];
@@ -32,25 +33,16 @@ const ORIGEN_EDAD = {
   mixto: { color: "#65a30d", texto: "saldo real y estimado" },
 };
 
-function DistribucionEdad({ ageBreakdown }) {
-  const max = Math.max(1, ...ageBreakdown.map((a) => a.racimos));
+const EDADES_COSECHA = [8, 9, 10, 11, 12];
+
+// Encabezado de columna que abre las gráficas de ese indicador (como en Proyección anual).
+function ThGrafica({ metrica, onGraficas, children, className = "" }) {
   return (
-    <div className="d-flex align-items-end gap-1" style={{ height: 28 }} title={
-      ageBreakdown.map((a) => `Edad ${a.edad}: ${a.racimos.toLocaleString("es")} racimos${a.origen ? ` (${ORIGEN_EDAD[a.origen]?.texto || a.origen})` : ""}`).join(" · ")
-    }>
-      {ageBreakdown.map((a) => (
-        <div
-          key={a.edad}
-          style={{
-            width: 6,
-            height: Math.max(2, Math.round((a.racimos / max) * 24)),
-            backgroundColor: ORIGEN_EDAD[a.origen]?.color || "#16a34a",
-            opacity: 0.85,
-            borderRadius: 1,
-          }}
-        />
-      ))}
-    </div>
+    <th className={className}>
+      <span role="button" className="text-nowrap" style={{ cursor: "pointer", borderBottom: "1px dashed #94a3b8" }} title="Clic para ver las gráficas" onClick={() => onGraficas(metrica)}>
+        {children} <FiBarChart2 size={11} className="text-secondary" />
+      </span>
+    </th>
   );
 }
 
@@ -110,6 +102,8 @@ function PronosticoSemanal() {
 
   const [ratioOverrides, setRatioOverrides] = useState({});
   const [editandoRatio, setEditandoRatio] = useState(null);
+  // Indicador cuyas gráficas se muestran (null = cerrado).
+  const [graficas, setGraficas] = useState(null);
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -454,16 +448,22 @@ function PronosticoSemanal() {
 
         <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
-            <table className="table table-hover mb-0 align-middle">
-              <thead>
+            <table className="table table-sm table-hover mb-0 align-middle" style={{ fontSize: "0.74rem" }}>
+              <thead className="table-light">
                 <tr>
                   <th>Semana</th>
                   {mostrarColumnaFinca && <th>Finca</th>}
-                  <th className="text-end">Racimos cosechados</th>
-                  <th>Distribución por edad</th>
-                  <th className="text-end">Ratio</th>
-                  <th className="text-end">Aprovechamiento</th>
-                  <th className="text-end">Cajas 20k</th>
+                  <ThGrafica metrica="hectareas" onGraficas={setGraficas} className="text-end">Hectáreas</ThGrafica>
+                  <ThGrafica metrica="racimos" onGraficas={setGraficas} className="text-end">Racimos cosechados</ThGrafica>
+                  <ThGrafica metrica="racimosHa" onGraficas={setGraficas} className="text-end">Racimos/ha</ThGrafica>
+                  {EDADES_COSECHA.map((e) => (
+                    <ThGrafica key={e} metrica="edades" onGraficas={setGraficas} className="text-end">
+                      Edad {e}
+                    </ThGrafica>
+                  ))}
+                  <ThGrafica metrica="aprovechamiento" onGraficas={setGraficas} className="text-end">Aprovechamiento</ThGrafica>
+                  <ThGrafica metrica="ratio" onGraficas={setGraficas} className="text-end">Ratio</ThGrafica>
+                  <ThGrafica metrica="cajas" onGraficas={setGraficas} className="text-end">Cajas 20k</ThGrafica>
                   {data?.meta?.simulacion && <th className="text-end">Cajas reales</th>}
                   {data?.meta?.simulacion && <th className="text-end">Dif.</th>}
                   <th>Confianza</th>
@@ -471,10 +471,10 @@ function PronosticoSemanal() {
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 10 : 8} className="text-center text-secondary py-4">Cargando...</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 16 : 14} className="text-center text-secondary py-4">Cargando...</td></tr>
                 )}
                 {!loading && (!data || data.rows.length === 0) && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 10 : 8} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 16 : 14} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
                 )}
                 {!loading && data && data.rows.map((row, idx) => {
                   const key = rowKey(row);
@@ -487,7 +487,7 @@ function PronosticoSemanal() {
                     <Fragment key={key}>
                     {esNuevaFinca && (
                       <tr>
-                        <td colSpan={data?.meta?.simulacion ? 10 : 8} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
+                        <td colSpan={data?.meta?.simulacion ? 16 : 14} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
                           {row.fincaCodigo} — {row.fincaNombre}
                         </td>
                       </tr>
@@ -495,8 +495,17 @@ function PronosticoSemanal() {
                     <tr>
                       <td>{row.semanaCodigo}</td>
                       {mostrarColumnaFinca && <td>{row.fincaNombre}</td>}
+                      <td className="text-end">{row.hectareas != null ? row.hectareas.toLocaleString("es", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "—"}</td>
                       <td className="text-end">{row.racimosCosechados.toLocaleString("es")}</td>
-                      <td><DistribucionEdad ageBreakdown={row.ageBreakdown} /></td>
+                      <td className="text-end">{row.hectareas > 0 ? (row.racimosCosechados / row.hectareas).toLocaleString("es", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "—"}</td>
+                      {EDADES_COSECHA.map((e) => {
+                        const a = (row.ageBreakdown || []).find((x) => x.edad === e);
+                        return (
+                          <td key={e} className="text-end" style={{ color: a?.origen === "estimado" ? "#b45309" : a?.origen === "mixto" ? "#65a30d" : undefined }} title={a?.origen ? ORIGEN_EDAD[a.origen]?.texto : ""}>
+                            {a ? a.racimos.toLocaleString("es") : "—"}
+                          </td>
+                        );
+                      })}
                       <td className="text-end" style={{ minWidth: "5rem" }}>
                         {editandoRatio === key ? (
                           <input
@@ -554,6 +563,17 @@ function PronosticoSemanal() {
           </div>
         </div>
       </div>
+
+      {graficas && data && (
+        <GraficasSemanalModal
+          filas={data.rows.map((r) => {
+            const o = ratioOverrides[rowKey(r)];
+            return o ? { ...r, ratio: o.ratio, cajas20kg: o.cajas20kg } : r;
+          })}
+          metrica={graficas}
+          onClose={() => setGraficas(null)}
+        />
+      )}
 
       <style jsx>{`
         .spin {
