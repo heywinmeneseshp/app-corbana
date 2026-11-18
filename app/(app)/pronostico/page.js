@@ -487,7 +487,7 @@ function PronosticoSemanal() {
                   {mostrarColumnaFinca && <th>Finca</th>}
                   <ThGrafica metrica="hectareas" onGraficas={setGraficas} className="text-end">Hectáreas</ThGrafica>
                   <ThGrafica metrica="edades" onGraficas={setGraficas}>Distribución por edad</ThGrafica>
-                  <ThGrafica metrica="racimos" onGraficas={setGraficas} className="text-end">Racimos cosechados</ThGrafica>
+                  <th className="text-end">Racimos cosechados</th>
                   <ThGrafica metrica="ratio" onGraficas={setGraficas} className="text-end">Ratio</ThGrafica>
                   <ThGrafica metrica="aprovechamiento" onGraficas={setGraficas} className="text-end">Aprovechamiento</ThGrafica>
                   <ThGrafica metrica="cajas" onGraficas={setGraficas} className="text-end">Cajas 20k</ThGrafica>

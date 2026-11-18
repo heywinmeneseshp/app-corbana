@@ -17,9 +17,7 @@ const fmt = (n, d = 0) => (n == null ? "—" : Number(n).toLocaleString("es", { 
 // (sin `real`, la gráfica solo muestra las semanas consultadas).
 export const INDICADORES = [
   { id: "cajas", titulo: "Cajas 20k", dec: 0, fila: (r) => r.cajas20kg, real: (d) => d.cajas },
-  { id: "racimos", titulo: "Racimos cosechados", dec: 0, fila: (r) => r.racimosCosechados, real: (d) => d.racimos },
   { id: "hectareas", titulo: "Hectáreas en producción", dec: 1, fila: (r) => r.hectareas, real: (d) => d.hectareas },
-  { id: "racimosHa", titulo: "Racimos por hectárea en producción", dec: 1, fila: (r) => (r.hectareas > 0 ? r.racimosCosechados / r.hectareas : null), real: (d) => (d.hectareas > 0 ? d.racimos / d.hectareas : null) },
   { id: "edades", titulo: "Racimos por edad de cosecha", dec: 0, porEdad: true },
   { id: "aprovechamiento", titulo: "Aprovechamiento (%)", dec: 1, fila: (r) => (r.aprovechamiento != null ? r.aprovechamiento * 100 : null) },
   { id: "ratio", titulo: "Ratio (cajas por racimo)", dec: 2, fila: (r) => r.ratio, real: (d) => d.ratio },
