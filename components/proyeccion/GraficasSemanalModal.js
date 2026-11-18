@@ -16,12 +16,12 @@ const fmt = (n, d = 0) => (n == null ? "—" : Number(n).toLocaleString("es", { 
 // Indicadores. `fila(r)` lee una fila de la proyección (semana consultada) y `real(d)` un dato real de la serie anual
 // (sin `real`, la gráfica solo muestra las semanas consultadas).
 export const INDICADORES = [
+  { id: "ratio", titulo: "Ratio (cajas por racimo)", dec: 2, fila: (r) => r.ratio, real: (d) => d.ratio },
   { id: "cajas", titulo: "Cajas 20k", dec: 0, fila: (r) => r.cajas20kg, real: (d) => d.cajas },
-  { id: "hectareas", titulo: "Hectáreas en producción", dec: 1, fila: (r) => r.hectareas, real: (d) => d.hectareas },
   { id: "edades", titulo: "Racimos por edad de cosecha", dec: 0, porEdad: true },
   // Real: aprovechamiento de la cinta embolsada esa semana (solo cintas cerradas). Proyectado: el que aplica la proyección.
   { id: "aprovechamiento", titulo: "Aprovechamiento de la cinta (%) · por semana de embolse", dec: 1, fila: (r) => (r.aprovechamiento != null ? r.aprovechamiento * 100 : null), real: (d) => (d.aprovechamiento != null ? d.aprovechamiento * 100 : null) },
-  { id: "ratio", titulo: "Ratio (cajas por racimo)", dec: 2, fila: (r) => r.ratio, real: (d) => d.ratio },
+  { id: "hectareas", titulo: "Hectáreas en producción", dec: 1, fila: (r) => r.hectareas, real: (d) => d.hectareas },
 ];
 
 // Gráficas de la proyección semanal sobre las 53 semanas del año: el año en curso real, los 3 años anteriores, su promedio y lo proyectado
@@ -106,7 +106,8 @@ export default function GraficasSemanalModal({ filas, seriesAnuales = {}, metric
     return [...porN.values()];
   }, [serie, anios, anioBase, delGrupo, ocultos, omitir]);
 
-  const orden = [...INDICADORES].sort((a, b) => (a.id === metrica ? -1 : b.id === metrica ? 1 : 0));
+  // Orden fijo: ratio primero y hectáreas al final; la gráfica del encabezado pulsado se resalta.
+  const orden = INDICADORES;
   const hayPrevios = anios.some((y) => y !== anioBase && !ocultos.has(y));
   const alternar = (y) =>
     setOcultos((prev) => {
