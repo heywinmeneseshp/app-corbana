@@ -318,24 +318,29 @@ function PronosticoSemanal() {
     setPctNoCosechadoAplicado(null);
   }
 
-  // Guarda las cajas adicionales de una semana (vacío o 0 = quitar) y actualiza solo esa fila, sin recargar.
+  // Cajas adicionales: por defecto la estimación de las fincas externas. Editarlas guarda el valor (también 0); `null` (botón ↺ o dejar el
+  // campo vacío) vuelve a la estimación. Se actualiza solo esa fila, sin recargar.
   async function guardarAdicional(row, texto) {
-    const limpio = String(texto).trim().replace(",", ".");
-    const cajas = limpio === "" ? 0 : Number(limpio);
-    if (Number.isNaN(cajas) || cajas < 0) {
+    const limpio = texto === null ? "" : String(texto).trim().replace(",", ".");
+    const cajas = limpio === "" ? null : Number(limpio);
+    if (cajas !== null && (Number.isNaN(cajas) || cajas < 0)) {
       setError("Las cajas adicionales deben ser un número mayor o igual a 0.");
       return;
     }
-    if (Math.abs(cajas - (row.cajasAdicionales || 0)) < 0.005) return;
+    if (cajas === null && !row.cajasAdicionalesManual) return;
+    if (cajas !== null && row.cajasAdicionalesManual && Math.abs(cajas - (row.cajasAdicionales || 0)) < 0.005) return;
+    if (cajas !== null && !row.cajasAdicionalesManual && Math.abs(cajas - (row.cajasAdicionalesEstimado || 0)) < 0.005) return;
     try {
-      await apiFetch("/pronostico/cajas-adicionales", { method: "PUT", body: JSON.stringify({ fincaUuid: row.fincaUuid || null, semanaCodigo: row.semanaCodigo, cajas: cajas || null }) });
+      await apiFetch("/pronostico/cajas-adicionales", { method: "PUT", body: JSON.stringify({ fincaUuid: row.fincaUuid || null, semanaCodigo: row.semanaCodigo, cajas }) });
       setData((prev) =>
         prev
           ? {
               ...prev,
-              rows: prev.rows.map((r) =>
-                r.fincaUuid === row.fincaUuid && r.semanaCodigo === row.semanaCodigo ? { ...r, cajasAdicionales: cajas, cajasTotal: Math.round((r.cajas20kg + cajas) * 100) / 100 } : r,
-              ),
+              rows: prev.rows.map((r) => {
+                if (r.fincaUuid !== row.fincaUuid || r.semanaCodigo !== row.semanaCodigo) return r;
+                const v = cajas === null ? r.cajasAdicionalesEstimado || 0 : cajas;
+                return { ...r, cajasAdicionales: v, cajasAdicionalesManual: cajas !== null, cajasTotal: Math.round((r.cajas20kg + v) * 100) / 100 };
+              }),
             }
           : prev,
       );
@@ -663,7 +668,7 @@ function PronosticoSemanal() {
                   <ThGrafica metrica="ratio" onGraficas={setGraficas} className="text-end">Ratio</ThGrafica>
                   <ThGrafica metrica="aprovechamiento" onGraficas={setGraficas} className="text-end">Aprovechamiento</ThGrafica>
                   <ThGrafica metrica="cajas" onGraficas={setGraficas} className="text-end">Cajas 20k</ThGrafica>
-                  <th className="text-end" title="Cajas que se agregan a mano en cada semana">Cajas adicionales</th>
+                  <th className="text-end" title="Por defecto, la estimación de cajas de las fincas externas; se puede editar">Cajas adicionales</th>
                   <th className="text-end">Total cajas</th>
                   {data?.meta?.simulacion && <th className="text-end">Cajas reales</th>}
                   {data?.meta?.simulacion && <th className="text-end">Dif.</th>}
@@ -748,7 +753,7 @@ function PronosticoSemanal() {
                             type="number"
                             autoFocus
                             className="form-control form-control-sm text-end rounded-3"
-                            defaultValue={row.cajasAdicionales || ""}
+                            defaultValue={row.cajasAdicionales ?? ""}
                             step="1"
                             min="0"
                             onBlur={(e) => {
@@ -761,13 +766,21 @@ function PronosticoSemanal() {
                             }}
                           />
                         ) : (
-                          <span
-                            role={puedeEditarRatio ? "button" : undefined}
-                            title={puedeEditarRatio ? "Clic para escribir las cajas adicionales de esta semana (se guardan)" : undefined}
-                            onClick={() => puedeEditarRatio && setEditandoAdicional(key)}
-                            style={{ cursor: puedeEditarRatio ? "pointer" : "default", borderBottom: puedeEditarRatio ? "1px dashed #94a3b8" : undefined, color: row.cajasAdicionales ? "#b45309" : "#94a3b8", fontWeight: row.cajasAdicionales ? 600 : undefined }}
-                          >
-                            {row.cajasAdicionales ? row.cajasAdicionales.toLocaleString("es", { maximumFractionDigits: 0 }) : "0"}
+                          <span className="d-inline-flex align-items-center gap-1">
+                            <span
+                              role={puedeEditarRatio ? "button" : undefined}
+                              title={`${row.cajasAdicionalesManual ? "Editado a mano" : "Estimación de las fincas externas"} · estimación: ${(row.cajasAdicionalesEstimado || 0).toLocaleString("es", { maximumFractionDigits: 0 })}${puedeEditarRatio ? " · clic para editar" : ""}`}
+                              onClick={() => puedeEditarRatio && setEditandoAdicional(key)}
+                              style={{ cursor: puedeEditarRatio ? "pointer" : "default", borderBottom: puedeEditarRatio ? "1px dashed #94a3b8" : undefined, color: row.cajasAdicionalesManual ? "#b45309" : row.cajasAdicionales ? undefined : "#94a3b8", fontWeight: row.cajasAdicionalesManual ? 600 : undefined }}
+                            >
+                              {(row.cajasAdicionales || 0).toLocaleString("es", { maximumFractionDigits: 0 })}
+                              {row.cajasAdicionalesManual && " ✎"}
+                            </span>
+                            {row.cajasAdicionalesManual && puedeEditarRatio && (
+                              <button type="button" className="btn btn-link btn-sm p-0 text-secondary" style={{ lineHeight: 1 }} title="Volver a la estimación de las fincas externas" onClick={() => guardarAdicional(row, null)}>
+                                ↺
+                              </button>
+                            )}
                           </span>
                         )}
                       </td>
