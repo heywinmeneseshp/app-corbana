@@ -16,6 +16,7 @@ import {
   exportarEscenario,
 } from "@/lib/proyeccion/api";
 import PlanHectareas from "./PlanHectareas";
+import FincasExternas from "./FincasExternas";
 import ParametrosFinca from "./ParametrosFinca";
 import ResultadosProyeccion from "./ResultadosProyeccion";
 
@@ -285,6 +286,7 @@ export default function ProyeccionAnual() {
             {[
               ["resultados", "Resultados"],
               ["hectareas", "Hectáreas nuevas", draft.areas.length],
+              ["externas", "Fincas externas"],
               ["parametros", "Parámetros y aprovechamiento"],
             ].map(([id, label, cuenta]) => {
               const activa = seccion === id;
@@ -318,6 +320,8 @@ export default function ProyeccionAnual() {
                 <ResultadosProyeccion resultado={resultado} productos={draft.productos || []} onProductosChange={(productos) => setDraft((d) => ({ ...d, productos }))} puedeEditar={puedeEditar} nombreEscenario={draft.nombre} params={draft.params} onParamsChange={(params) => setDraft((d) => ({ ...d, params }))} />
               </>
             ) : null)}
+
+          {seccion === "externas" && <FincasExternas escenarioUuid={uuid} puedeEditar={puedeEditar} onGuardado={() => calcular(uuid)} />}
 
           {seccion === "hectareas" && (
             <PlanHectareas

@@ -115,6 +115,11 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
   }, [filas, metrica, periodo, ocultas]);
 
   const totalGeneral = [...totalesFinca.values()].reduce((a, b) => a + b, 0);
+  // Cajas de las fincas externas (de su estimación): columnas aparte, solo en la métrica de cajas.
+  const conExternas = metrica === "cajas" && porSemana.some((s) => s.cajasExternas > 0);
+  const externasDe = (clave) =>
+    periodo === "semana" ? porSemana.find((s) => s.semanaCodigo === clave)?.cajasExternas || 0 : porSemana.filter((s) => mesDe(s.fechaInicio) === Number(clave)).reduce((a, s) => a + (s.cajasExternas || 0), 0);
+  const totalExternas = porSemana.reduce((a, s) => a + (s.cajasExternas || 0), 0);
   // Encabezados y columna de semana/mes con color propio para distinguirlos de los datos.
   const encabezado = { background: "#166534", color: "#fff" };
   const primeraCol = "#e8f6ee";
@@ -147,6 +152,16 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
             >
               Total
             </th>
+            {conExternas && (
+              <>
+                <th className="text-center" style={{ minWidth: 92, ...encabezado }} title="Cajas de las fincas externas (su estimación, cargada en la pestaña Fincas externas)">
+                  Externas
+                </th>
+                <th className="text-center" style={{ minWidth: 100, ...encabezado }}>
+                  Total + externas
+                </th>
+              </>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -178,6 +193,12 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
                   <td className="text-center fw-semibold" style={{ background: pie, ...bordeArriba }}>
                     {fmt(totalesPeriodo.get(String(pr.clave)))}
                   </td>
+                  {conExternas && (
+                    <>
+                      <td className="text-center" style={bordeArriba}>{fmt(externasDe(pr.clave))}</td>
+                      <td className="text-center fw-semibold" style={{ background: pie, ...bordeArriba }}>{fmt((totalesPeriodo.get(String(pr.clave)) || 0) + externasDe(pr.clave))}</td>
+                    </>
+                  )}
                 </tr>
                 {detalle.map((d, di) => {
                   const bordeAbajo = di === detalle.length - 1 ? { borderBottom: "3px solid #14532d" } : {};
@@ -194,6 +215,7 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
                     <td className="text-center small fw-semibold" style={{ background: d.resalta ? "#d3e2d8" : "#dbe7df", ...bordeAbajo }}>
                       {d.total()}
                     </td>
+                    {conExternas && <td colSpan={2} style={{ background: "#eff5f1", ...bordeAbajo }} />}
                   </tr>
                   );
                 })}
@@ -210,6 +232,12 @@ function Pivot({ resultado, metrica, periodo, ocultas, onGraficas }) {
               </td>
             ))}
             <td className="text-center" style={{ ...encabezado }}>{fmt(totalGeneral)}</td>
+            {conExternas && (
+              <>
+                <td className="text-center" style={{ background: pie }}>{fmt(totalExternas)}</td>
+                <td className="text-center" style={{ ...encabezado }}>{fmt(totalGeneral + totalExternas)}</td>
+              </>
+            )}
           </tr>
         </tfoot>
       </table>
