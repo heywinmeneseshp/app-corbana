@@ -238,7 +238,7 @@ function PronosticoSemanal() {
         <div className="mb-4 d-flex flex-wrap align-items-start justify-content-between gap-3">
           <div>
             <h1 className="fw-bold h3 mb-1 d-flex align-items-center gap-2">
-              <FiActivity /> Proyección
+              <FiActivity /> Proyección semanal
             </h1>
             <p className="text-secondary mb-0">Proyección de cajas 20kg por finca: saldos reales por cinta y, donde no hay saldo, embolse estimado con hectáreas productivas y el comportamiento de años pasados.</p>
           </div>
@@ -589,7 +589,7 @@ export default function PronosticoPage() {
           <ul className="nav nav-pills gap-1 mb-3">
             <li className="nav-item">
               <button type="button" className={`nav-link btn-sm py-1 px-3 ${vista === "pronostico" ? "active" : ""}`} onClick={() => setVista("pronostico")}>
-                Pronóstico
+                Proyección semanal
               </button>
             </li>
             <li className="nav-item">
