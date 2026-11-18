@@ -8,6 +8,7 @@ import RequirePermission from "@/components/RequirePermission";
 import ProyeccionAnual from "@/components/proyeccion/ProyeccionAnual";
 import GraficoRatio from "@/components/precalibracion/GraficoRatio";
 import GraficasSemanalModal from "@/components/proyeccion/GraficasSemanalModal";
+import ModalShell from "@/components/ModalShell";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { calcularColorSemana, COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 
@@ -57,6 +58,58 @@ function DistribucionEdad({ ageBreakdown }) {
 }
 
 const EDADES_COSECHA = [8, 9, 10, 11, 12];
+
+// Detalle de la columna "Estimación Finca": lo que estimó cada finca (propias y luego externas) en cada semana de la tabla, con totales.
+function EstimacionFincasModal({ detalle, onClose }) {
+  const { fincas = [], semanas = [], valores = {} } = detalle || {};
+  const fmt0 = (v) => (v == null ? "—" : Number(v).toLocaleString("es", { maximumFractionDigits: 0 }));
+  const totalSemana = (sc) => fincas.reduce((a, f) => a + (valores[f.uuid]?.[sc] || 0), 0);
+  const totalFinca = (u) => semanas.reduce((a, sc) => a + (valores[u]?.[sc] || 0), 0);
+  return (
+    <ModalShell title="Estimación de las fincas por semana" onClose={onClose} size="xl">
+      {fincas.length === 0 ? (
+        <p className="small text-secondary mb-0">No hay estimaciones registradas para estas semanas.</p>
+      ) : (
+        <div className="table-responsive">
+          <table className="table table-sm table-hover mb-0 align-middle text-center" style={{ fontSize: "0.82rem" }}>
+            <thead className="table-light">
+              <tr>
+                <th className="text-start">Finca</th>
+                {semanas.map((sc) => (
+                  <th key={sc}>{sc}</th>
+                ))}
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fincas.map((f) => (
+                <tr key={f.uuid}>
+                  <td className="text-start text-nowrap">
+                    {f.nombre}
+                    {f.externa && <span className="badge rounded-1 ms-1 fw-normal" style={{ background: "#e2e8f0", color: "#334155", fontSize: "0.65rem" }}>externa</span>}
+                  </td>
+                  {semanas.map((sc) => (
+                    <td key={sc}>{fmt0(valores[f.uuid]?.[sc])}</td>
+                  ))}
+                  <td className="fw-semibold">{fmt0(totalFinca(f.uuid))}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="table-light fw-bold">
+                <td className="text-start">Total</td>
+                {semanas.map((sc) => (
+                  <td key={sc}>{fmt0(totalSemana(sc))}</td>
+                ))}
+                <td>{fmt0(semanas.reduce((a, sc) => a + totalSemana(sc), 0))}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </ModalShell>
+  );
+}
 
 // Patrón de corte de las últimas 5 semanas liquidadas: cada fila es la cinta que cumplió 12 semanas en esa semana liquidada (cosecha terminada): % de lo procesado en cada edad y
 // aprovechamiento ((procesado + recusado) ÷ embolsado), como en el panel inicial y Estimaciones. `porGrupo`: { [fincaUuid | "GLOBAL"]: filas }.
@@ -222,6 +275,7 @@ function PronosticoSemanal() {
 
   const [editandoRatio, setEditandoRatio] = useState(null);
   const [editandoAdicional, setEditandoAdicional] = useState(null);
+  const [verEstimacionFincas, setVerEstimacionFincas] = useState(false);
   // El ratio editado se guarda para todos (solo en semanas proyectadas) y se refleja en la tabla, las cajas y el gráfico de ratio.
   const puedeEditarRatio = hasPermission("proyeccion.editar");
   // Indicador cuyas gráficas se muestran (null = cerrado).
@@ -689,7 +743,17 @@ function PronosticoSemanal() {
                   <ThGrafica metrica="cajas" onGraficas={setGraficas} className="text-end">Cajas 20k</ThGrafica>
                   <th className="text-end" title="Por defecto, la estimación de cajas de las fincas externas; se puede editar">Cajas adicionales</th>
                   <th className="text-end">Total cajas</th>
-                  <th className="text-end" title="Suma de lo que estimaron las fincas para esa semana (Estimaciones finca), incluidas las externas">Estimación Finca</th>
+                  <th className="text-end">
+                    <span
+                      role="button"
+                      className="text-nowrap"
+                      style={{ cursor: "pointer", borderBottom: "1px dashed #94a3b8" }}
+                      title="Suma de lo que estimaron las fincas para esa semana (incluidas las externas). Clic para ver la estimación de cada finca."
+                      onClick={() => setVerEstimacionFincas(true)}
+                    >
+                      Estimación Finca
+                    </span>
+                  </th>
                   {data?.meta?.simulacion && <th className="text-end">Cajas reales</th>}
                   {data?.meta?.simulacion && <th className="text-end">Dif.</th>}
                   <th>Confianza</th>
@@ -876,6 +940,8 @@ function PronosticoSemanal() {
           </div>
         </div>
       </div>
+
+      {verEstimacionFincas && data && <EstimacionFincasModal detalle={data.estimacionPorFinca} onClose={() => setVerEstimacionFincas(false)} />}
 
       {graficas && data && (
         <GraficasSemanalModal
