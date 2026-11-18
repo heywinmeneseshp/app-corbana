@@ -486,11 +486,11 @@ function PronosticoSemanal() {
                   <th>Semana</th>
                   {mostrarColumnaFinca && <th>Finca</th>}
                   <ThGrafica metrica="hectareas" onGraficas={setGraficas} className="text-end">Hectáreas</ThGrafica>
-                  <ThGrafica metrica="racimos" onGraficas={setGraficas} className="text-end">Racimos cosechados</ThGrafica>
                   <ThGrafica metrica="racimosHa" onGraficas={setGraficas} className="text-end">Racimos/ha</ThGrafica>
                   <ThGrafica metrica="edades" onGraficas={setGraficas}>Distribución por edad</ThGrafica>
-                  <ThGrafica metrica="aprovechamiento" onGraficas={setGraficas} className="text-end">Aprovechamiento</ThGrafica>
+                  <ThGrafica metrica="racimos" onGraficas={setGraficas} className="text-end">Racimos cosechados</ThGrafica>
                   <ThGrafica metrica="ratio" onGraficas={setGraficas} className="text-end">Ratio</ThGrafica>
+                  <ThGrafica metrica="aprovechamiento" onGraficas={setGraficas} className="text-end">Aprovechamiento</ThGrafica>
                   <ThGrafica metrica="cajas" onGraficas={setGraficas} className="text-end">Cajas 20k</ThGrafica>
                   {data?.meta?.simulacion && <th className="text-end">Cajas reales</th>}
                   {data?.meta?.simulacion && <th className="text-end">Dif.</th>}
@@ -527,9 +527,9 @@ function PronosticoSemanal() {
                       <td role="button" style={{ cursor: "pointer" }} onClick={() => alternarSemana(key)}>{row.semanaCodigo}</td>
                       {mostrarColumnaFinca && <td>{row.fincaNombre}</td>}
                       <td className="text-end">{row.hectareas != null ? row.hectareas.toLocaleString("es", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "—"}</td>
-                      <td className="text-end">{row.racimosCosechados.toLocaleString("es")}</td>
                       <td className="text-end">{row.hectareas > 0 ? (row.racimosCosechados / row.hectareas).toLocaleString("es", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "—"}</td>
                       <td><DistribucionEdad ageBreakdown={row.ageBreakdown} /></td>
+                      <td className="text-end">{row.racimosCosechados.toLocaleString("es")}</td>
                       <td className="text-end" style={{ minWidth: "5rem" }}>
                         {editandoRatio === key ? (
                           <input
