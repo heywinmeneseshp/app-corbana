@@ -174,7 +174,7 @@ export default function RegistrarEmbolsePage() {
     setGuardandoArea(true);
     setError("");
     try {
-      await apiFetch(`/lotes/${areaFaltante.loteUuid}/area-produccion`, { method: "POST", body: JSON.stringify({ area, semanaUuid: semanaEmbolseUuid }) });
+      await apiFetch("/racimo-movimientos/area-produccion", { method: "POST", body: JSON.stringify({ loteUuid: areaFaltante.loteUuid, semanaUuid: semanaEmbolseUuid, area }) });
       setAreaFaltante(null);
       setGuardandoArea(false);
       await handleSubmit();
