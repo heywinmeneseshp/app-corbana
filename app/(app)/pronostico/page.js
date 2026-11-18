@@ -194,6 +194,8 @@ function PronosticoSemanal() {
   // Ventana de la gráfica del ratio (semanas antes y después de hoy); se aplica al pulsar Enter o salir del campo.
   const [ratioPasadas, setRatioPasadas] = useState(26);
   const [ratioFuturas, setRatioFuturas] = useState(26);
+  // Año en particular para comparar en el gráfico de ratio ("" = ninguno).
+  const [anioRatio, setAnioRatio] = useState("");
 
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
   const [pctNoCosechadoInput, setPctNoCosechadoInput] = useState("");
@@ -526,10 +528,24 @@ function PronosticoSemanal() {
           <div className="row g-3 mb-3">
           <div className="col-12 col-xl-7">
             <GraficoRatio
-              datos={data.ratioSerie.serie}
+              datos={anioRatio ? data.ratioSerie.serie.map((p) => ({ ...p, ratioAnio: p.porAnio?.[anioRatio] ?? null })) : data.ratioSerie.serie}
+              lineasExtra={anioRatio ? [{ dataKey: "ratioAnio", name: `Ratio ${anioRatio} (misma semana)`, color: "#ea580c" }] : []}
               alcance={`${data.ratioSerie.pasadas} semanas pasadas y ${data.ratioSerie.futuras} futuras, vs. promedio de ${data.ratioSerie.aniosHistoricos} años anteriores`}
               controles={
                 <div className="d-flex align-items-center gap-2 ms-auto me-1 small">
+                  <label className="d-flex align-items-center gap-1 mb-0">
+                    Año
+                    <select className="form-select form-select-sm rounded-3" style={{ width: "6.5rem" }} value={anioRatio} onChange={(e) => setAnioRatio(e.target.value)} title="Agrega la línea del ratio de un año en particular (misma semana)">
+                      <option value="">Ninguno</option>
+                      {[...new Set(data.ratioSerie.serie.flatMap((p) => Object.keys(p.porAnio || {})))]
+                        .sort((a, b) => b - a)
+                        .map((y) => (
+                          <option key={y} value={y}>
+                            {y}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
                   <label className="d-flex align-items-center gap-1 mb-0">
                     Pasadas
                     <input

@@ -17,7 +17,8 @@ import ModalShell from "@/components/ModalShell";
 // Ratio cajas ÷ racimos cosechados: año actual (azul sólida) vs promedio
 // histórico de la misma semana (verde punteada). Mismo diseño que el
 // gráfico de ratio de Estimaciones de Fincas.
-export default function GraficoRatio({ datos, alcance, controles = null }) {
+// `lineasExtra`: líneas adicionales [{ dataKey, name, color }] (p. ej. el ratio de un año en particular).
+export default function GraficoRatio({ datos, alcance, controles = null, lineasExtra = [] }) {
   const [ampliado, setAmpliado] = useState(false);
 
   function renderGrafico(height) {
@@ -36,6 +37,9 @@ export default function GraficoRatio({ datos, alcance, controles = null }) {
           {datos?.some((d) => d.ratioProyectado != null) && (
             <Line type="monotone" dataKey="ratioProyectado" name="Ratio proyectado" stroke="#7c3aed" strokeWidth={2} strokeDasharray="2 3" dot={{ r: 2 }} connectNulls={false} />
           )}
+          {lineasExtra.map((l) => (
+            <Line key={l.dataKey} type="monotone" dataKey={l.dataKey} name={l.name} stroke={l.color} strokeWidth={2} dot={{ r: 2 }} connectNulls />
+          ))}
           <Line
             type="monotone"
             dataKey="promedio"
