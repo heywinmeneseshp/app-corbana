@@ -19,7 +19,8 @@ export const INDICADORES = [
   { id: "cajas", titulo: "Cajas 20k", dec: 0, fila: (r) => r.cajas20kg, real: (d) => d.cajas },
   { id: "hectareas", titulo: "Hectáreas en producción", dec: 1, fila: (r) => r.hectareas, real: (d) => d.hectareas },
   { id: "edades", titulo: "Racimos por edad de cosecha", dec: 0, porEdad: true },
-  { id: "aprovechamiento", titulo: "Aprovechamiento (%)", dec: 1, fila: (r) => (r.aprovechamiento != null ? r.aprovechamiento * 100 : null) },
+  // Real: aprovechamiento de la cinta embolsada esa semana (solo cintas cerradas). Proyectado: el que aplica la proyección.
+  { id: "aprovechamiento", titulo: "Aprovechamiento de la cinta (%) · por semana de embolse", dec: 1, fila: (r) => (r.aprovechamiento != null ? r.aprovechamiento * 100 : null), real: (d) => (d.aprovechamiento != null ? d.aprovechamiento * 100 : null) },
   { id: "ratio", titulo: "Ratio (cajas por racimo)", dec: 2, fila: (r) => r.ratio, real: (d) => d.ratio },
 ];
 
@@ -68,11 +69,6 @@ export default function GraficasSemanalModal({ filas, seriesAnuales = {}, metric
       for (const ind of INDICADORES) if (ind.fila) fila[`${pref}_${ind.id}`] = ind.fila(r);
       if (!r.real && r.anio === anioBase) for (const a of r.ageBreakdown || []) fila[`edadProy${a.edad}`] = a.racimos;
     });
-    // Aprovechamiento: solo las semanas consultadas (no hay dato semanal histórico).
-    for (const r of delGrupo) {
-      const fila = porN.get(r.numeroSemana);
-      if (fila && r.real) fila[`${anioBase}_aprovechamiento`] = r.aprovechamiento * 100;
-    }
     // Promedio de los años anteriores marcados.
     const previos = anios.filter((y) => y !== anioBase && !ocultos.has(y));
     for (const fila of porN.values()) {
@@ -130,7 +126,8 @@ export default function GraficasSemanalModal({ filas, seriesAnuales = {}, metric
         </div>
         <p className="small text-secondary mb-2">
           Las 53 semanas del año: {anioBase} real (línea oscura), los años anteriores en gris, su promedio punteado y en verde lo proyectado en las semanas consultadas. En
-          racimos por edad, las líneas continuas son reales y las punteadas proyectadas; el aprovechamiento solo existe para las semanas consultadas.
+          racimos por edad, las líneas continuas son reales y las punteadas proyectadas. El aprovechamiento real es el de cada cinta (semana de embolse) y solo
+          aparece cuando la cinta ya terminó de cosecharse (12 semanas).
         </p>
         <div className="row g-3">
           {orden.map((ind) => (
@@ -152,7 +149,7 @@ export default function GraficasSemanalModal({ filas, seriesAnuales = {}, metric
                           ])
                         : [
                             ...anios
-                              .filter((y) => !ocultos.has(y) && (ind.real || (ind.id === "aprovechamiento" && y === anioBase)))
+                              .filter((y) => !ocultos.has(y) && ind.real)
                               .map((y) => (
                                 <Line key={y} type="monotone" dataKey={`${y}_${ind.id}`} name={`${y} real`} stroke={colorAnio(y)} strokeWidth={y === anioBase ? 2 : 1.5} dot={false} connectNulls />
                               )),
