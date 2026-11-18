@@ -58,7 +58,7 @@ function DistribucionEdad({ ageBreakdown }) {
 
 const EDADES_COSECHA = [8, 9, 10, 11, 12];
 
-// Patrón de corte de las últimas 5 cintas que ya tienen 12 semanas o más (cosecha terminada): % de lo procesado en cada edad y
+// Patrón de corte de las últimas 5 semanas liquidadas: cada fila es la cinta que cumplió 12 semanas en esa semana liquidada (cosecha terminada): % de lo procesado en cada edad y
 // aprovechamiento (procesado ÷ procesado + repique + recuse), como en Estimaciones. `porGrupo`: { [fincaUuid | "GLOBAL"]: filas }.
 function PatronCorteCard({ porGrupo, grupos }) {
   const [grupo, setGrupo] = useState(grupos[0]?.clave);
@@ -83,14 +83,15 @@ function PatronCorteCard({ porGrupo, grupos }) {
           </select>
         )}
       </div>
-      <div className="small text-secondary mb-2">Cada fila es una de las últimas 5 cintas (semana de embolse) que ya cumplió 12 semanas; muestra el % de sus racimos procesados que se cortó en cada edad.</div>
+      <div className="small text-secondary mb-2">Cada fila es la cinta (semana de embolse) que cumplió 12 semanas en la semana liquidada indicada (últimas 5 liquidadas); muestra el % de sus racimos procesados que se cortó en cada edad.</div>
       {filas.length === 0 ? (
-        <div className="small text-secondary">Sin cintas con la cosecha terminada.</div>
+        <div className="small text-secondary">Todavía no hay semanas liquidadas.</div>
       ) : (
         <div className="table-responsive">
           <table className="table table-sm mb-0 text-center" style={{ fontSize: "0.8rem" }}>
             <thead className="table-light">
               <tr>
+                <th>Liquidada</th>
                 <th>Cinta</th>
                 {EDADES_COSECHA.map((e) => (
                   <th key={e}>{e} sem.</th>
@@ -103,6 +104,7 @@ function PatronCorteCard({ porGrupo, grupos }) {
                 const nombre = calcularColorSemana(f.cinta.anio, f.cinta.numeroSemana);
                 return (
                   <tr key={f.cinta.codigo}>
+                    <td className="text-secondary">{f.semanaLiquidada}</td>
                     <td>
                       <span className="badge rounded-pill" style={{ backgroundColor: COLOR_HEX[nombre], color: COLOR_TEXT[nombre] }} title={`${nombre} · ${f.edadHoy} semanas de edad`}>
                         {f.cinta.codigo}
@@ -118,7 +120,7 @@ function PatronCorteCard({ porGrupo, grupos }) {
             </tbody>
             <tfoot>
               <tr className="table-light fw-bold">
-                <td>Promedio</td>
+                <td colSpan={2}>Promedio</td>
                 {promedio.map((v, i) => (
                   <td key={i}>{v == null ? "—" : `${v.toFixed(1)}%`}</td>
                 ))}
