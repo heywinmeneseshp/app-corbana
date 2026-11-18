@@ -199,8 +199,9 @@ function PronosticoSemanal() {
   const [pctNoCosechadoInput, setPctNoCosechadoInput] = useState("");
   const [pctNoCosechadoAplicado, setPctNoCosechadoAplicado] = useState(null);
 
-  const [ratioOverrides, setRatioOverrides] = useState({});
   const [editandoRatio, setEditandoRatio] = useState(null);
+  // El ratio editado se guarda para todos (solo en semanas proyectadas) y se refleja en la tabla, las cajas y el gráfico de ratio.
+  const puedeEditarRatio = hasPermission("proyeccion.editar");
   // Indicador cuyas gráficas se muestran (null = cerrado).
   const [graficas, setGraficas] = useState(null);
   // Semanas desplegadas (detalle de racimos por edad).
@@ -260,7 +261,6 @@ function PronosticoSemanal() {
     try {
       const res = await apiFetch(`/pronostico?${buildParams().toString()}`);
       setData(res);
-      setRatioOverrides({});
     } catch (err) {
       setError(err.message);
       setData(null);
@@ -315,13 +315,22 @@ function PronosticoSemanal() {
     setPctNoCosechadoAplicado(null);
   }
 
-  function setRatioOverride(key, racimos, nuevoRatio) {
-    const ratio = Number(nuevoRatio);
-    if (Number.isNaN(ratio) || ratio < 0) return;
-    setRatioOverrides((prev) => ({
-      ...prev,
-      [key]: { ratio, cajas20kg: Math.round(racimos * ratio * 100) / 100 },
-    }));
+  // Guarda el ratio editado de una semana proyectada (vacío = volver al calculado) y recarga la proyección.
+  async function guardarRatio(row, texto) {
+    const limpio = String(texto).trim().replace(",", ".");
+    const ratio = limpio === "" ? null : Number(limpio);
+    if (ratio !== null && (Number.isNaN(ratio) || ratio < 0 || ratio > 5)) {
+      setError("El ratio debe ser un número entre 0 y 5.");
+      return;
+    }
+    if (ratio !== null && Math.abs(ratio - row.ratio) < 0.00005) return;
+    if (ratio === null && !row.ratioManual) return;
+    try {
+      await apiFetch("/pronostico/ratio-manual", { method: "PUT", body: JSON.stringify({ fincaUuid: row.fincaUuid || null, semanaCodigo: row.semanaCodigo, ratio }) });
+      await handleConsultar();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   // Basado en las filas (no en meta.fincas): "Todas" produce un solo grupo
@@ -591,9 +600,9 @@ function PronosticoSemanal() {
                 )}
                 {!loading && data && data.rows.map((row, idx) => {
                   const key = rowKey(row);
-                  const override = ratioOverrides[key];
-                  const ratioMostrado = override ? override.ratio : row.ratio;
-                  const cajasMostradas = override ? override.cajas20kg : row.cajas20kg;
+                  const ratioMostrado = row.ratio;
+                  const cajasMostradas = row.cajas20kg;
+                  const ratioEditable = puedeEditarRatio && !row.real && !data?.meta?.simulacion;
                   const estilo = CONFIANZA_ESTILO[row.confianza] || CONFIANZA_ESTILO.Media;
                   const esNuevaFinca = mostrarColumnaFinca && (idx === 0 || data.rows[idx - 1].fincaUuid !== row.fincaUuid);
                   return (
@@ -624,8 +633,8 @@ function PronosticoSemanal() {
                             step="0.01"
                             min="0"
                             onBlur={(e) => {
-                              setRatioOverride(key, row.racimosCosechados, e.target.value);
                               setEditandoRatio(null);
+                              guardarRatio(row, e.target.value);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") e.target.blur();
@@ -634,12 +643,21 @@ function PronosticoSemanal() {
                           />
                         ) : (
                           <span
-                            role="button"
-                            title="Click para editar el ratio (no se guarda, solo afecta esta vista/export)"
-                            onClick={() => setEditandoRatio(key)}
-                            style={{ cursor: "pointer", borderBottom: "1px dashed #94a3b8" }}
+                            role={ratioEditable ? "button" : undefined}
+                            title={
+                              row.ratioManual
+                                ? "Ratio editado a mano (guardado). Haz clic para cambiarlo; borra el valor para volver al calculado."
+                                : ratioEditable
+                                  ? "Clic para editar el ratio: se guarda y cambia las cajas y el gráfico de ratio"
+                                  : row.real
+                                    ? "Semana real: el ratio no se edita"
+                                    : undefined
+                            }
+                            onClick={() => ratioEditable && setEditandoRatio(key)}
+                            style={{ cursor: ratioEditable ? "pointer" : "default", borderBottom: ratioEditable ? "1px dashed #94a3b8" : undefined, color: row.ratioManual ? "#b45309" : undefined, fontWeight: row.ratioManual ? 600 : undefined }}
                           >
                             {ratioMostrado.toFixed(2)}
+                            {row.ratioManual && " ✎"}
                           </span>
                         )}
                       </td>
@@ -716,10 +734,7 @@ function PronosticoSemanal() {
 
       {graficas && data && (
         <GraficasSemanalModal
-          filas={data.rows.map((r) => {
-            const o = ratioOverrides[rowKey(r)];
-            return o ? { ...r, ratio: o.ratio, cajas20kg: o.cajas20kg } : r;
-          })}
+          filas={data.rows}
           seriesAnuales={data.seriesAnuales || {}}
           metrica={graficas}
           onClose={() => setGraficas(null)}
