@@ -72,7 +72,7 @@ function PatronCorteCard({ porGrupo, grupos }) {
   return (
     <div className="card border-0 shadow-sm rounded-4 p-3 h-100">
       <div className="d-flex align-items-center justify-content-between gap-2 mb-1">
-        <div className="fw-semibold small">Patrón de corte · últimas 5 cintas con 12 semanas o más</div>
+        <div className="fw-semibold small">Patrón de corte</div>
         {grupos.length > 1 && (
           <select className="form-select form-select-sm rounded-1" style={{ width: "auto" }} value={grupo} onChange={(e) => setGrupo(e.target.value)}>
             {grupos.map((g) => (
@@ -83,7 +83,7 @@ function PatronCorteCard({ porGrupo, grupos }) {
           </select>
         )}
       </div>
-      <div className="small text-secondary mb-2">% de los racimos procesados de cada cinta que se cortó en cada edad.</div>
+      <div className="small text-secondary mb-2">Cada fila es una de las últimas 5 cintas (semana de embolse) que ya cumplió 12 semanas; muestra el % de sus racimos procesados que se cortó en cada edad.</div>
       {filas.length === 0 ? (
         <div className="small text-secondary">Sin cintas con la cosecha terminada.</div>
       ) : (
