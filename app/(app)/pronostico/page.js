@@ -58,7 +58,7 @@ function DistribucionEdad({ ageBreakdown }) {
 
 const EDADES_COSECHA = [8, 9, 10, 11, 12];
 
-// Patrón de corte de las últimas 5 cintas que ya tienen 13 semanas o más (cosecha terminada): % de lo procesado en cada edad y
+// Patrón de corte de las últimas 5 cintas que ya tienen 12 semanas o más (cosecha terminada): % de lo procesado en cada edad y
 // aprovechamiento (procesado ÷ procesado + repique + recuse), como en Estimaciones. `porGrupo`: { [fincaUuid | "GLOBAL"]: filas }.
 function PatronCorteCard({ porGrupo, grupos }) {
   const [grupo, setGrupo] = useState(grupos[0]?.clave);
@@ -72,7 +72,7 @@ function PatronCorteCard({ porGrupo, grupos }) {
   return (
     <div className="card border-0 shadow-sm rounded-4 p-3 h-100">
       <div className="d-flex align-items-center justify-content-between gap-2 mb-1">
-        <div className="fw-semibold small">Patrón de corte · últimas 5 cintas con 13 semanas o más</div>
+        <div className="fw-semibold small">Patrón de corte · últimas 5 cintas con 12 semanas o más</div>
         {grupos.length > 1 && (
           <select className="form-select form-select-sm rounded-1" style={{ width: "auto" }} value={grupo} onChange={(e) => setGrupo(e.target.value)}>
             {grupos.map((g) => (
