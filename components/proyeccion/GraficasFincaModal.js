@@ -93,6 +93,62 @@ function armarSeries(resultado, sel, divisor, { anioActual, excluirUltimas, excl
   return { filas, anios: ys };
 }
 
+// Totales de cajas del año por serie: año completo, primera mitad (semanas 1-26) y segunda mitad (27-53), en cantidad y en % del año.
+// Siempre sobre el año completo (no sobre el rango de semanas visible). Un año sin todas sus semanas indica hasta qué semana suma.
+function TotalesCajas({ datos, series }) {
+  const filas = series
+    .map((sr) => {
+      let total = 0;
+      let h1 = 0;
+      let h2 = 0;
+      let ultima = 0;
+      for (const r of datos) {
+        const v = r[sr.clave];
+        if (v == null) continue;
+        total += v;
+        if (r.semana <= 26) h1 += v;
+        else h2 += v;
+        ultima = Math.max(ultima, r.semana);
+      }
+      return { ...sr, total, h1, h2, ultima };
+    })
+    .filter((f) => f.total > 0);
+  if (filas.length === 0) return null;
+  const pct = (a, t) => (t > 0 ? `${((a / t) * 100).toLocaleString("es", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %` : "—");
+  return (
+    <div className="table-responsive mt-2">
+      <table className="table table-sm mb-0 align-middle" style={{ fontSize: "0.74rem" }}>
+        <thead className="table-light">
+          <tr>
+            <th>Serie</th>
+            <th className="text-end">Total del año</th>
+            <th className="text-end">1ª mitad (S1-S26)</th>
+            <th className="text-end">%</th>
+            <th className="text-end">2ª mitad (S27-S53)</th>
+            <th className="text-end">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map((f) => (
+            <tr key={f.clave}>
+              <td className="text-nowrap">
+                <span style={{ display: "inline-block", width: 12, height: 3, background: f.color, marginRight: 6, verticalAlign: "middle" }} />
+                {f.nombre}
+                {f.ultima > 0 && f.ultima < 52 && <span className="text-secondary"> (hasta S{f.ultima})</span>}
+              </td>
+              <td className="text-end fw-semibold">{fmt(f.total)}</td>
+              <td className="text-end">{fmt(f.h1)}</td>
+              <td className="text-end text-secondary">{pct(f.h1, f.total)}</td>
+              <td className="text-end">{fmt(f.h2)}</td>
+              <td className="text-end text-secondary">{pct(f.h2, f.total)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // Gráficas por finca (o de varias): para cada indicador, la curva semana a semana de los años históricos reales y la del año
 // proyectado. `uuids`: fincas incluidas (una sola, o todas las visibles para el total). Debajo se pueden agregar comparaciones
 // (otra finca, varias fincas en promedio, todas, y uno o varios años reales o la proyección), como en los gráficos de Clima.
@@ -107,6 +163,32 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
     return new Set([...presentes].filter((y) => !usados.has(y)));
   });
   const [verPromedio, setVerPromedio] = useState(true);
+  // Colores elegidos por el usuario para cada línea (año real, "proy" y "prom"); se recuerdan en este navegador.
+  const [colores, setColores] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("proyeccion.colores") || "{}") || {};
+    } catch {
+      return {};
+    }
+  });
+  const cambiarColor = (clave, valor) =>
+    setColores((prev) => {
+      const n = { ...prev, [clave]: valor };
+      try {
+        localStorage.setItem("proyeccion.colores", JSON.stringify(n));
+      } catch {
+        // sin almacenamiento local: el color dura mientras la ventana esté abierta
+      }
+      return n;
+    });
+  const restablecerColores = () => {
+    setColores({});
+    try {
+      localStorage.removeItem("proyeccion.colores");
+    } catch {
+      // nada que borrar
+    }
+  };
   // Rango de semanas visible en todas las gráficas (null = año completo).
   const [rangoSemanas, setRangoSemanas] = useState(null);
   // Cuántas de las últimas semanas con datos reales del año actual se dejan fuera de todas las gráficas (y del promedio).
@@ -216,6 +298,9 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
       return n;
     });
   const visibles = anios.filter((y) => !excluidos.has(y));
+  const colorAnio = (y, i) => colores[y] || COLORES_ANIOS[Math.max(0, COLORES_ANIOS.length - anios.length) + i] || "#94a3b8";
+  const colorProy = colores.proy || COLOR_PROYECCION;
+  const colorProm = colores.prom || COLOR_PROMEDIO;
   const datosVista = useMemo(() => filtrarSemanas(datos, rangoSemanas, "semana"), [datos, rangoSemanas]);
   const hayPromedioPorFinca = comparaciones.some((c) => c.fincaUuids.length !== 1);
 
@@ -233,11 +318,24 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
           <div key={y} className="form-check mb-0">
             <input type="checkbox" className="form-check-input" id={`gf-anio-${y}`} checked={!excluidos.has(y)} onChange={() => alternarAnio(y)} />
             <label className="form-check-label small" htmlFor={`gf-anio-${y}`}>
-              <span style={{ display: "inline-block", width: 14, height: 3, background: COLORES_ANIOS[Math.max(0, COLORES_ANIOS.length - anios.length) + i] || "#94a3b8", marginRight: 6, verticalAlign: "middle" }} />
               {y}
             </label>
+            <input type="color" className="ms-1 align-middle border-0 p-0" style={{ width: 18, height: 18, background: "none", cursor: "pointer" }} value={colorAnio(y, i)} onChange={(e) => cambiarColor(y, e.target.value)} title={`Color de la línea ${y}`} />
           </div>
         ))}
+        <div className="d-flex align-items-center gap-1">
+          <span className="small">{anioProy} proyectado</span>
+          <input type="color" className="border-0 p-0" style={{ width: 18, height: 18, background: "none", cursor: "pointer" }} value={colorProy} onChange={(e) => cambiarColor("proy", e.target.value)} title="Color de la proyección" />
+        </div>
+        <div className="d-flex align-items-center gap-1">
+          <span className="small">Promedio</span>
+          <input type="color" className="border-0 p-0" style={{ width: 18, height: 18, background: "none", cursor: "pointer" }} value={colorProm} onChange={(e) => cambiarColor("prom", e.target.value)} title="Color del promedio histórico" />
+        </div>
+        {Object.keys(colores).length > 0 && (
+          <button type="button" className="btn btn-link btn-sm p-0 small" onClick={restablecerColores}>
+            Colores por defecto
+          </button>
+        )}
         {anios.includes(anioActual) && (
           <div className="d-flex align-items-center gap-2 ms-2">
             <label className="small mb-0" htmlFor="gf-excluir" title={`Deja fuera de todas las gráficas las últimas semanas con datos reales de ${anioActual} (y del promedio), porque todavía están incompletas`}>
@@ -345,18 +443,29 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
                     <Tooltip formatter={(v, nombre) => [fmt(v, g.dec), nombre]} labelFormatter={(l) => `Semana ${l}`} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     {anios.map((y, i) => !excluidos.has(y) && (
-                      <Line key={y} type="monotone" dataKey={`${y}_${g.id}`} name={`${y} real`} stroke={COLORES_ANIOS[Math.max(0, COLORES_ANIOS.length - anios.length) + i] || "#94a3b8"} strokeWidth={1.5} dot={false} connectNulls />
+                      <Line key={y} type="monotone" dataKey={`${y}_${g.id}`} name={`${y} real`} stroke={colorAnio(y, i)} strokeWidth={1.5} dot={false} connectNulls />
                     ))}
                     {verPromedio && visibles.length > 0 && !g.sinPromedio && (
-                      <Line type="monotone" dataKey={`prom_${g.id}`} name="Promedio histórico" stroke={COLOR_PROMEDIO} strokeWidth={2.2} strokeDasharray="6 4" dot={false} connectNulls />
+                      <Line type="monotone" dataKey={`prom_${g.id}`} name="Promedio histórico" stroke={colorProm} strokeWidth={2.2} strokeDasharray="6 4" dot={false} connectNulls />
                     )}
-                    <Line type="monotone" dataKey={`proy_${g.id}`} name={`${anioProy} proyectado`} stroke={COLOR_PROYECCION} strokeWidth={3} dot={false} connectNulls />
+                    <Line type="monotone" dataKey={`proy_${g.id}`} name={`${anioProy} proyectado`} stroke={colorProy} strokeWidth={3} dot={false} connectNulls />
                     {comparaciones.map((c) => (
                       <Line key={c.id} type="monotone" dataKey={`cmp${c.id}_${g.id}`} name={`${c.fincaLabel} · ${c.anioLabel}`} stroke={c.color} strokeWidth={2.4} dot={false} connectNulls />
                     ))}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
+              {g.id === "cajas" && (
+                <TotalesCajas
+                  datos={datos}
+                  series={[
+                    ...anios.map((y, i) => ({ y, i })).filter(({ y }) => !excluidos.has(y)).map(({ y, i }) => ({ clave: `${y}_cajas`, nombre: `${y} real`, color: colorAnio(y, i) })),
+                    ...(verPromedio && visibles.length > 0 ? [{ clave: "prom_cajas", nombre: "Promedio histórico", color: colorProm }] : []),
+                    { clave: "proy_cajas", nombre: `${anioProy} proyectado`, color: colorProy },
+                    ...comparaciones.map((c) => ({ clave: `cmp${c.id}_cajas`, nombre: `${c.fincaLabel} · ${c.anioLabel}`, color: c.color })),
+                  ]}
+                />
+              )}
             </div>
           </div>
           );
