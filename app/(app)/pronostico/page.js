@@ -59,7 +59,7 @@ function DistribucionEdad({ ageBreakdown }) {
 const EDADES_COSECHA = [8, 9, 10, 11, 12];
 
 // Patrón de corte de las últimas 5 semanas liquidadas: cada fila es la cinta que cumplió 12 semanas en esa semana liquidada (cosecha terminada): % de lo procesado en cada edad y
-// aprovechamiento (procesado ÷ procesado + repique + recuse), como en Estimaciones. `porGrupo`: { [fincaUuid | "GLOBAL"]: filas }.
+// aprovechamiento ((procesado + recusado) ÷ embolsado), como en el panel inicial y Estimaciones. `porGrupo`: { [fincaUuid | "GLOBAL"]: filas }.
 function PatronCorteCard({ porGrupo, grupos }) {
   const [grupo, setGrupo] = useState(grupos[0]?.clave);
   const filas = porGrupo?.[grupo] || [];
