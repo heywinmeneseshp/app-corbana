@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FiPlus, FiSliders } from "react-icons/fi";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import ModalShell from "@/components/ModalShell";
@@ -25,7 +25,7 @@ const GRAFICAS = [
 
 // Series semana a semana de un conjunto de fincas: por cada indicador, el valor de cada año histórico real (`${año}_${id}`), el de la proyección
 // (`proy_${id}`) y el promedio de los años no excluidos (`prom_${id}`). `divisor` > 1 las lleva a promedio por finca (los ratios no cambian).
-function armarSeries(resultado, sel, divisor, { anioProy, excluirUltimas, excluidos }) {
+function armarSeries(resultado, sel, divisor, { anioActual, excluirUltimas, excluidos }) {
   const aniosHist = new Set();
   // Histórico: por año y semana, suma de las fincas seleccionadas.
   const hist = new Map(); // `${anio}|${n}` -> { e, ha, c, j }
@@ -59,7 +59,7 @@ function armarSeries(resultado, sel, divisor, { anioProy, excluirUltimas, exclui
   let ultimaSemanaActual = 0;
   for (const k of hist.keys()) {
     const [y, n] = k.split("|").map(Number);
-    if (y === anioProy && n > ultimaSemanaActual) ultimaSemanaActual = n;
+    if (y === anioActual && n > ultimaSemanaActual) ultimaSemanaActual = n;
   }
   const limiteActual = ultimaSemanaActual - excluirUltimas;
   const filas = [];
@@ -76,7 +76,7 @@ function armarSeries(resultado, sel, divisor, { anioProy, excluirUltimas, exclui
     for (const y of ys) {
       const h = hist.get(`${y}|${n}`);
       if (!h) continue;
-      if (y === anioProy && excluirUltimas > 0 && n > limiteActual) continue;
+      if (y === anioActual && excluirUltimas > 0 && n > limiteActual) continue;
       fila[`${y}_ratio`] = h.c > 0 && h.j > 0 ? h.j / h.c : null;
       fila[`${y}_embolses`] = h.e;
       fila[`${y}_embolsesPorHa`] = h.ha > 0 && h.e > 0 ? h.e / h.ha : null;
@@ -110,8 +110,30 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
   // Rango de semanas visible en todas las gráficas (null = año completo).
   const [rangoSemanas, setRangoSemanas] = useState(null);
   // Cuántas de las últimas semanas con datos reales del año actual se dejan fuera de todas las gráficas (y del promedio).
-  const [excluirUltimas, setExcluirUltimas] = useState(0);
-  const [excluirTexto, setExcluirTexto] = useState("");
+  // Año en curso con datos reales (el de la semana actual, p. ej. 2026), que es el que puede tener las últimas semanas incompletas.
+  const anioActual = useMemo(() => {
+    const m = String(resultado.meta.semanaActual || "").match(/(\d{4})$/);
+    if (m) return Number(m[1]);
+    let max = 0;
+    for (const porAnio of Object.values(resultado.historico || {})) for (const y of Object.keys(porAnio)) max = Math.max(max, Number(y));
+    return max;
+  }, [resultado]);
+  // Se recuerda en este navegador para no tener que escribirlo cada vez.
+  const [excluirUltimas, setExcluirUltimas] = useState(() => {
+    try {
+      return Math.min(53, Math.max(0, Number(localStorage.getItem("proyeccion.excluirUltimas")) || 0));
+    } catch {
+      return 0;
+    }
+  });
+  const [excluirTexto, setExcluirTexto] = useState(() => (excluirUltimas ? String(excluirUltimas) : ""));
+  useEffect(() => {
+    try {
+      localStorage.setItem("proyeccion.excluirUltimas", String(excluirUltimas));
+    } catch {
+      // sin almacenamiento local: solo dura mientras la ventana esté abierta
+    }
+  }, [excluirUltimas]);
 
   // ── Comparaciones ──
   const fincasLista = useMemo(
@@ -163,9 +185,9 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
   const quitarComparacion = (id) => setComparaciones((prev) => prev.filter((c) => c.id !== id));
 
   const { datos, anios } = useMemo(() => {
-    const opciones = { anioProy, excluirUltimas, excluidos };
+    const opciones = { anioActual, excluirUltimas, excluidos };
     const base = armarSeries(resultado, new Set(uuids), 1, opciones);
-    const sinExcluir = { anioProy, excluirUltimas, excluidos: new Set() };
+    const sinExcluir = { anioActual, excluirUltimas, excluidos: new Set() };
     // Una serie por comparación: la proyección y/o los años reales elegidos, promediados semana a semana si son varios.
     const series = comparaciones.map((c) => {
       const sel = c.fincaUuids.length ? c.fincaUuids : fincasLista.map((f) => f.uuid);
@@ -184,7 +206,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
       return { ...r, ...extra };
     });
     return { datos, anios: base.anios };
-  }, [resultado, uuids, excluidos, excluirUltimas, anioProy, comparaciones, fincasLista]);
+  }, [resultado, uuids, excluidos, excluirUltimas, anioActual, comparaciones, fincasLista]);
 
   const alternarAnio = (y) =>
     setExcluidos((prev) => {
@@ -216,10 +238,10 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
             </label>
           </div>
         ))}
-        {anios.includes(anioProy) && (
+        {anios.includes(anioActual) && (
           <div className="d-flex align-items-center gap-2 ms-2">
-            <label className="small mb-0" htmlFor="gf-excluir" title={`Deja fuera de todas las gráficas las últimas semanas con datos reales de ${anioProy} (y del promedio), por si todavía están incompletas`}>
-              Excluir últimas semanas de {anioProy}
+            <label className="small mb-0" htmlFor="gf-excluir" title={`Deja fuera de todas las gráficas las últimas semanas con datos reales de ${anioActual} (y del promedio), porque todavía están incompletas`}>
+              Omitir últimas semanas de {anioActual}
             </label>
             <input
               id="gf-excluir"
