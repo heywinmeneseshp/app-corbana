@@ -486,7 +486,6 @@ function PronosticoSemanal() {
                   <th>Semana</th>
                   {mostrarColumnaFinca && <th>Finca</th>}
                   <ThGrafica metrica="hectareas" onGraficas={setGraficas} className="text-end">Hectáreas</ThGrafica>
-                  <ThGrafica metrica="racimosHa" onGraficas={setGraficas} className="text-end">Racimos/ha</ThGrafica>
                   <ThGrafica metrica="edades" onGraficas={setGraficas}>Distribución por edad</ThGrafica>
                   <ThGrafica metrica="racimos" onGraficas={setGraficas} className="text-end">Racimos cosechados</ThGrafica>
                   <ThGrafica metrica="ratio" onGraficas={setGraficas} className="text-end">Ratio</ThGrafica>
@@ -499,10 +498,10 @@ function PronosticoSemanal() {
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 13 : 11} className="text-center text-secondary py-4">Cargando...</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 12 : 10} className="text-center text-secondary py-4">Cargando...</td></tr>
                 )}
                 {!loading && (!data || data.rows.length === 0) && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 13 : 11} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 12 : 10} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
                 )}
                 {!loading && data && data.rows.map((row, idx) => {
                   const key = rowKey(row);
@@ -515,7 +514,7 @@ function PronosticoSemanal() {
                     <Fragment key={key}>
                     {esNuevaFinca && (
                       <tr>
-                        <td colSpan={data?.meta?.simulacion ? 13 : 11} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
+                        <td colSpan={data?.meta?.simulacion ? 12 : 10} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
                           {row.fincaCodigo} — {row.fincaNombre}
                         </td>
                       </tr>
@@ -527,7 +526,6 @@ function PronosticoSemanal() {
                       <td role="button" style={{ cursor: "pointer" }} onClick={() => alternarSemana(key)}>{row.semanaCodigo}</td>
                       {mostrarColumnaFinca && <td>{row.fincaNombre}</td>}
                       <td className="text-end">{row.hectareas != null ? row.hectareas.toLocaleString("es", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "—"}</td>
-                      <td className="text-end">{row.hectareas > 0 ? (row.racimosCosechados / row.hectareas).toLocaleString("es", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "—"}</td>
                       <td><DistribucionEdad ageBreakdown={row.ageBreakdown} /></td>
                       <td className="text-end">{row.racimosCosechados.toLocaleString("es")}</td>
                       <td className="text-end" style={{ minWidth: "5rem" }}>
@@ -582,7 +580,7 @@ function PronosticoSemanal() {
                     {abiertas.has(key) && (
                       <tr>
                         <td />
-                        <td colSpan={data?.meta?.simulacion ? 12 : 10} className="py-2" style={{ background: "#f8fafc" }}>
+                        <td colSpan={data?.meta?.simulacion ? 11 : 9} className="py-2" style={{ background: "#f8fafc" }}>
                           <table className="table table-sm mb-0" style={{ fontSize: "0.72rem", maxWidth: 560, background: "transparent" }}>
                             <thead>
                               <tr className="text-secondary">
