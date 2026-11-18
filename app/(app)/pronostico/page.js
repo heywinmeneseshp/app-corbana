@@ -275,6 +275,7 @@ function PronosticoSemanal() {
 
   const [editandoRatio, setEditandoRatio] = useState(null);
   const [editandoAdicional, setEditandoAdicional] = useState(null);
+  const [editandoProyectada, setEditandoProyectada] = useState(null);
   const [verEstimacionFincas, setVerEstimacionFincas] = useState(false);
   // El ratio editado se guarda para todos (solo en semanas proyectadas) y se refleja en la tabla, las cajas y el gráfico de ratio.
   const puedeEditarRatio = hasPermission("proyeccion.editar");
@@ -412,8 +413,38 @@ function PronosticoSemanal() {
               rows: prev.rows.map((r) => {
                 if (r.fincaUuid !== row.fincaUuid || r.semanaCodigo !== row.semanaCodigo) return r;
                 const v = cajas === null ? r.cajasAdicionalesEstimado || 0 : cajas;
-                return { ...r, cajasAdicionales: v, cajasAdicionalesManual: cajas !== null, cajasTotal: Math.round((r.cajas20kg + v) * 100) / 100 };
+                const total = Math.round((r.cajas20kg + v) * 100) / 100;
+                return { ...r, cajasAdicionales: v, cajasAdicionalesManual: cajas !== null, cajasTotal: total, cajasProyectada: r.cajasProyectadaManual ? r.cajasProyectada : total };
               }),
+            }
+          : prev,
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // "Proyectada": por defecto la Estimación; editarla guarda el valor, `null` (↺ o campo vacío) la devuelve a la Estimación. Sin recargar.
+  async function guardarProyectada(row, texto) {
+    const limpio = texto === null ? "" : String(texto).trim().replace(",", ".");
+    const cajas = limpio === "" ? null : Number(limpio);
+    if (cajas !== null && (Number.isNaN(cajas) || cajas < 0)) {
+      setError("La proyectada debe ser un número mayor o igual a 0.");
+      return;
+    }
+    if (cajas === null && !row.cajasProyectadaManual) return;
+    if (cajas !== null && Math.abs(cajas - (row.cajasProyectada ?? 0)) < 0.005) return;
+    try {
+      await apiFetch("/pronostico/cajas-proyectada", { method: "PUT", body: JSON.stringify({ fincaUuid: row.fincaUuid || null, semanaCodigo: row.semanaCodigo, cajas }) });
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              rows: prev.rows.map((r) =>
+                r.fincaUuid === row.fincaUuid && r.semanaCodigo === row.semanaCodigo
+                  ? { ...r, cajasProyectadaManual: cajas !== null, cajasProyectada: cajas === null ? r.cajasTotal : cajas }
+                  : r,
+              ),
             }
           : prev,
       );
@@ -451,6 +482,7 @@ function PronosticoSemanal() {
             ratio,
             cajas20kg: Math.round(r.racimosCosechados * ratio * 100) / 100,
             cajasTotal: Math.round((r.racimosCosechados * ratio + (r.cajasAdicionales || 0)) * 100) / 100,
+            cajasProyectada: r.cajasProyectadaManual ? r.cajasProyectada : Math.round((r.racimosCosechados * ratio + (r.cajasAdicionales || 0)) * 100) / 100,
             cajasCiLow: factor != null && r.cajasCiLow != null ? Math.round(r.cajasCiLow * factor * 100) / 100 : r.cajasCiLow,
             cajasCiHigh: factor != null && r.cajasCiHigh != null ? Math.round(r.cajasCiHigh * factor * 100) / 100 : r.cajasCiHigh,
             ratioManual: true,
@@ -742,7 +774,7 @@ function PronosticoSemanal() {
                   <ThGrafica metrica="aprovechamiento" onGraficas={setGraficas} className="text-end">Aprovechamiento</ThGrafica>
                   <ThGrafica metrica="cajas" onGraficas={setGraficas} className="text-end">Cajas 20k</ThGrafica>
                   <th className="text-end" title="Por defecto, la estimación de cajas de las fincas externas; se puede editar">Cajas adicionales</th>
-                  <th className="text-end">Total cajas</th>
+                  <th className="text-end" title="Cajas 20k + cajas adicionales">Estimación</th>
                   <th className="text-end">
                     <span
                       role="button"
@@ -754,6 +786,7 @@ function PronosticoSemanal() {
                       Estimación Finca
                     </span>
                   </th>
+                  <th className="text-end" title="Por defecto la Estimación; se puede editar">Proyectada</th>
                   {data?.meta?.simulacion && <th className="text-end">Cajas reales</th>}
                   {data?.meta?.simulacion && <th className="text-end">Dif.</th>}
                   <th>Confianza</th>
@@ -761,10 +794,10 @@ function PronosticoSemanal() {
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 15 : 13} className="text-center text-secondary py-4">Cargando...</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 16 : 14} className="text-center text-secondary py-4">Cargando...</td></tr>
                 )}
                 {!loading && (!data || data.rows.length === 0) && (
-                  <tr><td colSpan={data?.meta?.simulacion ? 15 : 13} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
+                  <tr><td colSpan={data?.meta?.simulacion ? 16 : 14} className="text-center text-secondary py-4">No hay datos para los filtros seleccionados.</td></tr>
                 )}
                 {!loading && data && data.rows.map((row, idx) => {
                   const key = rowKey(row);
@@ -777,7 +810,7 @@ function PronosticoSemanal() {
                     <Fragment key={key}>
                     {esNuevaFinca && (
                       <tr>
-                        <td colSpan={data?.meta?.simulacion ? 15 : 13} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
+                        <td colSpan={data?.meta?.simulacion ? 16 : 14} className="bg-light fw-bold small py-2" style={{ borderTop: "2px solid #cbd5e1" }}>
                           {row.fincaCodigo} — {row.fincaNombre}
                         </td>
                       </tr>
@@ -869,8 +902,45 @@ function PronosticoSemanal() {
                         )}
                       </td>
                       <td className="text-end fw-bold">{(row.cajasTotal ?? cajasMostradas).toLocaleString("es", { maximumFractionDigits: 0 })}</td>
-                      <td className="text-end" title={row.estimacionFinca != null ? `Diferencia con el total: ${(row.estimacionFinca - (row.cajasTotal ?? cajasMostradas)).toLocaleString("es", { maximumFractionDigits: 0 })} cajas` : "Sin estimación registrada para esta semana"}>
+                      <td className="text-end" title={row.estimacionFinca != null ? `Diferencia con la Estimación: ${(row.estimacionFinca - (row.cajasTotal ?? cajasMostradas)).toLocaleString("es", { maximumFractionDigits: 0 })} cajas` : "Sin estimación registrada para esta semana"}>
                         {row.estimacionFinca != null ? row.estimacionFinca.toLocaleString("es", { maximumFractionDigits: 0 }) : "—"}
+                      </td>
+                      <td className="text-end" style={{ minWidth: "6.5rem" }}>
+                        {editandoProyectada === key ? (
+                          <input
+                            type="number"
+                            autoFocus
+                            className="form-control form-control-sm text-end rounded-3"
+                            defaultValue={Math.round(row.cajasProyectada ?? row.cajasTotal ?? cajasMostradas)}
+                            step="1"
+                            min="0"
+                            onBlur={(e) => {
+                              setEditandoProyectada(null);
+                              guardarProyectada(row, e.target.value);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") e.target.blur();
+                              if (e.key === "Escape") setEditandoProyectada(null);
+                            }}
+                          />
+                        ) : (
+                          <span className="d-inline-flex align-items-center gap-1">
+                            <span
+                              role={puedeEditarRatio ? "button" : undefined}
+                              title={`${row.cajasProyectadaManual ? "Fijada a mano" : "Igual a la Estimación"}${puedeEditarRatio ? " · clic para editar" : ""}`}
+                              onClick={() => puedeEditarRatio && setEditandoProyectada(key)}
+                              style={{ cursor: puedeEditarRatio ? "pointer" : "default", borderBottom: puedeEditarRatio ? "1px dashed #94a3b8" : undefined, color: row.cajasProyectadaManual ? "#b45309" : undefined, fontWeight: 700 }}
+                            >
+                              {(row.cajasProyectada ?? row.cajasTotal ?? cajasMostradas).toLocaleString("es", { maximumFractionDigits: 0 })}
+                              {row.cajasProyectadaManual && " ✎"}
+                            </span>
+                            {row.cajasProyectadaManual && puedeEditarRatio && (
+                              <button type="button" className="btn btn-link btn-sm p-0 text-secondary" style={{ lineHeight: 1 }} title="Volver a la Estimación" onClick={() => guardarProyectada(row, null)}>
+                                ↺
+                              </button>
+                            )}
+                          </span>
+                        )}
                       </td>
                       {data?.meta?.simulacion && (
                         <>
@@ -893,7 +963,7 @@ function PronosticoSemanal() {
                     {abiertas.has(key) && (
                       <tr>
                         <td />
-                        <td colSpan={data?.meta?.simulacion ? 14 : 12} className="py-2" style={{ background: "#f8fafc" }}>
+                        <td colSpan={data?.meta?.simulacion ? 15 : 13} className="py-2" style={{ background: "#f8fafc" }}>
                           <table className="table table-sm mb-0" style={{ fontSize: "0.72rem", maxWidth: 560, background: "transparent" }}>
                             <thead>
                               <tr className="text-secondary">
