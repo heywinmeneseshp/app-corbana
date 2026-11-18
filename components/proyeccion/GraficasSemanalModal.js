@@ -136,7 +136,7 @@ export default function GraficasSemanalModal({ filas, seriesAnuales = {}, metric
           {orden.map((ind) => (
             <div key={ind.id} className="col-12 col-lg-6">
               <div className="border rounded-1 p-2" style={ind.id === metrica ? { borderColor: "#16a34a", boxShadow: "0 0 0 2px rgba(22,163,74,.15)" } : undefined}>
-                <div className="fw-semibold small mb-1 ps-1">{ind.titulo}</div>
+                <div className="fw-semibold small mb-1 ps-1">{ind.porEdad && anioBase ? `${ind.titulo} · solo ${anioBase} (real y proyectado)` : ind.titulo}</div>
                 <div style={{ height: "clamp(220px, 30vh, 340px)" }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={datos} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
