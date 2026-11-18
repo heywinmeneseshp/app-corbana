@@ -9,6 +9,7 @@ import ProyeccionAnual from "@/components/proyeccion/ProyeccionAnual";
 import GraficoRatio from "@/components/precalibracion/GraficoRatio";
 import GraficasSemanalModal from "@/components/proyeccion/GraficasSemanalModal";
 import { hasPermission } from "@/lib/auth";
+import { calcularColorSemana, COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 
 const SEMANAS_OPCIONES = [4, 8, 12, 26, 52];
 const SEMANAS_MAX = 53; // hasta un año calendario completo
@@ -56,6 +57,80 @@ function DistribucionEdad({ ageBreakdown }) {
 }
 
 const EDADES_COSECHA = [8, 9, 10, 11, 12];
+
+// Patrón de corte de las últimas 5 cintas que ya tienen 13 semanas o más (cosecha terminada): % de lo procesado en cada edad y
+// aprovechamiento (procesado ÷ procesado + repique + recuse), como en Estimaciones. `porGrupo`: { [fincaUuid | "GLOBAL"]: filas }.
+function PatronCorteCard({ porGrupo, grupos }) {
+  const [grupo, setGrupo] = useState(grupos[0]?.clave);
+  const filas = porGrupo?.[grupo] || [];
+  const promedio = EDADES_COSECHA.map((e) => {
+    const v = filas.map((f) => f.porEdad.find((p) => p.edad === e)?.porcentaje).filter((x) => x != null);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  });
+  const aprov = filas.map((f) => f.aprovechamiento).filter((x) => x != null);
+  const aprovProm = aprov.length ? aprov.reduce((a, b) => a + b, 0) / aprov.length : null;
+  return (
+    <div className="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div className="d-flex align-items-center justify-content-between gap-2 mb-1">
+        <div className="fw-semibold small">Patrón de corte · últimas 5 cintas con 13 semanas o más</div>
+        {grupos.length > 1 && (
+          <select className="form-select form-select-sm rounded-1" style={{ width: "auto" }} value={grupo} onChange={(e) => setGrupo(e.target.value)}>
+            {grupos.map((g) => (
+              <option key={g.clave} value={g.clave}>
+                {g.nombre}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <div className="small text-secondary mb-2">% de los racimos procesados de cada cinta que se cortó en cada edad.</div>
+      {filas.length === 0 ? (
+        <div className="small text-secondary">Sin cintas con la cosecha terminada.</div>
+      ) : (
+        <div className="table-responsive">
+          <table className="table table-sm mb-0 text-center" style={{ fontSize: "0.8rem" }}>
+            <thead className="table-light">
+              <tr>
+                <th>Cinta</th>
+                {EDADES_COSECHA.map((e) => (
+                  <th key={e}>{e} sem.</th>
+                ))}
+                <th>Aprov.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((f) => {
+                const nombre = calcularColorSemana(f.cinta.anio, f.cinta.numeroSemana);
+                return (
+                  <tr key={f.cinta.codigo}>
+                    <td>
+                      <span className="badge rounded-pill" style={{ backgroundColor: COLOR_HEX[nombre], color: COLOR_TEXT[nombre] }} title={`${nombre} · ${f.edadHoy} semanas de edad`}>
+                        {f.cinta.codigo}
+                      </span>
+                    </td>
+                    {f.porEdad.map((p) => (
+                      <td key={p.edad}>{p.porcentaje == null ? "—" : `${p.porcentaje.toFixed(1)}%`}</td>
+                    ))}
+                    <td className="fw-semibold">{f.aprovechamiento == null ? "—" : `${(f.aprovechamiento * 100).toFixed(1)}%`}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="table-light fw-bold">
+                <td>Promedio</td>
+                {promedio.map((v, i) => (
+                  <td key={i}>{v == null ? "—" : `${v.toFixed(1)}%`}</td>
+                ))}
+                <td>{aprovProm == null ? "—" : `${(aprovProm * 100).toFixed(1)}%`}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Encabezado de columna que abre las gráficas de ese indicador (como en Proyección anual).
 function ThGrafica({ metrica, onGraficas, children, className = "" }) {
@@ -437,7 +512,8 @@ function PronosticoSemanal() {
         {data?.meta?.simulacion && <ResumenSimulacion data={data} />}
 
         {data?.ratioSerie?.serie?.length > 0 && (
-          <div className="mb-3">
+          <div className="row g-3 mb-3">
+          <div className="col-12 col-xl-7">
             <GraficoRatio
               datos={data.ratioSerie.serie}
               alcance={`${data.ratioSerie.pasadas} semanas pasadas y ${data.ratioSerie.futuras} futuras, vs. promedio de ${data.ratioSerie.aniosHistoricos} años anteriores`}
@@ -474,6 +550,14 @@ function PronosticoSemanal() {
                 </div>
               }
             />
+          </div>
+          <div className="col-12 col-xl-5">
+            <PatronCorteCard
+              key={Object.keys(data.patronCorte || {}).join(",")}
+              porGrupo={data.patronCorte}
+              grupos={[...new Map(data.rows.map((r) => [r.fincaUuid ?? "GLOBAL", { clave: r.fincaUuid ?? "GLOBAL", nombre: r.fincaNombre || "Todas las fincas" }])).values()]}
+            />
+          </div>
           </div>
         )}
 
