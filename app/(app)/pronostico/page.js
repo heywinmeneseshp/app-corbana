@@ -424,12 +424,12 @@ function PronosticoSemanal() {
     }
   }
 
-  // "Cajas Ajustadas": por defecto la Estimación; editarla guarda el valor, `null` (↺ o campo vacío) la devuelve a la Estimación. Sin recargar.
+  // "Cajas Proyectadas": por defecto la Estimación; editarla guarda el valor, `null` (↺ o campo vacío) la devuelve a la Estimación. Sin recargar.
   async function guardarProyectada(row, texto) {
     const limpio = texto === null ? "" : String(texto).trim().replace(",", ".");
     const cajas = limpio === "" ? null : Number(limpio);
     if (cajas !== null && (Number.isNaN(cajas) || cajas < 0)) {
-      setError("Las cajas ajustadas deben ser un número mayor o igual a 0.");
+      setError("Las cajas proyectadas deben ser un número mayor o igual a 0.");
       return;
     }
     if (cajas === null && !row.cajasProyectadaManual) return;
@@ -786,7 +786,7 @@ function PronosticoSemanal() {
                       Estimación Finca
                     </span>
                   </th>
-                  <th className="text-end" title="Por defecto la Estimación; se puede editar">Cajas Ajustadas</th>
+                  <th className="text-end" title="Por defecto la Estimación; se puede editar">Cajas Proyectadas</th>
                   {data?.meta?.simulacion && <th className="text-end">Cajas reales</th>}
                   {data?.meta?.simulacion && <th className="text-end">Dif.</th>}
                   <th>Confianza</th>
