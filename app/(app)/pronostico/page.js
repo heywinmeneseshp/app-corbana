@@ -329,7 +329,40 @@ function PronosticoSemanal() {
     if (ratio === null && !row.ratioManual) return;
     try {
       await apiFetch("/pronostico/ratio-manual", { method: "PUT", body: JSON.stringify({ fincaUuid: row.fincaUuid || null, semanaCodigo: row.semanaCodigo, ratio }) });
-      await handleConsultar();
+      if (ratio === null) {
+        // Volver al calculado: el valor lo calcula el servidor, se trae en segundo plano sin recargar la tabla.
+        const res = await apiFetch(`/pronostico?${buildParams().toString()}`);
+        setData(res);
+        return;
+      }
+      // Ratio nuevo: se actualiza solo esa fila (cajas, marca de editado) y el punto del gráfico de ratio, sin recargar la página.
+      setData((prev) => {
+        if (!prev) return prev;
+        const rows = prev.rows.map((r) => {
+          if (r.fincaUuid !== row.fincaUuid || r.semanaCodigo !== row.semanaCodigo) return r;
+          const factor = r.ratio > 0 ? ratio / r.ratio : null;
+          return {
+            ...r,
+            ratio,
+            cajas20kg: Math.round(r.racimosCosechados * ratio * 100) / 100,
+            cajasCiLow: factor != null && r.cajasCiLow != null ? Math.round(r.cajasCiLow * factor * 100) / 100 : r.cajasCiLow,
+            cajasCiHigh: factor != null && r.cajasCiHigh != null ? Math.round(r.cajasCiHigh * factor * 100) / 100 : r.cajasCiHigh,
+            ratioManual: true,
+          };
+        });
+        const deLaSemana = rows.filter((r) => !r.real && r.semanaCodigo === row.semanaCodigo).map((r) => r.ratio);
+        const ratioSerie = prev.ratioSerie
+          ? {
+              ...prev.ratioSerie,
+              serie: prev.ratioSerie.serie.map((pt) =>
+                pt.anio === row.anio && pt.numeroSemana === row.numeroSemana && deLaSemana.length
+                  ? { ...pt, ratioProyectado: Math.round((deLaSemana.reduce((a, b) => a + b, 0) / deLaSemana.length) * 1000) / 1000 }
+                  : pt,
+              ),
+            }
+          : prev.ratioSerie;
+        return { ...prev, rows, ratioSerie };
+      });
     } catch (err) {
       setError(err.message);
     }
