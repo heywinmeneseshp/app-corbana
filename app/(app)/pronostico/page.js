@@ -36,7 +36,7 @@ const ORIGEN_EDAD = {
 function DistribucionEdad({ ageBreakdown }) {
   const max = Math.max(1, ...ageBreakdown.map((a) => a.racimos));
   return (
-    <div className="d-flex align-items-end gap-1" style={{ height: 28 }} title={
+    <div className="d-flex align-items-end justify-content-center gap-1" style={{ height: 28 }} title={
       ageBreakdown.map((a) => `Edad ${a.edad}: ${a.racimos.toLocaleString("es")} racimos${a.origen ? ` (${ORIGEN_EDAD[a.origen]?.texto || a.origen})` : ""}`).join(" · ")
     }>
       {ageBreakdown.map((a) => (
@@ -479,7 +479,7 @@ function PronosticoSemanal() {
 
         <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
           <div className="table-responsive">
-            <table className="table table-sm table-hover mb-0 align-middle" style={{ fontSize: "0.74rem" }}>
+            <table className="table table-sm table-hover mb-0 align-middle tabla-pronostico" style={{ fontSize: "0.84rem" }}>
               <thead className="table-light">
                 <tr>
                   <th style={{ width: 24 }} />
@@ -640,6 +640,10 @@ function PronosticoSemanal() {
       )}
 
       <style jsx>{`
+        :global(.tabla-pronostico th),
+        :global(.tabla-pronostico td) {
+          text-align: center !important;
+        }
         .spin {
           animation: spin 0.8s linear infinite;
         }
