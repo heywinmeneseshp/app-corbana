@@ -8,7 +8,7 @@ import RequirePermission from "@/components/RequirePermission";
 import ProyeccionAnual from "@/components/proyeccion/ProyeccionAnual";
 import GraficoRatio from "@/components/precalibracion/GraficoRatio";
 import GraficasSemanalModal from "@/components/proyeccion/GraficasSemanalModal";
-import { hasPermission } from "@/lib/auth";
+import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { calcularColorSemana, COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 
 const SEMANAS_OPCIONES = [4, 8, 12, 26, 52];
@@ -188,7 +188,26 @@ function PronosticoSemanal() {
   const [anio, setAnio] = useState(anioActual);
   const [semanasDelAnio, setSemanasDelAnio] = useState([]);
   const [semanaInicioUuid, setSemanaInicioUuid] = useState("");
-  const [semanasProyectar, setSemanasProyectar] = useState(8);
+  // "Semanas a proyectar" se recuerda por usuario en este navegador, para no tener que elegirlo cada vez.
+  const claveSemanas = () => {
+    const u = typeof window !== "undefined" ? getCurrentUser() : null;
+    return `pronostico.semanas.${u?.uuid || u?.id || u?.usuario || "anon"}`;
+  };
+  const [semanasProyectar, setSemanasProyectar] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem(claveSemanas()));
+      return v >= 1 && v <= SEMANAS_MAX ? v : 8;
+    } catch {
+      return 8;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(claveSemanas(), String(semanasProyectar));
+    } catch {
+      // sin almacenamiento local: dura mientras la página esté abierta
+    }
+  }, [semanasProyectar]);
   // Simulación: pronosticar como si hoy fuera una fecha pasada, para compararlo con lo que realmente ocurrió.
   const [simularDesde, setSimularDesde] = useState("");
   // Ventana de la gráfica del ratio (semanas antes y después de hoy); se aplica al pulsar Enter o salir del campo.
