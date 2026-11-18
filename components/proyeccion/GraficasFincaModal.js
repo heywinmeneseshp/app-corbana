@@ -102,6 +102,9 @@ function TotalesCajas({ datos, series }) {
       let h1 = 0;
       let h2 = 0;
       let ultima = 0;
+      // Hectáreas en producción promedio de las semanas con cajas, por periodo: cajas/ha = cajas del periodo ÷ hectáreas promedio del periodo.
+      const ha = { anio: [], h1: [], h2: [] };
+      const claveHa = sr.clave.replace(/_cajas$/, "_hectareas");
       for (const r of datos) {
         const v = r[sr.clave];
         if (v == null) continue;
@@ -109,8 +112,15 @@ function TotalesCajas({ datos, series }) {
         if (r.semana <= 26) h1 += v;
         else h2 += v;
         ultima = Math.max(ultima, r.semana);
+        const h = r[claveHa];
+        if (h > 0) {
+          ha.anio.push(h);
+          (r.semana <= 26 ? ha.h1 : ha.h2).push(h);
+        }
       }
-      return { ...sr, total, h1, h2, ultima };
+      const prom = (l) => (l.length ? l.reduce((a, b) => a + b, 0) / l.length : 0);
+      const porHa = (cajas, l) => (prom(l) > 0 ? cajas / prom(l) : null);
+      return { ...sr, total, h1, h2, ultima, haAnio: porHa(total, ha.anio), ha1: porHa(h1, ha.h1), ha2: porHa(h2, ha.h2) };
     })
     .filter((f) => f.total > 0);
   if (filas.length === 0) return null;
@@ -122,10 +132,13 @@ function TotalesCajas({ datos, series }) {
           <tr>
             <th>Serie</th>
             <th className="text-end">Total del año</th>
+            <th className="text-end" title="Cajas del año ÷ hectáreas en producción promedio del año">Cajas/ha año</th>
             <th className="text-end">1ª mitad (S1-S26)</th>
             <th className="text-end">%</th>
+            <th className="text-end" title="Cajas de la 1ª mitad ÷ hectáreas en producción promedio de esas semanas">Cajas/ha</th>
             <th className="text-end">2ª mitad (S27-S53)</th>
             <th className="text-end">%</th>
+            <th className="text-end" title="Cajas de la 2ª mitad ÷ hectáreas en producción promedio de esas semanas">Cajas/ha</th>
           </tr>
         </thead>
         <tbody>
@@ -137,10 +150,13 @@ function TotalesCajas({ datos, series }) {
                 {f.ultima > 0 && f.ultima < 52 && <span className="text-secondary"> (hasta S{f.ultima})</span>}
               </td>
               <td className="text-end fw-semibold">{fmt(f.total)}</td>
+              <td className="text-end fw-semibold">{fmt(f.haAnio, 1)}</td>
               <td className="text-end">{fmt(f.h1)}</td>
               <td className="text-end text-secondary">{pct(f.h1, f.total)}</td>
+              <td className="text-end">{fmt(f.ha1, 1)}</td>
               <td className="text-end">{fmt(f.h2)}</td>
               <td className="text-end text-secondary">{pct(f.h2, f.total)}</td>
+              <td className="text-end">{fmt(f.ha2, 1)}</td>
             </tr>
           ))}
         </tbody>
