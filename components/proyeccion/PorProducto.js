@@ -192,7 +192,8 @@ function NuevoProductoModal({ onClose, onCreado }) {
 // Reparto de las cajas proyectadas por producto. El total de cajas de cada semana (suma de las fincas visibles) se convierte a kilos con
 // el peso de la caja de referencia (tasa de conversión, hoy 18.6) y se reparte entre productos: contenedores fijos por semana, % de
 // los kilos y un producto que se queda con el resto. Cada producto convierte sus kilos en cajas con su peso neto. Una sola mezcla para todas las fincas.
-export default function PorProducto({ resultado, ocultas, productos, onChange, puedeEditar, nombreEscenario = "" }) {
+// `soloNormal`: sin el selector conservador / normal / optimista (la proyección semanal reparte solo las cajas normales).
+export default function PorProducto({ resultado, ocultas, productos, onChange, puedeEditar, nombreEscenario = "", soloNormal = false }) {
   const tasa = resultado.meta.tasaConversion ?? 18.6;
   const [catalogo, setCatalogo] = useState([]);
   const [texto, setTexto] = useState("");
@@ -408,7 +409,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
       const ws = wb.addWorksheet(nombre, { views: [{ state: "frozen", xSplit: 1, ySplit: 4 }] });
       const ncol = cabeceras.length;
       ws.mergeCells(1, 1, 1, ncol);
-      ws.getCell(1, 1).value = `Proyección ${resultado.meta.anio}${nombreEscenario ? ` · ${nombreEscenario}` : ""} · Cajas por producto · Escenario ${nombreEscenarioCajas}`;
+      ws.getCell(1, 1).value = `Proyección ${resultado.meta.anio}${nombreEscenario ? ` · ${nombreEscenario}` : ""} · Cajas por producto${soloNormal ? "" : ` · Escenario ${nombreEscenarioCajas}`}`;
       ws.getCell(1, 1).font = { bold: true, size: 14, color: { argb: verde } };
       ws.getCell(1, 1).alignment = { horizontal: "center" };
       ws.mergeCells(2, 1, 2, ncol);
@@ -693,6 +694,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
               </button>
             ))}
           </div>
+          {!soloNormal && (
           <div className="d-flex align-items-center gap-2">
             <span className="small text-secondary">Escenario</span>
             <div className="d-inline-flex gap-1 p-1" style={{ background: "#e6eee8", borderRadius: 8 }} title="Conservador = p25 y optimista = p75 del rango de la proyección">
@@ -709,6 +711,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
               ))}
             </div>
           </div>
+          )}
           <button type="button" className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" onClick={descargarExcel}>
             <FiDownload /> Descargar Excel
           </button>
