@@ -9,6 +9,7 @@ import ProyeccionAnual from "@/components/proyeccion/ProyeccionAnual";
 import GraficoRatio from "@/components/precalibracion/GraficoRatio";
 import GraficasSemanalModal from "@/components/proyeccion/GraficasSemanalModal";
 import ModalShell from "@/components/ModalShell";
+import PorProducto from "@/components/proyeccion/PorProducto";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { calcularColorSemana, COLOR_HEX, COLOR_TEXT } from "@/lib/semanaColor";
 
@@ -58,6 +59,128 @@ function DistribucionEdad({ ageBreakdown }) {
 }
 
 const EDADES_COSECHA = [8, 9, 10, 11, 12];
+const SIN_OCULTAS = new Set();
+
+// Cajas por producto de la proyección semanal: reparte las Cajas Proyectadas de cada semana con la misma lógica de la proyección anual.
+// Usa su propia configuración si está guardada; si no, la del escenario anual (y se puede volver a ella).
+function ProductosSemanal({ data, puedeEditar }) {
+  const [cfg, setCfg] = useState(null); // { origen, escenario, productos }
+  const [productos, setProductos] = useState([]);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const [abierto, setAbierto] = useState(false);
+  useEffect(() => {
+    apiFetch("/pronostico/productos")
+      .then((r) => {
+        setCfg(r);
+        setProductos(r.productos || []);
+      })
+      .catch((err) => setError(err.message));
+  }, []);
+  const resultado = useMemo(() => {
+    const cajasDe = (r, extra) => (extra ?? r.cajas20kg) + (r.cajasAdicionales || 0);
+    const grupos = new Map();
+    const filas = data.rows.map((r) => {
+      const fincaUuid = r.fincaUuid ?? "GLOBAL";
+      grupos.set(fincaUuid, r.fincaNombre || "Todas las fincas");
+      const normal = r.cajasProyectada ?? r.cajasTotal ?? r.cajas20kg;
+      return {
+        fincaUuid,
+        fincaNombre: r.fincaNombre || "Todas las fincas",
+        semanaCodigo: r.semanaCodigo,
+        numeroSemana: r.numeroSemana,
+        fechaInicio: r.fechaInicio,
+        real: r.real,
+        cajas: normal,
+        cajasBajo: r.cajasProyectadaManual ? normal : cajasDe(r, r.cajasCiLow),
+        cajasAlto: r.cajasProyectadaManual ? normal : cajasDe(r, r.cajasCiHigh),
+      };
+    });
+    return {
+      meta: { tasaConversion: data.meta?.tasaConversion ?? 18.6, anio: data.meta?.semanaInicio?.anio },
+      filas,
+      aprovechamiento: [...grupos.entries()].map(([fincaUuid, fincaNombre]) => ({ fincaUuid, fincaNombre })),
+    };
+  }, [data]);
+  const sucio = cfg && JSON.stringify(productos) !== JSON.stringify(cfg.productos);
+
+  async function guardar() {
+    setError("");
+    setGuardando(true);
+    try {
+      const items = productos.map((x) => ({
+        productoUuid: x.uuid,
+        modo: x.modo || "PORCENTAJE",
+        porcentaje: x.modo === "PORCENTAJE" || !x.modo ? Number(x.porcentaje) : null,
+        contenedores: x.modo === "CONTENEDORES" ? Number(x.contenedores) : null,
+        cajasContenedor: x.modo === "CONTENEDORES" || x.modo === "FINCA" ? x.cajasContenedor ?? null : null,
+        cadaSemanas: x.modo === "CONTENEDORES" ? x.cadaSemanas || 1 : 1,
+        desdeSemana: x.modo === "CONTENEDORES" ? x.desdeSemana || 1 : 1,
+        fincaUuids: x.modo === "FINCA" ? x.fincaUuids || [] : [],
+      }));
+      const r = await apiFetch("/pronostico/productos", { method: "PUT", body: JSON.stringify({ productos: items }) });
+      setCfg(r);
+      setProductos(r.productos || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+  async function usarAnual() {
+    if (!window.confirm("¿Volver a usar el reparto por producto del escenario anual? Se borra la configuración propia de la proyección semanal.")) return;
+    setError("");
+    try {
+      const r = await apiFetch("/pronostico/productos", { method: "DELETE" });
+      setCfg(r);
+      setProductos(r.productos || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <div className="card border-0 shadow-sm rounded-4 p-3 mt-3">
+      <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <button type="button" className="btn btn-link p-0 text-decoration-none text-dark fw-semibold d-flex align-items-center gap-1" onClick={() => setAbierto((v) => !v)}>
+          {abierto ? <FiChevronDown /> : <FiChevronRight />} Cajas por producto
+        </button>
+        {cfg && (
+          <span className="small text-secondary">
+            {cfg.origen === "propia" ? "Configuración propia de la proyección semanal" : cfg.origen === "anual" ? `Tomada del escenario anual «${cfg.escenario?.nombre}»` : "Sin configuración de productos"}
+          </span>
+        )}
+      </div>
+      {abierto && (
+        <div className="mt-2">
+          {error && <div className="alert alert-danger py-2 small">{error}</div>}
+          <p className="small text-secondary mb-2">
+            Reparte las <strong>Cajas Proyectadas</strong> de cada semana entre productos, igual que en la Proyección anual. Al editar los productos aquí y guardar, la
+            proyección semanal usa su propia configuración; mientras no la tenga, usa la del escenario anual.
+          </p>
+          {puedeEditar && (
+            <div className="d-flex flex-wrap gap-2 mb-2">
+              <button type="button" className="btn btn-brand btn-sm" disabled={!sucio || guardando} onClick={guardar}>
+                {guardando ? "Guardando..." : "Guardar distribución"}
+              </button>
+              {sucio && (
+                <button type="button" className="btn btn-link btn-sm text-secondary" onClick={() => setProductos(cfg.productos || [])}>
+                  Descartar cambios
+                </button>
+              )}
+              {cfg?.origen === "propia" && (
+                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={usarAnual}>
+                  Usar la del escenario anual
+                </button>
+              )}
+            </div>
+          )}
+          {cfg && <PorProducto resultado={resultado} ocultas={SIN_OCULTAS} productos={productos} onChange={setProductos} puedeEditar={puedeEditar} nombreEscenario="Proyección semanal" />}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Detalle de la columna "Estimación Finca": lo que estimó cada finca (propias y luego externas) en cada semana de la tabla, con totales.
 function EstimacionFincasModal({ detalle, onClose }) {
@@ -1009,6 +1132,8 @@ function PronosticoSemanal() {
             </table>
           </div>
         </div>
+
+        {data && data.rows.length > 0 && !data.meta?.simulacion && <ProductosSemanal data={data} puedeEditar={puedeEditarRatio} />}
       </div>
 
       {verEstimacionFincas && data && <EstimacionFincasModal detalle={data.estimacionPorFinca} onClose={() => setVerEstimacionFincas(false)} />}
