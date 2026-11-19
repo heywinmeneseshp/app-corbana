@@ -248,6 +248,11 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
                             Principal
                           </span>
                         )}
+                        {i.esSecundario && (
+                          <span className="badge rounded-pill ms-2" style={{ backgroundColor: "#e0f2fe", color: "#0369a1" }}>
+                            Secundario
+                          </span>
+                        )}
                         {i.esAdicional && (
                           <span className="badge rounded-pill ms-2" style={{ backgroundColor: "#fef3c7", color: "#b45309" }} title="Agregado a esta aspersión; no está en la receta de la mezcla">
                             Adicional

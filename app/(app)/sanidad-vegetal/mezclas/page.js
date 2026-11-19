@@ -228,6 +228,7 @@ function emptyInsumoRow() {
     cantidad: "1",
     unidadUuid: "",
     esPrincipal: false,
+    esSecundario: false,
     // Dosis relativa: dos tipos excluyentes (ver utils/dosisRelativa.js en
     // el backend) — PORCENTAJE: X% de otro insumo (ej. 1% del ACEITE
     // BANOLE); POR_VOLUMEN: tasa por unidad de volumen de mezcla total
@@ -583,6 +584,7 @@ function componentesPayloadDesdeRows(rows, { grafoUnidades, articulos, unidades,
         cantidad: completa && preview != null ? Number(preview.toFixed(4)) : Number(r.cantidad),
         unidadUuid: r.unidadUuid || null,
         esPrincipal: Boolean(r.esPrincipal),
+        esSecundario: Boolean(r.esSecundario) && !r.esPrincipal,
         tipoDosis: completa ? tipo : "FIJA",
         referenciaArticuloUuid: completa && tipo === "PORCENTAJE" ? r.referenciaArticuloUuid : null,
         porcentajeReferencia: completa && tipo === "PORCENTAJE" ? Number(r.porcentajeReferencia) : null,
@@ -961,6 +963,7 @@ export default function ElaboracionesPage() {
                 cantidad: c.cantidad != null ? String(c.cantidad) : "",
                 unidadUuid: c.unidad?.uuid || "",
                 esPrincipal: Boolean(c.esPrincipal),
+                esSecundario: Boolean(c.esSecundario),
                 tipoDosis: c.tipoDosis || (c.referenciaArticuloId ? "PORCENTAJE" : "FIJA"),
                 referenciaArticuloUuid: "",
                 porcentajeReferencia: c.porcentajeReferencia != null ? String(c.porcentajeReferencia) : "",
@@ -1007,7 +1010,7 @@ export default function ElaboracionesPage() {
   // tope de 100%-110% del "% Aumento" automático, antes solo se podía
   // marcar desde la prueba de laboratorio.
   function marcarPrincipalEditar(key) {
-    setEditarInsumoRows((rows) => rows.map((r) => ({ ...r, esPrincipal: r.key === key })));
+    setEditarInsumoRows((rows) => rows.map((r) => ({ ...r, esPrincipal: r.key === key, esSecundario: r.key === key ? false : r.esSecundario })));
   }
 
   function addEditarInsumoRow() {
@@ -1285,7 +1288,7 @@ export default function ElaboracionesPage() {
 
   // Solo un insumo puede ser "Principal" — ver marcarPrincipalEditar.
   function marcarPrincipal(key) {
-    setInsumoRows((rows) => rows.map((r) => ({ ...r, esPrincipal: r.key === key })));
+    setInsumoRows((rows) => rows.map((r) => ({ ...r, esPrincipal: r.key === key, esSecundario: r.key === key ? false : r.esSecundario })));
   }
 
   function addInsumoRow() {
@@ -1833,7 +1836,7 @@ export default function ElaboracionesPage() {
                       <th style={{ width: "7rem" }}>Cantidad</th>
                       <th style={{ minWidth: "10rem" }}>% de otro</th>
                       <th className="text-center" style={{ width: "5rem" }}>
-                        Principal
+                        Principal / 2°
                       </th>
                       <th className="text-center" style={{ minWidth: "7rem" }}>
                         Dosis informativa
@@ -1937,6 +1940,14 @@ export default function ElaboracionesPage() {
                             disabled={!row.articuloUuid}
                             onChange={() => marcarPrincipal(row.key)}
                             title="Insumo principal de la receta — lo usa Programación de Aspersiones para el tope de dosis del % Aumento automático"
+                          />
+                          <input
+                            type="checkbox"
+                            className="form-check-input ms-2"
+                            checked={Boolean(row.esSecundario)}
+                            disabled={!row.articuloUuid || row.esPrincipal}
+                            onChange={(e) => updateInsumoRow(row.key, { esSecundario: e.target.checked })}
+                            title="Insumo secundario: su información (ingrediente activo, concentración y dosis) también sale en el comprobante de aspersión"
                           />
                         </td>
                         <td className="small text-center text-secondary">
@@ -2455,7 +2466,7 @@ export default function ElaboracionesPage() {
                           <th style={{ width: "7rem" }}>Cantidad</th>
                       <th style={{ minWidth: "10rem" }}>% de otro</th>
                           <th className="text-center" style={{ width: "5rem" }}>
-                            Principal
+                            Principal / 2°
                           </th>
                           <th className="text-center" style={{ minWidth: "7rem" }}>
                             Dosis informativa
@@ -2565,6 +2576,14 @@ export default function ElaboracionesPage() {
                                 disabled={!row.articuloUuid}
                                 onChange={() => marcarPrincipalEditar(row.key)}
                                 title="Insumo principal de la receta — lo usa Programación de Aspersiones para el tope de dosis del % Aumento automático"
+                              />
+                              <input
+                                type="checkbox"
+                                className="form-check-input ms-2"
+                                checked={Boolean(row.esSecundario)}
+                                disabled={!row.articuloUuid || row.esPrincipal}
+                                onChange={(e) => updateEditarInsumoRow(row.key, { esSecundario: e.target.checked })}
+                                title="Insumo secundario: su información (ingrediente activo, concentración y dosis) también sale en el comprobante de aspersión"
                               />
                             </td>
                             <td className="small text-center text-secondary">
