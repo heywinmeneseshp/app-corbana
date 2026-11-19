@@ -11,6 +11,7 @@ import ModalShell from "@/components/ModalShell";
 import DetalleComprobanteModal from "@/components/aspersion/DetalleComprobanteModal";
 import PilotoAsistentes from "@/components/aspersion/PilotoAsistentes";
 import RecorridoKml from "@/components/aspersion/RecorridoKml";
+import ManipuladoresPicker from "@/components/aspersion/ManipuladoresPicker";
 import { descargarComprobanteAspersionPdf, verComprobanteAspersionPdf, generarComprobanteAspersionPdfBlob } from "@/lib/comprobanteAspersionExport";
 
 const MEDIO_LABEL = { AVION: "Avión", DRON: "Dron" };
@@ -208,7 +209,7 @@ export default function ComprobantesAspersionPage() {
       anchoDeposicion: c.anchoDeposicion != null ? String(Number(c.anchoDeposicion)) : "",
       tiempoReentrada: c.tiempoReentrada != null ? String(Number(c.tiempoReentrada)) : "4",
       tiempoCarencia: c.tiempoCarencia != null ? String(Number(c.tiempoCarencia)) : "0",
-      manipuladores: (c.manipuladores || []).length ? c.manipuladores.map((m) => ({ nombre: m.nombre || "", documento: m.documento || "" })) : [{ nombre: "", documento: "" }],
+      manipuladores: (c.manipuladores || []).map((m) => ({ colaboradorUuid: m.colaboradorUuid || null, nombre: m.nombre || "", documento: m.documento || "" })),
       error: "",
     });
   }
@@ -229,7 +230,7 @@ export default function ComprobantesAspersionPage() {
         anchoDeposicion: m.anchoDeposicion === "" ? null : Number(m.anchoDeposicion),
         tiempoReentrada: m.tiempoReentrada === "" ? null : Number(m.tiempoReentrada),
         tiempoCarencia: m.tiempoCarencia === "" ? null : Number(m.tiempoCarencia),
-        manipuladores: m.manipuladores.filter((x) => x.nombre.trim()).map((x) => ({ nombre: x.nombre.trim(), documento: x.documento.trim() })),
+        manipuladores: m.manipuladores.filter((x) => x.nombre.trim()).map((x) => ({ colaboradorUuid: x.colaboradorUuid || null, nombre: x.nombre.trim(), documento: (x.documento || "").trim() })),
       };
       const actualizado = await apiFetch(`/comprobantes-aspersion/${m.comprobante.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       setItems((prev) => prev.map((it) => (it.uuid === actualizado.uuid ? actualizado : it)));
@@ -796,18 +797,7 @@ Se abrirá la edición para completarlo.`);
               ))}
               <div className="col-12">
                 <label className="form-label small fw-medium mb-1">Manipuladores de plaguicidas</label>
-                {edicion.manipuladores.map((mp, i) => (
-                  <div key={i} className="d-flex gap-2 mb-1">
-                    <input className="form-control form-control-sm rounded-3" placeholder="Nombre y apellido" value={mp.nombre} onChange={(e) => setEdicion((m) => ({ ...m, manipuladores: m.manipuladores.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)) }))} />
-                    <input className="form-control form-control-sm rounded-3" style={{ maxWidth: 160 }} placeholder="Identificación" value={mp.documento} onChange={(e) => setEdicion((m) => ({ ...m, manipuladores: m.manipuladores.map((x, j) => (j === i ? { ...x, documento: e.target.value } : x)) }))} />
-                    <button type="button" className="btn btn-sm btn-link text-danger p-0" title="Quitar" onClick={() => setEdicion((m) => ({ ...m, manipuladores: m.manipuladores.filter((_, j) => j !== i) }))}>
-                      <FiTrash2 />
-                    </button>
-                  </div>
-                ))}
-                <button type="button" className="btn btn-sm btn-link text-decoration-none p-0" onClick={() => setEdicion((m) => ({ ...m, manipuladores: [...m.manipuladores, { nombre: "", documento: "" }] }))}>
-                  + Agregar manipulador
-                </button>
+                <ManipuladoresPicker valor={edicion.manipuladores} onChange={(v) => setEdicion((m) => ({ ...m, manipuladores: v }))} />
               </div>
               <div className="col-12">
                 <label className="form-label small fw-medium mb-1">Observaciones</label>
