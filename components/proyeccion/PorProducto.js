@@ -24,6 +24,7 @@ const ESCENARIOS = [
 
 const MODOS = [
   { id: "CONTENEDORES", label: "Contenedores por semana" },
+  { id: "MANUAL", label: "Manual semana a semana" },
   { id: "PORCENTAJE", label: "% de los kilos" },
   { id: "RESTO", label: "Resto (lo que sobra)" },
   { id: "FINCA", label: "Toda la fruta de fincas" },
@@ -67,6 +68,8 @@ function repartirKilos(kg, lista, numeroSemana, kgPorFinca = {}) {
     cajas[p.uuid] = p.pesoNeto > 0 ? real / p.pesoNeto : null;
   };
   for (const p of lista.filter((x) => x.modo === "CONTENEDORES")) asignar(p, aplicaEnSemana(p, numeroSemana) ? Number(p.contenedores || 0) * Number(p.cajasPorContenedor || 0) * p.pesoNeto : 0);
+  // MANUAL: los contenedores escritos para esa semana (semanas sin valor = 0).
+  for (const p of lista.filter((x) => x.modo === "MANUAL")) asignar(p, Number(p.semanasManual?.[String(Number(numeroSemana))] || 0) * Number(p.cajasPorContenedor || 0) * p.pesoNeto);
   for (const p of lista.filter((x) => x.modo === "PORCENTAJE")) asignar(p, (kg * Number(p.porcentaje || 0)) / 100);
   const resto = lista.find((x) => x.modo === "RESTO");
   if (resto) {
@@ -212,6 +215,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
   const prodVista = cliente ? productos.filter((p) => (p.clientes || []).includes(cliente)) : productos;
   const [fincasNuevo, setFincasNuevo] = useState([]); // fincas del producto que se va a agregar en modo FINCA
   const [nuevoProducto, setNuevoProducto] = useState(false);
+  const [editandoManual, setEditandoManual] = useState(null); // uuid del producto MANUAL cuyos contenedores por semana se editan
   const fincasLista = resultado.aprovechamiento || [];
   const fincasOcupadas = (excepto) => new Set(productos.filter((x) => x.modo === "FINCA" && x.uuid !== excepto).flatMap((x) => x.fincaUuids || []));
   const nombreFinca = useMemo(() => new Map((resultado.aprovechamiento || []).map((f) => [f.fincaUuid, f.fincaNombre])), [resultado]);
@@ -224,11 +228,11 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
 
   const etiqueta = (p) => (p.codigo ? `${p.nombre} (${p.codigo})` : p.nombre);
   const porEtiqueta = useMemo(() => new Map(catalogo.map((p) => [etiqueta(p), p])), [catalogo]);
-  const disponibles = catalogo.filter((p) => !productos.some((x) => x.uuid === p.uuid) && (modo !== "CONTENEDORES" || cajasContenedor(p) > 0));
+  const disponibles = catalogo.filter((p) => !productos.some((x) => x.uuid === p.uuid) && ((modo !== "CONTENEDORES" && modo !== "MANUAL") || cajasContenedor(p) > 0));
   // Mezcla general = todo menos los productos FINCA (esos solo toman la fruta de sus fincas).
   const generales = productos.filter((p) => p.modo !== "FINCA");
   const hayResto = generales.some((p) => p.modo === "RESTO");
-  const hayContenedores = generales.some((p) => p.modo === "CONTENEDORES");
+  const hayContenedores = generales.some((p) => p.modo === "CONTENEDORES" || p.modo === "MANUAL");
   // Con fincas dedicadas los % (sobre el total) no pueden sumar 100: hace falta un «resto» que se quede con lo que queda.
   const hayFinca = productos.some((p) => p.modo === "FINCA");
   const sumaPct = Math.round(generales.filter((p) => p.modo === "PORCENTAJE").reduce((a, p) => a + Number(p.porcentaje || 0), 0) * 100) / 100;
@@ -247,6 +251,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
     if (modo === "PORCENTAJE" && !(num > 0 && num <= 100)) return setError("Escribe un porcentaje entre 0 y 100.");
     if (modo === "CONTENEDORES" && !(num > 0)) return setError("Escribe cuántos contenedores por semana.");
     if (modo === "FINCA" && fincasNuevo.length === 0) return setError("Elige las fincas cuya fruta va a este producto.");
+    if (modo === "MANUAL") setEditandoManual(prod.uuid); // se abre la tabla de semanas para escribir los contenedores
     onChange([
       ...productos,
       {
@@ -263,6 +268,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
         cadaSemanas: 1,
         desdeSemana: 1,
         fincaUuids: modo === "FINCA" ? fincasNuevo : [],
+        semanasManual: {},
       },
     ]);
     setTexto("");
@@ -288,7 +294,9 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
       porcentaje: nuevo === "PORCENTAJE" ? p.porcentaje || "" : null,
       contenedores: nuevo === "CONTENEDORES" ? p.contenedores || "" : null,
       fincaUuids: nuevo === "FINCA" ? (p.fincaUuids || []).filter((u) => !fincasOcupadas(p.uuid).has(u)) : [],
+      semanasManual: nuevo === "MANUAL" ? p.semanasManual || {} : {},
     });
+    if (nuevo === "MANUAL") setEditandoManual(p.uuid);
   };
 
   // Cajas 18.6 de cada semana del escenario elegido (en semanas reales los tres valen lo mismo), sumando solo las fincas visibles.
@@ -388,7 +396,9 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
   const detalleModo = (p) =>
     p.modo === "CONTENEDORES"
       ? `${fmt(p.contenedores, 2)} cont.${p.cadaSemanas > 1 ? ` cada ${p.cadaSemanas} sem. desde S${p.desdeSemana}` : "/sem."}`
-      : p.modo === "RESTO"
+      : p.modo === "MANUAL"
+        ? `manual: ${fmt(Object.values(p.semanasManual || {}).reduce((a, n) => a + Number(n || 0), 0), 1)} cont. en ${Object.keys(p.semanasManual || {}).length} sem.`
+        : p.modo === "RESTO"
         ? "resto"
         : p.modo === "FINCA"
           ? `fincas: ${(p.fincaUuids || []).map((u) => nombreFinca.get(u) || "?").join(", ")}`
@@ -537,7 +547,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                   <td className="fw-medium">{etiqueta(p)}</td>
                   <td className="text-end">{fmt(p.pesoNeto, 3)}</td>
                   <td className="text-end">
-                    {p.modo === "CONTENEDORES" || p.modo === "FINCA" ? (
+                    {p.modo === "CONTENEDORES" || p.modo === "FINCA" || p.modo === "MANUAL" ? (
                       <input
                         type="number"
                         min="1"
@@ -557,7 +567,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                     ) : (
                       "—"
                     )}
-                    {(p.modo === "CONTENEDORES" || p.modo === "FINCA") && p.cajasContenedor && p.cajasCatalogo > 0 && <div className="text-secondary" style={{ fontSize: "0.7rem" }}>catálogo: {fmt(p.cajasCatalogo)}</div>}
+                    {(p.modo === "CONTENEDORES" || p.modo === "FINCA" || p.modo === "MANUAL") && p.cajasContenedor && p.cajasCatalogo > 0 && <div className="text-secondary" style={{ fontSize: "0.7rem" }}>catálogo: {fmt(p.cajasCatalogo)}</div>}
                   </td>
                   <td>
                     <select className="form-select form-select-sm" disabled={!puedeEditar} value={p.modo} onChange={(e) => cambiarModo(p, e.target.value)}>
@@ -589,6 +599,13 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                     {p.modo === "PORCENTAJE" && <input type="number" min="0" max="100" step="0.01" className="form-control form-control-sm" disabled={!puedeEditar} value={p.porcentaje ?? ""} onChange={(e) => cambiar(p.uuid, { porcentaje: e.target.value === "" ? "" : Number(e.target.value) })} />}
                     {p.modo === "CONTENEDORES" && <input type="number" min="0" step="0.5" className="form-control form-control-sm" disabled={!puedeEditar} value={p.contenedores ?? ""} onChange={(e) => cambiar(p.uuid, { contenedores: e.target.value === "" ? "" : Number(e.target.value) })} />}
                     {p.modo === "RESTO" && <span className="text-secondary">lo que sobra</span>}
+                    {p.modo === "MANUAL" && (
+                      <button type="button" className="btn btn-sm btn-outline-secondary w-100" onClick={() => setEditandoManual(p.uuid)} title="Contenedores de este producto en cada semana">
+                        {Object.keys(p.semanasManual || {}).length
+                          ? `${fmt(Object.values(p.semanasManual).reduce((a, n) => a + Number(n || 0), 0), 1)} cont. · ${Object.keys(p.semanasManual).length} sem.`
+                          : "Escribir semanas"}
+                      </button>
+                    )}
                     {p.modo === "FINCA" && (
                       <SelectorFincas fincas={fincasLista} valor={p.fincaUuids || []} ocupadas={fincasOcupadas(p.uuid)} disabled={!puedeEditar} onChange={(v) => cambiar(p.uuid, { fincaUuids: v })} />
                     )}
@@ -642,7 +659,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                 <SelectorFincas fincas={fincasLista} valor={fincasNuevo} ocupadas={fincasOcupadas(null)} onChange={setFincasNuevo} />
               </div>
             )}
-            {modo !== "RESTO" && modo !== "FINCA" && (
+            {modo !== "RESTO" && modo !== "FINCA" && modo !== "MANUAL" && (
               <div style={{ width: 110 }}>
                 <label className="form-label small mb-1">{modo === "CONTENEDORES" ? "Contenedores" : "% de kilos"}</label>
                 <input type="number" min="0" step={modo === "CONTENEDORES" ? "0.5" : "0.01"} className="form-control form-control-sm" value={valor} onChange={(e) => setValor(e.target.value)} />
@@ -663,6 +680,18 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
           <div className="alert alert-warning py-2 small mt-2 mb-0">
             Quedan {fmt(kgSinAsignar)} kg ({fmt(kgSinAsignar / tasa)} cajas {fmt(tasa, 1)}) sin producto en el año: agrega un producto «resto» para la fruta de las demás fincas y lo que sobra de las dedicadas.
           </div>
+        )}
+        {editandoManual && productos.some((x) => x.uuid === editandoManual) && (
+          <SemanasManualModal
+            producto={productos.find((x) => x.uuid === editandoManual)}
+            semanas={semanas}
+            puedeEditar={puedeEditar}
+            onClose={() => setEditandoManual(null)}
+            onGuardar={(semanasManual) => {
+              cambiar(editandoManual, { semanasManual });
+              setEditandoManual(null);
+            }}
+          />
         )}
         {nuevoProducto && (
           <NuevoProductoModal
@@ -839,6 +868,76 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
           <p className="small text-secondary mt-2 mb-0">* Semana ya transcurrida. Las cajas de cada producto son cajas reales de ese producto (kilos ÷ su peso neto); pasa el ratón sobre una cifra para ver los contenedores. El producto «resto» se redondea hacia arriba a contenedores completos. Las semanas en naranja no alcanzan para el reparto pedido.</p>
         </>
       )}
+    </div>
+  );
+}
+
+// Modo MANUAL: contenedores del producto en cada semana. Las semanas vacías no llevan contenedores; el «resto» toma lo que sobra.
+function SemanasManualModal({ producto, semanas, puedeEditar, onClose, onGuardar }) {
+  const [valores, setValores] = useState(() => Object.fromEntries(Object.entries(producto.semanasManual || {}).map(([k, v]) => [k, String(v)])));
+  const [todas, setTodas] = useState("");
+  const lista = [...semanas].sort((a, b) => String(a.fechaInicio).localeCompare(String(b.fechaInicio)));
+  const total = Object.values(valores).reduce((a, v) => a + (Number(v) || 0), 0);
+  const cajasCont = Number(producto.cajasPorContenedor || 0);
+  const guardar = () => onGuardar(Object.fromEntries(Object.entries(valores).filter(([, v]) => Number(v) > 0).map(([k, v]) => [k, Number(v)])));
+  return (
+    <div className="modal d-block" tabIndex={-1} style={{ background: "rgba(0,0,0,0.35)" }} onClick={onClose}>
+      <div className="modal-dialog modal-lg modal-dialog-scrollable" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content">
+          <div className="modal-header py-2">
+            <h6 className="modal-title mb-0">Contenedores por semana · {producto.nombre}</h6>
+            <button type="button" className="btn-close" onClick={onClose} />
+          </div>
+          <div className="modal-body">
+            <div className="small text-secondary mb-2">
+              Escribe los contenedores de cada semana ({fmt(cajasCont)} cajas por contenedor). Las semanas vacías no llevan; lo que sobra va al producto «resto».
+            </div>
+            {puedeEditar && (
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <span className="small">Poner en todas las semanas</span>
+                <input type="number" min="0" step="0.5" className="form-control form-control-sm" style={{ width: 90 }} value={todas} onChange={(e) => setTodas(e.target.value)} />
+                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setValores(Object.fromEntries(lista.map((s) => [String(s.numeroSemana), todas])))}>
+                  Aplicar
+                </button>
+                <button type="button" className="btn btn-sm btn-link text-secondary" onClick={() => setValores({})}>
+                  Limpiar
+                </button>
+              </div>
+            )}
+            <div className="row g-2">
+              {lista.map((s) => (
+                <div key={s.semanaCodigo} className="col-4 col-md-2">
+                  <label className="form-label small mb-0 text-secondary" title={String(s.fechaInicio || "").slice(0, 10)}>
+                    {s.semanaCodigo}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    className="form-control form-control-sm text-end"
+                    disabled={!puedeEditar}
+                    value={valores[String(s.numeroSemana)] ?? ""}
+                    onChange={(e) => setValores((v) => ({ ...v, [String(s.numeroSemana)]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="modal-footer py-2">
+            <span className="small me-auto">
+              Total: <b>{fmt(total, 1)}</b> contenedores · {fmt(total * cajasCont)} cajas
+            </span>
+            <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={onClose}>
+              Cancelar
+            </button>
+            {puedeEditar && (
+              <button type="button" className="btn btn-sm btn-primary" onClick={guardar}>
+                Listo
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
