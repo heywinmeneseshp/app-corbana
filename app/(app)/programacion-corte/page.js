@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { FiCalendar, FiDownload, FiFilter, FiRefreshCw, FiTrash2, FiX } from "react-icons/fi";
-import { descargarProgramacionCorteExcel } from "@/lib/programacionCorteExport";
+import { FiCalendar, FiDownload, FiEye, FiFilter, FiRefreshCw, FiTrash2, FiX } from "react-icons/fi";
+import { armarTablaProgramacion, descargarProgramacionCorteExcel } from "@/lib/programacionCorteExport";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
@@ -71,27 +71,35 @@ export default function ProgramacionCortePage() {
 
   const [syncModal, setSyncModal] = useState(false);
   const [descargando, setDescargando] = useState(false);
+  const [vistaPrevia, setVistaPrevia] = useState(null); // { registros, titulo }
 
-  // Excel con el formato de «Proyección semanal · Cajas por producto», con los filtros actuales (todas las páginas).
-  async function descargarExcel() {
+  // Toda la programación con los filtros actuales (todas las páginas) y el título del informe.
+  async function traerTodos() {
+    const params = new URLSearchParams({ limit: "100" });
+    if (fincaUuid) params.set("fincaUuid", fincaUuid);
+    if (semanaUuid) params.set("semanaUuid", semanaUuid);
+    let todos = [];
+    for (let p = 1; ; p++) {
+      params.set("page", String(p));
+      const r = await apiFetch(`/programacion-corte?${params.toString()}`);
+      todos = todos.concat(r.items || []);
+      if (p >= (r.totalPages || 1)) break;
+    }
+    if (!todos.length) throw new Error("No hay programación para estos filtros");
+    const finca = fincas.find((f) => f.uuid === fincaUuid);
+    const semana = semanas.find((s) => s.uuid === semanaUuid);
+    const titulo = ["Programación de corte", finca ? finca.nombre : "Todas las fincas", semana?.codigo].filter(Boolean).join(" · ");
+    return { registros: todos, titulo };
+  }
+
+  // Excel con el formato de «Proyección semanal · Cajas por producto»; `previa`: abre la tabla en pantalla en vez de descargar.
+  async function descargarExcel(previa = false) {
     setDescargando(true);
     setError("");
     try {
-      const params = new URLSearchParams({ limit: "100" });
-      if (fincaUuid) params.set("fincaUuid", fincaUuid);
-      if (semanaUuid) params.set("semanaUuid", semanaUuid);
-      let todos = [];
-      for (let p = 1; ; p++) {
-        params.set("page", String(p));
-        const r = await apiFetch(`/programacion-corte?${params.toString()}`);
-        todos = todos.concat(r.items || []);
-        if (p >= (r.totalPages || 1)) break;
-      }
-      if (!todos.length) throw new Error("No hay programación para estos filtros");
-      const finca = fincas.find((f) => f.uuid === fincaUuid);
-      const semana = semanas.find((s) => s.uuid === semanaUuid);
-      const titulo = ["Programación de corte", finca ? finca.nombre : "Todas las fincas", semana?.codigo].filter(Boolean).join(" · ");
-      await descargarProgramacionCorteExcel(todos, { titulo });
+      const datos = await traerTodos();
+      if (previa) setVistaPrevia(datos);
+      else await descargarProgramacionCorteExcel(datos.registros, { titulo: datos.titulo });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -166,9 +174,18 @@ export default function ProgramacionCortePage() {
           <div className="d-flex gap-2">
             <button
               type="button"
+              className="btn btn-outline-secondary btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1"
+              disabled={descargando}
+              onClick={() => descargarExcel(true)}
+              title="Ver la tabla de cajas por producto antes de descargarla"
+            >
+              <FiEye /> Vista previa
+            </button>
+            <button
+              type="button"
               className="btn btn-outline-success btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1"
               disabled={descargando}
-              onClick={descargarExcel}
+              onClick={() => descargarExcel(false)}
               title="Cajas por producto y semana (y por mes) con los filtros actuales"
             >
               <FiDownload /> {descargando ? "Generando…" : "Descargar Excel"}
@@ -318,6 +335,13 @@ export default function ProgramacionCortePage() {
           </div>
         </div>
 
+        {vistaPrevia && (
+          <VistaPreviaModal
+            datos={vistaPrevia}
+            onClose={() => setVistaPrevia(null)}
+            onDescargar={() => descargarProgramacionCorteExcel(vistaPrevia.registros, { titulo: vistaPrevia.titulo })}
+          />
+        )}
         {syncModal && (
           <SyncModal
             semanas={semanas}
@@ -454,6 +478,86 @@ function SyncModal({ semanas, onClose, onSynced }) {
           </div>
         </>
       )}
+    </ModalShell>
+  );
+}
+
+// ─── Vista previa: la misma tabla del Excel (cajas por producto, por semana con el total de cada mes, o por mes) ───
+function VistaPreviaModal({ datos, onClose, onDescargar }) {
+  const [periodo, setPeriodo] = useState("semana");
+  const { cols, grupos, kilosDe, sinPeso } = armarTablaProgramacion(datos.registros);
+  const filas = grupos(periodo);
+  const total = {};
+  for (const f of filas) if (!f.esSubtotal) for (const p of cols) total[p.uuid] = (total[p.uuid] || 0) + (f.productos[p.uuid] || 0);
+  const suma = (m) => cols.reduce((t, p) => t + (m[p.uuid] || 0), 0);
+  const n = (v) => (v ? Math.round(v).toLocaleString("es-CO") : "");
+  const verde = "#166534";
+  const celda = { textAlign: "center", whiteSpace: "nowrap" };
+  return (
+    <ModalShell
+      title={`${datos.titulo} · Cajas por producto`}
+      onClose={onClose}
+      width="min(1200px, 96vw)"
+      acciones={
+        <button type="button" className="btn btn-sm btn-success d-flex align-items-center gap-1" onClick={onDescargar}>
+          <FiDownload /> Descargar Excel
+        </button>
+      }
+    >
+      <div className="d-flex align-items-center gap-2 mb-2">
+        <div className="btn-group btn-group-sm">
+          <button type="button" className={`btn ${periodo === "semana" ? "btn-success" : "btn-outline-success"}`} onClick={() => setPeriodo("semana")}>
+            Por semana
+          </button>
+          <button type="button" className={`btn ${periodo === "mes" ? "btn-success" : "btn-outline-success"}`} onClick={() => setPeriodo("mes")}>
+            Total por mes
+          </button>
+        </div>
+        <span className="small text-secondary">Cajas programadas por producto; kilos = cajas × peso neto del producto.</span>
+      </div>
+      <div className="table-responsive" style={{ maxHeight: "65vh" }}>
+        <table className="table table-sm table-bordered align-middle mb-0 small">
+          <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
+            <tr>
+              {[periodo === "semana" ? "Semana" : "Mes", ...cols.map((p) => p.nombre), "Total cajas", "Kilos"].map((t, i) => (
+                <th key={i} style={{ ...celda, background: verde, color: "#fff", whiteSpace: "normal", minWidth: i === 0 ? 120 : 90, ...(i === 0 ? { position: "sticky", left: 0 } : {}) }}>
+                  {t}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((f, i) => {
+              const fondo = f.esSubtotal ? "#cfe5d6" : undefined;
+              return (
+                <tr key={i} style={f.esSubtotal ? { fontWeight: 600, borderTop: "2px solid #14532d" } : undefined}>
+                  <td style={{ ...celda, fontWeight: 600, color: "#14532d", background: f.esSubtotal ? "#b7d8c2" : "#e8f6ee", position: "sticky", left: 0 }}>{f.titulo}</td>
+                  {cols.map((p) => (
+                    <td key={p.uuid} style={{ ...celda, background: fondo }}>
+                      {n(f.productos[p.uuid])}
+                    </td>
+                  ))}
+                  <td style={{ ...celda, fontWeight: 600, background: fondo || "#d1ecdc" }}>{n(suma(f.productos))}</td>
+                  <td style={{ ...celda, background: fondo }}>{n(kilosDe(f.productos))}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot style={{ position: "sticky", bottom: 0 }}>
+            <tr>
+              <td style={{ ...celda, background: verde, color: "#fff", fontWeight: 700, position: "sticky", left: 0 }}>Total</td>
+              {cols.map((p) => (
+                <td key={p.uuid} style={{ ...celda, background: verde, color: "#fff", fontWeight: 700 }}>
+                  {n(total[p.uuid])}
+                </td>
+              ))}
+              <td style={{ ...celda, background: verde, color: "#fff", fontWeight: 700 }}>{n(suma(total))}</td>
+              <td style={{ ...celda, background: verde, color: "#fff", fontWeight: 700 }}>{n(kilosDe(total))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {sinPeso.length > 0 && <div className="small text-secondary mt-2">* Sin peso neto (no suman kilos): {sinPeso.join(", ")}.</div>}
     </ModalShell>
   );
 }
