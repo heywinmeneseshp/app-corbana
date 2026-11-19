@@ -96,6 +96,17 @@ function ProductosSemanal({ data, puedeEditar }) {
         cajasAlto: r.cajasProyectadaManual ? normal : cajasDe(r, r.cajasCiHigh),
       };
     });
+    // Con "Todas" la proyección no viene por finca: se reparte entre las fincas según su participación en las cajas reales recientes, para
+    // que se puedan elegir fincas en los productos «toda la fruta de fincas».
+    const part = data.participacionFincas || [];
+    if (part.length && filas.every((f) => f.fincaUuid === "GLOBAL")) {
+      const porFinca = filas.flatMap((f) => part.map((p) => ({ ...f, fincaUuid: p.uuid, fincaNombre: p.nombre, cajas: f.cajas * p.participacion, cajasBajo: f.cajasBajo * p.participacion, cajasAlto: f.cajasAlto * p.participacion })));
+      return {
+        meta: { tasaConversion: data.meta?.tasaConversion ?? 18.6, anio: data.meta?.semanaInicio?.anio },
+        filas: porFinca,
+        aprovechamiento: part.map((p) => ({ fincaUuid: p.uuid, fincaNombre: p.nombre })),
+      };
+    }
     return {
       meta: { tasaConversion: data.meta?.tasaConversion ?? 18.6, anio: data.meta?.semanaInicio?.anio },
       filas,
