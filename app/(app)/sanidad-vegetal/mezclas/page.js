@@ -202,6 +202,36 @@ function emptyForm() {
   };
 }
 
+// Tipo de insumo en la receta: Principal (uno solo), Secundario (varios) o ninguno; y si se muestra en el comprobante de aspersión.
+function RolInsumo({ row, onPrincipal, onCambio }) {
+  const rol = row.esPrincipal ? "PRINCIPAL" : row.esSecundario ? "SECUNDARIO" : "";
+  return (
+    <div style={{ minWidth: "8.5rem" }}>
+      <select
+        className="form-select form-select-sm"
+        value={rol}
+        disabled={!row.articuloUuid}
+        title="Principal: uno solo por receta (lo usa Programación de Aspersiones). Secundario: pueden ser varios. Ambos salen en el comprobante de aspersión."
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "PRINCIPAL") onPrincipal();
+          else onCambio({ esPrincipal: false, esSecundario: v === "SECUNDARIO" });
+        }}
+      >
+        <option value="">—</option>
+        <option value="PRINCIPAL">Principal</option>
+        <option value="SECUNDARIO">Secundario</option>
+      </select>
+      {rol && (
+        <label className="d-flex align-items-center justify-content-center gap-1 mt-1 small text-secondary" style={{ cursor: "pointer", fontSize: "0.72rem" }}>
+          <input type="checkbox" className="form-check-input m-0" checked={row.mostrarEnComprobante !== false} onChange={(e) => onCambio({ mostrarEnComprobante: e.target.checked })} />
+          Mostrar en comprobante
+        </label>
+      )}
+    </div>
+  );
+}
+
 function emptyDirectaForm() {
   return { articuloNombre: "", articuloElaboradoNombre: "", articuloCodigo: "", articuloCategoriaUuid: "", articuloUnidadMedidaUuid: "", tipoAgricultura: "", formulacion: "" };
 }
@@ -1907,8 +1937,8 @@ export default function ElaboracionesPage() {
                       <th style={{ minWidth: "8rem" }}>Unidad</th>
                       <th style={{ width: "7rem" }}>Cantidad</th>
                       <th style={{ minWidth: "10rem" }}>% de otro</th>
-                      <th className="text-center" style={{ width: "5rem" }}>
-                        Principal / 2° / Mostrar
+                      <th className="text-center" style={{ minWidth: "9rem" }}>
+                        Tipo de insumo
                       </th>
                       <th className="text-center" style={{ minWidth: "7rem" }}>
                         Dosis informativa
@@ -2004,32 +2034,7 @@ export default function ElaboracionesPage() {
                         </td>
                         {celdaDosisRelativa(row, insumoRows, updateInsumoRow, { unidades, articulos, grafoUnidades, totalRef: totalRefCrear, aguaLitros: aguaLitrosCrear, deshabilitado: sinRegla })}
                         <td className="text-center">
-                          <input
-                            type="radio"
-                            name="insumoPrincipal"
-                            className="form-check-input"
-                            checked={Boolean(row.esPrincipal)}
-                            disabled={!row.articuloUuid}
-                            onChange={() => marcarPrincipal(row.key)}
-                            title="Insumo principal de la receta — lo usa Programación de Aspersiones para el tope de dosis del % Aumento automático"
-                          />
-                          <input
-                            type="checkbox"
-                            className="form-check-input ms-2"
-                            checked={Boolean(row.esSecundario)}
-                            disabled={!row.articuloUuid || row.esPrincipal}
-                            onChange={(e) => updateInsumoRow(row.key, { esSecundario: e.target.checked })}
-                            title="Insumo secundario: su información (ingrediente activo, concentración y dosis) también sale en el comprobante de aspersión"
-                          />
-                          <input
-                            type="checkbox"
-                            className="form-check-input ms-2"
-                            style={{ accentColor: "#0369a1" }}
-                            checked={row.mostrarEnComprobante !== false}
-                            disabled={!(row.esPrincipal || row.esSecundario)}
-                            onChange={(e) => updateInsumoRow(row.key, { mostrarEnComprobante: e.target.checked })}
-                            title="Mostrar (marcado) o no mostrar este insumo en el comprobante de aspersión"
-                          />
+                          <RolInsumo row={row} onPrincipal={() => marcarPrincipal(row.key)} onCambio={(patch) => updateInsumoRow(row.key, patch)} />
                         </td>
                         <td className="small text-center text-secondary">
 <div className="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
@@ -2581,8 +2586,8 @@ export default function ElaboracionesPage() {
                           <th style={{ minWidth: "8rem" }}>Unidad</th>
                           <th style={{ width: "7rem" }}>Cantidad</th>
                       <th style={{ minWidth: "10rem" }}>% de otro</th>
-                          <th className="text-center" style={{ width: "5rem" }}>
-                            Principal / 2° / Mostrar
+                          <th className="text-center" style={{ minWidth: "9rem" }}>
+                            Tipo de insumo
                           </th>
                           <th className="text-center" style={{ minWidth: "7rem" }}>
                             Dosis informativa
@@ -2684,32 +2689,7 @@ export default function ElaboracionesPage() {
                             </td>
                             {celdaDosisRelativa(row, editarInsumoRows, updateEditarInsumoRow, { unidades, articulos, grafoUnidades, totalRef: totalRefEditar, aguaLitros: aguaLitrosEditar, deshabilitado: sinRegla })}
                             <td className="text-center">
-                              <input
-                                type="radio"
-                                name="editarInsumoPrincipal"
-                                className="form-check-input"
-                                checked={Boolean(row.esPrincipal)}
-                                disabled={!row.articuloUuid}
-                                onChange={() => marcarPrincipalEditar(row.key)}
-                                title="Insumo principal de la receta — lo usa Programación de Aspersiones para el tope de dosis del % Aumento automático"
-                              />
-                              <input
-                                type="checkbox"
-                                className="form-check-input ms-2"
-                                checked={Boolean(row.esSecundario)}
-                                disabled={!row.articuloUuid || row.esPrincipal}
-                                onChange={(e) => updateEditarInsumoRow(row.key, { esSecundario: e.target.checked })}
-                                title="Insumo secundario: su información (ingrediente activo, concentración y dosis) también sale en el comprobante de aspersión"
-                              />
-                              <input
-                                type="checkbox"
-                                className="form-check-input ms-2"
-                                style={{ accentColor: "#0369a1" }}
-                                checked={row.mostrarEnComprobante !== false}
-                                disabled={!(row.esPrincipal || row.esSecundario)}
-                                onChange={(e) => updateEditarInsumoRow(row.key, { mostrarEnComprobante: e.target.checked })}
-                                title="Mostrar (marcado) o no mostrar este insumo en el comprobante de aspersión"
-                              />
+                              <RolInsumo row={row} onPrincipal={() => marcarPrincipalEditar(row.key)} onCambio={(patch) => updateEditarInsumoRow(row.key, patch)} />
                             </td>
                             <td className="small text-center text-secondary">
 <div className="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
