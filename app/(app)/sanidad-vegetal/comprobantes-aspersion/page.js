@@ -215,7 +215,7 @@ export default function ComprobantesAspersionPage() {
       anchoDeposicion: c.anchoDeposicion != null ? String(Number(c.anchoDeposicion)) : "",
       tiempoReentrada: c.tiempoReentrada != null ? String(Number(c.tiempoReentrada)) : "4",
       tiempoCarencia: c.tiempoCarencia != null ? String(Number(c.tiempoCarencia)) : "0",
-      manipuladores: (c.manipuladores || []).map((m) => ({ colaboradorUuid: m.colaboradorUuid || null, nombre: m.nombre || "", documento: m.documento || "" })),
+      manipuladores: (c.manipuladores || []).map((m) => ({ manipuladorUuid: m.manipuladorUuid || null, nombre: m.nombre || "", documento: m.documento || "" })),
       error: "",
     });
   }
@@ -236,7 +236,7 @@ export default function ComprobantesAspersionPage() {
         anchoDeposicion: m.anchoDeposicion === "" ? null : Number(m.anchoDeposicion),
         tiempoReentrada: m.tiempoReentrada === "" ? null : Number(m.tiempoReentrada),
         tiempoCarencia: m.tiempoCarencia === "" ? null : Number(m.tiempoCarencia),
-        manipuladores: m.manipuladores.filter((x) => x.nombre.trim()).map((x) => ({ colaboradorUuid: x.colaboradorUuid || null, nombre: x.nombre.trim(), documento: (x.documento || "").trim() })),
+        manipuladores: m.manipuladores.filter((x) => x.nombre.trim()).map((x) => ({ manipuladorUuid: x.manipuladorUuid || null, nombre: x.nombre.trim(), documento: (x.documento || "").trim() })),
       };
       const actualizado = await apiFetch(`/comprobantes-aspersion/${m.comprobante.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       setItems((prev) => prev.map((it) => (it.uuid === actualizado.uuid ? actualizado : it)));
