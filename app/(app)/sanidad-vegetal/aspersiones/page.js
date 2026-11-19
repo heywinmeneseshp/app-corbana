@@ -1856,6 +1856,13 @@ export default function AspersionesPage() {
       // Aeronave: con dron se elige de los drones de Inventarios → Equipos; con avión se escribe.
       aeronave: "",
       drones: null,
+      // Clima y horario de la aplicación (opcionales, igual que en la app móvil).
+      tempInicial: "",
+      tempFinal: "",
+      viento: "",
+      humedad: "",
+      horaInicio: "",
+      horaFinal: "",
       error: "",
     });
     if (aspersion.medio === "DRON") {
@@ -1882,11 +1889,26 @@ export default function AspersionesPage() {
       setEjecutarModal({ ...m, error: "Las hectáreas aplicadas deben ser mayores a 0." });
       return;
     }
+    const num = (v) => (String(v).trim() === "" ? undefined : Number(String(v).replace(",", ".")));
+    const humedad = num(m.humedad);
+    if (humedad !== undefined && !(humedad >= 0 && humedad <= 100)) {
+      setEjecutarModal({ ...m, error: "La humedad relativa debe estar entre 0 y 100 %." });
+      return;
+    }
+    const clima = {
+      ...(num(m.tempInicial) !== undefined ? { temperaturaInicial: num(m.tempInicial) } : {}),
+      ...(num(m.tempFinal) !== undefined ? { temperaturaFinal: num(m.tempFinal) } : {}),
+      ...(num(m.viento) !== undefined ? { velocidadViento: num(m.viento) } : {}),
+      ...(humedad !== undefined ? { humedadRelativaFinal: humedad } : {}),
+      ...(m.horaInicio ? { horaInicio: m.horaInicio } : {}),
+      ...(m.horaFinal ? { horaFinal: m.horaFinal } : {}),
+    };
     const comprobante = {
       piloto: m.piloto.trim(),
       ...(conDron ? { pilotoColaboradorUuid: m.pilotoColaboradorUuid, asistentesUuids: m.asistentesUuids } : {}),
       hectareasAplicadas: aplicadas,
       aeronave: m.aeronave.trim(),
+      ...clima,
       ...(m.observaciones.trim() ? { observaciones: m.observaciones.trim() } : {}),
       // Ejecución parcial: lo que falta queda como parte pendiente del mismo ciclo.
       ...(aplicadas < Number(m.aspersion.hectareas) && m.fechaParteRestante ? { fechaParteRestante: m.fechaParteRestante } : {}),
@@ -4599,6 +4621,26 @@ export default function AspersionesPage() {
                   </div>
                 )}
                 {/* «Es del mismo ciclo que…» ya no se pregunta al ejecutar. */}
+                {/* Clima y horario de la aplicación (opcionales). */}
+                {[
+                  ["tempInicial", "Temperatura inicial (°C)", "number"],
+                  ["tempFinal", "Temperatura final (°C)", "number"],
+                  ["viento", "Velocidad del viento (km/h)", "number"],
+                  ["humedad", "Humedad relativa final (%)", "number"],
+                  ["horaInicio", "Hora de inicio", "time"],
+                  ["horaFinal", "Hora final", "time"],
+                ].map(([k, label, tipo]) => (
+                  <div key={k} className="col-6 col-md-4">
+                    <label className="form-label small fw-medium mb-1">{label}</label>
+                    <input
+                      type={tipo}
+                      step={tipo === "number" ? "0.1" : undefined}
+                      className="form-control form-control-sm rounded-3"
+                      value={ejecutarModal[k]}
+                      onChange={(e) => setEjecutarModal((m) => ({ ...m, [k]: e.target.value }))}
+                    />
+                  </div>
+                ))}
                 <div className="col-12">
                   <label className="form-label small fw-medium mb-1">Observaciones</label>
                   <textarea
