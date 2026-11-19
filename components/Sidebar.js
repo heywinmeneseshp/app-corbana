@@ -133,6 +133,7 @@ const NAV = [
       { key: "sanidadObjetivos", label: "Objetivos", icon: FiTarget, permKey: "sanidadObjetivos", href: "/sanidad-vegetal/objetivos" },
       { key: "sanidadAspersiones", label: "Programación de Aspersiones", icon: FiDroplet, permKey: "sanidadAspersiones", href: "/sanidad-vegetal/aspersiones" },
       { key: "sanidadComprobantesAspersion", label: "Comprobante de aspersiones", icon: FiFileText, permKey: "sanidadComprobantesAspersion", href: "/sanidad-vegetal/comprobantes-aspersion" },
+      { key: "sanidadInformeIca", label: "Informe ICA", icon: FiFileText, permKey: "sanidadComprobantesAspersion", href: "/sanidad-vegetal/informe-ica" },
       { key: "sanidadColaboradores", label: "Colaboradores", icon: FiUsers, permKey: "sanidadColaboradores", href: "/sanidad-vegetal/colaboradores" },
       { key: "sanidadPistas", label: "Pistas", icon: FiSend, permKey: "sanidadPistas", href: "/sanidad-vegetal/pistas" },
       // Un solo ítem de menú para las 3 vistas (Mezclas/Insumos/Ingredientes
