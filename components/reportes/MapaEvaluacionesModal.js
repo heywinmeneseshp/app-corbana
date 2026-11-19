@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, CircleMarker } from "react-leaflet";
 import L from "leaflet";
 import { FiMapPin } from "react-icons/fi";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { normalizarPerimetro } from "@/lib/kml";
 import ModalShell from "@/components/ModalShell";
 import LotesPoligonos from "@/components/LotesPoligonos";
@@ -121,6 +121,10 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
   const [verSinUbicacion, setVerSinUbicacion] = useState(false);
   const [verRuta, setVerRuta] = useState(false);
   const [perimetro, setPerimetro] = useState(null);
+  // Recorrido GPS de los evaluadores (lo graba la app móvil) en los días de estas evaluaciones.
+  const [verRecorrido, setVerRecorrido] = useState(false);
+  const [recorridos, setRecorridos] = useState(null); // [{ uuid, evaluador, inicio, fin, distanciaM, puntos: [{lat,lng,t}] }]
+  const [cargandoRecorrido, setCargandoRecorrido] = useState(false);
 
   useEffect(() => {
     if (!fincaUuid) return;
@@ -138,7 +142,8 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
     if (semanaUuid) params.set("semanaUuid", semanaUuid);
     if (usuarioUuid) params.set("usuarioUuid", usuarioUuid);
     if (loteUuid) params.set("loteUuid", loteUuid);
-    apiFetch(`/evaluaciones?${params.toString()}`)
+    // Todas las páginas: con solo la primera (100) quedaban por fuera evaluaciones, p. ej. las de emisión foliar.
+    apiFetchTodos(`/evaluaciones?${params.toString()}`)
       .then((res) => setItems(res.items || []))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -198,6 +203,28 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
   );
 
   const hayHoraReal = visibles.some((it) => it.capturadoEn || it.createdAt);
+
+  // Al activar el recorrido se traen los de cada día con evaluaciones (máximo 14 días), del evaluador filtrado si hay uno.
+  async function alternarRecorrido() {
+    if (verRecorrido) return setVerRecorrido(false);
+    setVerRecorrido(true);
+    if (recorridos) return;
+    setCargandoRecorrido(true);
+    try {
+      const dias = [...new Set(items.map((it) => String(it.fecha).slice(0, 10)))].sort().slice(-14);
+      const listas = await Promise.all(
+        dias.map((fecha) => apiFetch(`/evaluaciones/recorridos?fincaUuid=${fincaUuid}&fecha=${fecha}${usuarioUuid ? `&usuarioUuid=${usuarioUuid}` : ""}`).then((d) => d.items || [])),
+      );
+      const conPuntos = await Promise.all(listas.flat().map((r) => apiFetch(`/evaluaciones/recorridos/${r.uuid}/puntos`).then((p) => ({ ...r, puntos: p.puntos || [] }))));
+      setRecorridos(conPuntos.filter((r) => r.puntos.length > 0));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCargandoRecorrido(false);
+    }
+  }
+  const COLORES_RECORRIDO = ["#f97316", "#22d3ee", "#a3e635", "#f43f5e", "#e879f9", "#facc15"];
+  const kmTexto = (m) => (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m || 0)} m`);
 
   function toggleTipo(nombre) {
     setTiposOcultos((prev) => {
@@ -280,6 +307,15 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
             >
               {verRuta ? "Ocultar ruta" : "Ver ruta"}
             </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${verRecorrido ? "btn-brand" : "btn-outline-secondary"}`}
+              onClick={alternarRecorrido}
+              disabled={cargandoRecorrido}
+              title="Recorrido GPS que grabó la app móvil mientras el evaluador evaluaba (días de estas evaluaciones)"
+            >
+              {cargandoRecorrido ? "Cargando recorrido…" : verRecorrido ? "Ocultar recorrido" : "Ver recorrido"}
+            </button>
             <div className="btn-group btn-group-sm" role="group">
               {Object.entries(CAPAS).map(([clave, def]) => (
                 <button
@@ -295,6 +331,21 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
           </div>
         )}
       </div>
+
+      {verRecorrido && recorridos && (
+        <div className="d-flex flex-wrap gap-2 px-3 py-2 border-bottom bg-white small">
+          {recorridos.length === 0 ? (
+            <span className="text-secondary">No hay recorridos grabados en los días de estas evaluaciones.</span>
+          ) : (
+            recorridos.map((r, i) => (
+              <span key={r.uuid} className="d-inline-flex align-items-center gap-1 border rounded-pill px-2">
+                <span className="rounded-circle d-inline-block" style={{ width: 9, height: 9, background: COLORES_RECORRIDO[i % COLORES_RECORRIDO.length] }} />
+                {r.evaluador?.nombre || "—"} · {String(r.inicio || "").slice(0, 10)} · {kmTexto(r.distanciaM)}
+              </span>
+            ))
+          )}
+        </div>
+      )}
 
       {verRuta && !hayHoraReal && (
         <div className="alert alert-warning py-2 small m-3 mb-0">
@@ -341,6 +392,31 @@ export default function MapaEvaluacionesModal({ fincaUuid, fincaNombre, semanaUu
             )}
             <LotesPoligonos fincaUuid={fincaUuid} loteUuidResaltado={loteUuid} />
             <CapasMapa fincaUuid={fincaUuid} />
+            {verRecorrido &&
+              (recorridos || []).map((r, i) => {
+                const color = COLORES_RECORRIDO[i % COLORES_RECORRIDO.length];
+                const ini = r.puntos[0];
+                const fin = r.puntos[r.puntos.length - 1];
+                return (
+                  <div key={r.uuid}>
+                    <Polyline positions={r.puntos.map((p) => [p.lat, p.lng])} pathOptions={{ color, weight: 3, opacity: 0.85 }} />
+                    <CircleMarker center={[ini.lat, ini.lng]} radius={6} pathOptions={{ color: "#fff", weight: 2, fillColor: "#16a34a", fillOpacity: 1 }}>
+                      <Popup>
+                        <div className="small">
+                          <strong>Inicio</strong> · {r.evaluador?.nombre} · {horaCorta(ini.t)}
+                        </div>
+                      </Popup>
+                    </CircleMarker>
+                    <CircleMarker center={[fin.lat, fin.lng]} radius={6} pathOptions={{ color: "#fff", weight: 2, fillColor: "#dc2626", fillOpacity: 1 }}>
+                      <Popup>
+                        <div className="small">
+                          <strong>Fin</strong> · {r.evaluador?.nombre} · {horaCorta(fin.t)}
+                        </div>
+                      </Popup>
+                    </CircleMarker>
+                  </div>
+                );
+              })}
             {verRuta && (
               <Polyline
                 positions={rutaPosiciones}

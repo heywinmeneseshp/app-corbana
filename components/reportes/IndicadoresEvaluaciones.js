@@ -21,7 +21,6 @@ import ModalShell from "@/components/ModalShell";
 import SemanaAutocomplete from "@/components/SemanaAutocomplete";
 import { COLORES_CINTA } from "@/components/reportes/PromedioPorSemanaChart";
 import MapaEvaluacionesModal from "@/components/reportes/MapaEvaluacionesModal";
-import MapaRecorridoEvaluadorModal from "@/components/reportes/MapaRecorridoEvaluadorModal";
 import GraficoEmbolsesCompacto from "@/components/reportes/GraficoEmbolsesCompacto";
 
 const TIPOS_COLUMNA = ["Índice de infección", "Conteo de Hojas", "Suma Bruta"];
@@ -114,7 +113,6 @@ export default function IndicadoresEvaluaciones() {
   const [ruta, setRuta] = useState([]);
   const [edadModal, setEdadModal] = useState(null);
   const [mapaFinca, setMapaFinca] = useState(null);
-  const [verRecorridos, setVerRecorridos] = useState(false);
 
   useEffect(() => {
     Promise.all([apiFetch("/fincas?limit=100"), apiFetch(`/semanas?anio=${anio}&limit=100`)])
@@ -248,9 +246,6 @@ export default function IndicadoresEvaluaciones() {
           </div>
         </div>
         <div className="d-flex flex-wrap gap-2 align-items-end">
-          <button type="button" className="btn btn-outline-secondary btn-sm rounded-1" onClick={() => setVerRecorridos(true)} title="Recorrido GPS de los evaluadores por finca y día">
-            Recorridos
-          </button>
           <div>
             <label className="form-label small fw-medium text-secondary mb-1">Año</label>
             <input
@@ -569,8 +564,7 @@ export default function IndicadoresEvaluaciones() {
         <ModalEdad edad={edadModal} onClose={() => setEdadModal(null)} />
       )}
 
-      {verRecorridos && <MapaRecorridoEvaluadorModal fincas={fincas.filter((f) => !data?.fincasConObjetivos || data.fincasConObjetivos.includes(f.uuid))} fincaUuidInicial={fincaUuid} onClose={() => setVerRecorridos(false)} />}
-
+      
       {mapaFinca && (
         <MapaEvaluacionesModal
           fincaUuid={mapaFinca.uuid}
