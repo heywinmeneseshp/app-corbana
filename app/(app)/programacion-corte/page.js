@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { FiCalendar, FiFilter, FiRefreshCw, FiTrash2, FiX } from "react-icons/fi";
+import { FiCalendar, FiDownload, FiFilter, FiRefreshCw, FiTrash2, FiX } from "react-icons/fi";
+import { descargarProgramacionCorteExcel } from "@/lib/programacionCorteExport";
 import { apiFetch } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
@@ -69,6 +70,34 @@ export default function ProgramacionCortePage() {
   const [totalPaginas, setTotalPaginas] = useState(1);
 
   const [syncModal, setSyncModal] = useState(false);
+  const [descargando, setDescargando] = useState(false);
+
+  // Excel con el formato de «Proyección semanal · Cajas por producto», con los filtros actuales (todas las páginas).
+  async function descargarExcel() {
+    setDescargando(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ limit: "100" });
+      if (fincaUuid) params.set("fincaUuid", fincaUuid);
+      if (semanaUuid) params.set("semanaUuid", semanaUuid);
+      let todos = [];
+      for (let p = 1; ; p++) {
+        params.set("page", String(p));
+        const r = await apiFetch(`/programacion-corte?${params.toString()}`);
+        todos = todos.concat(r.items || []);
+        if (p >= (r.totalPages || 1)) break;
+      }
+      if (!todos.length) throw new Error("No hay programación para estos filtros");
+      const finca = fincas.find((f) => f.uuid === fincaUuid);
+      const semana = semanas.find((s) => s.uuid === semanaUuid);
+      const titulo = ["Programación de corte", finca ? finca.nombre : "Todas las fincas", semana?.codigo].filter(Boolean).join(" · ");
+      await descargarProgramacionCorteExcel(todos, { titulo });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDescargando(false);
+    }
+  }
   const [rechazos, setRechazos] = useState([]);
 
   useEffect(() => {
@@ -135,6 +164,15 @@ export default function ProgramacionCortePage() {
             <p className="text-secondary mb-0">Cajas programadas por finca y fecha (cargue masivo o sincronización con Logística).</p>
           </div>
           <div className="d-flex gap-2">
+            <button
+              type="button"
+              className="btn btn-outline-success btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1"
+              disabled={descargando}
+              onClick={descargarExcel}
+              title="Cajas por producto y semana (y por mes) con los filtros actuales"
+            >
+              <FiDownload /> {descargando ? "Generando…" : "Descargar Excel"}
+            </button>
             {hasPermission("programacion_corte.crear") && (
               <button
                 type="button"
