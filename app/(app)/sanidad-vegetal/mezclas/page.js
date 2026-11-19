@@ -258,7 +258,7 @@ const FORMULACIONES = [
 // hectárea. Ej.: «POWMYL SC I.A (DIETHOFENCARB) + DITHANE 430 F-MB I.A (MANCOZEB) EN EMULSION A 6 GAL/HA».
 // Devuelve "" mientras falte el principal o la formulación.
 // `incluirOcultos`: el nombre interno lleva todos los insumos; el comercial omite los marcados «no mostrar en el comprobante».
-function nombreAutomaticoMezcla(rows, articulos, unidades, formulacion, volumen, unidadUuid, { incluirOcultos = false } = {}) {
+function nombreAutomaticoMezcla(rows, articulos, unidades, formulacion, volumen, unidadUuid, { incluirOcultos = false, tipo = "" } = {}) {
   const visible = (r) => incluirOcultos || r.mostrarEnComprobante !== false;
   const principal = rows.find((r) => r.esPrincipal && r.articuloUuid);
   if (!principal || !formulacion) return "";
@@ -272,7 +272,9 @@ function nombreAutomaticoMezcla(rows, articulos, unidades, formulacion, volumen,
   if (!partes.length) return "";
   const unidad = unidades.find((u) => u.uuid === unidadUuid);
   const vol = volumen !== "" && volumen != null && Number(volumen) > 0 ? ` A ${Number(volumen).toLocaleString("es-CO", { maximumFractionDigits: 2 })} ${String(unidad?.simbolo || "").toUpperCase()}/HA`.replace(" /HA", "/HA") : "";
-  return `${partes.join(" + ")} EN ${formulacion}${vol}`;
+  // Al inicio, si es orgánica (ORG) o convencional (CONV).
+  const prefijo = tipo === "ORGANICA" ? "ORG " : tipo === "CONVENCIONAL" ? "CONV " : "";
+  return `${prefijo}${partes.join(" + ")} EN ${formulacion}${vol}`;
 }
 
 // Sugerencia de código: continúa el correlativo "MEZ-000N" de la última
@@ -2142,7 +2144,7 @@ export default function ElaboracionesPage() {
               <div className="row g-2 mb-3">
                 <div className="col-12 col-lg-6">
                   {(() => {
-                    const auto = nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid);
+                    const auto = nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid, { tipo: directaForm.tipoAgricultura });
                     return (
                       <>
                         <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-2">
@@ -2176,7 +2178,7 @@ export default function ElaboracionesPage() {
                   <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-2">
                     <span>Nombre interno (lista de Programación de aspersiones)</span>
                     {(() => {
-                      const auto = nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid, { incluirOcultos: true });
+                      const auto = nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid, { incluirOcultos: true, tipo: directaForm.tipoAgricultura });
                       return (
                         <button
                           type="button"
@@ -2836,7 +2838,7 @@ export default function ElaboracionesPage() {
               <div className="row g-2 mb-3">
                 <div className="col-12 col-lg-6">
                   {(() => {
-                    const auto = nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid);
+                    const auto = nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid, { tipo: editarForm.tipoAgricultura });
                     return (
                       <>
                         <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-2">
@@ -2870,7 +2872,7 @@ export default function ElaboracionesPage() {
                   <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-2">
                     <span>Nombre interno (lista de Programación de aspersiones)</span>
                     {(() => {
-                      const auto = nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid, { incluirOcultos: true });
+                      const auto = nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid, { incluirOcultos: true, tipo: editarForm.tipoAgricultura });
                       return (
                         <button
                           type="button"

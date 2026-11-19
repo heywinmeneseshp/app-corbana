@@ -2858,8 +2858,9 @@ export default function AspersionesPage() {
                   <label className="form-label small fw-medium mb-1">
                     Mezcla <span className="text-danger">*</span>
                   </label>
+                  {/* Finca orgánica: no se ofrecen mezclas convencionales (la API también lo impide). */}
                   <MezclaAutocomplete
-                    mezclas={mezclas}
+                    mezclas={fincas.find((f) => f.uuid === form.fincaUuid)?.tipoAgricultura === "ORGANICA" ? mezclas.filter((m) => m.tipoAgricultura !== "CONVENCIONAL") : mezclas}
                     value={form.mezclaUuid}
                     required
                     onChange={(uuid) => {

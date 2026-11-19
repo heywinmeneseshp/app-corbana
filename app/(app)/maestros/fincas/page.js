@@ -265,6 +265,11 @@ export default function FincasPage() {
                             · Externa
                           </span>
                         )}
+                        {finca.tipoAgricultura === "ORGANICA" && (
+                          <span className="badge rounded-pill" style={{ backgroundColor: "#dcfce7", color: "#166534", fontSize: "0.65rem" }} title="Finca orgánica: no se le programan mezclas convencionales">
+                            ORG
+                          </span>
+                        )}
                       </p>
                       <p className="small text-secondary mb-0">Código: {finca.codigo}</p>
                     </td>
@@ -431,6 +436,8 @@ function FincaModal({ finca, onClose, onSaved }) {
   const [codigo, setCodigo] = useState(finca?.codigo || "");
   const [estado, setEstado] = useState(finca ? finca.estado : true);
   const [esExterna, setEsExterna] = useState(finca?.esExterna || false);
+  // Orgánica o convencional: a una finca orgánica no se le programan mezclas convencionales.
+  const [tipoAgricultura, setTipoAgricultura] = useState(finca?.tipoAgricultura || "CONVENCIONAL");
   const [permiteAsistencia, setPermiteAsistencia] = useState(finca?.permiteAsistencia ?? true);
   const [grupoFincaUuid, setGrupoFincaUuid] = useState(finca?.grupoFinca?.uuid || "");
   // Coordenadas de la finca (grados decimales) — las usa Open-Meteo.
@@ -477,7 +484,7 @@ function FincaModal({ finca, onClose, onSaved }) {
         setSaving(false);
         return;
       }
-      const payload = { nombre, codigo, estado, esExterna, permiteAsistencia, grupoFincaUuid: grupoFincaUuid || null, latitud: lat, longitud: lng };
+      const payload = { nombre, codigo, estado, esExterna, tipoAgricultura, permiteAsistencia, grupoFincaUuid: grupoFincaUuid || null, latitud: lat, longitud: lng };
       await apiFetch(finca ? `/fincas/${finca.uuid}` : "/fincas", {
         method: finca ? "PUT" : "POST",
         body: JSON.stringify(payload),
@@ -580,6 +587,14 @@ function FincaModal({ finca, onClose, onSaved }) {
           <label className="form-check-label small" htmlFor="fincaEstado">
             Activo
           </label>
+        </div>
+        <div className="mb-3">
+          <label className="form-label small fw-medium mb-1">Tipo de finca</label>
+          <select className="form-select form-select-sm" value={tipoAgricultura} onChange={(e) => setTipoAgricultura(e.target.value)}>
+            <option value="CONVENCIONAL">Convencional</option>
+            <option value="ORGANICA">Orgánica</option>
+          </select>
+          <div className="form-text">A una finca orgánica no se le pueden programar mezclas convencionales.</div>
         </div>
         <div className="form-check mb-3">
           <input
