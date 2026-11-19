@@ -202,6 +202,15 @@ export default function ComprobantesAspersionPage() {
       humedadRelativaFinal: c.humedadRelativaFinal != null ? String(Number(c.humedadRelativaFinal)) : "",
       horaInicio: c.horaInicio || "",
       horaFinal: c.horaFinal || "",
+      // Datos del reporte operacional de fumigación.
+      tipoEquipo: c.tipoEquipo || "",
+      alturaVuelo: c.alturaVuelo || "",
+      anchoDeposicion: c.anchoDeposicion != null ? String(Number(c.anchoDeposicion)) : "",
+      concentracionIa: c.concentracionIa != null ? String(Number(c.concentracionIa)) : "",
+      personaAutoriza: c.personaAutoriza || "",
+      tiempoReentrada: c.tiempoReentrada != null ? String(Number(c.tiempoReentrada)) : "4",
+      tiempoCarencia: c.tiempoCarencia != null ? String(Number(c.tiempoCarencia)) : "0",
+      manipuladores: (c.manipuladores || []).length ? c.manipuladores.map((m) => ({ nombre: m.nombre || "", documento: m.documento || "" })) : [{ nombre: "", documento: "" }],
       error: "",
     });
   }
@@ -217,6 +226,14 @@ export default function ComprobantesAspersionPage() {
         ...(m.medio === "DRON" ? { pilotoColaboradorUuid: m.pilotoColaboradorUuid || null, asistentesUuids: m.asistentesUuids } : {}),
         medio: m.medio || null,
         observaciones: m.observaciones.trim() || null,
+        tipoEquipo: m.tipoEquipo.trim() || null,
+        alturaVuelo: m.alturaVuelo.trim() || null,
+        anchoDeposicion: m.anchoDeposicion === "" ? null : Number(m.anchoDeposicion),
+        concentracionIa: m.concentracionIa === "" ? null : Number(m.concentracionIa),
+        personaAutoriza: m.personaAutoriza.trim() || null,
+        tiempoReentrada: m.tiempoReentrada === "" ? null : Number(m.tiempoReentrada),
+        tiempoCarencia: m.tiempoCarencia === "" ? null : Number(m.tiempoCarencia),
+        manipuladores: m.manipuladores.filter((x) => x.nombre.trim()).map((x) => ({ nombre: x.nombre.trim(), documento: x.documento.trim() })),
       };
       const actualizado = await apiFetch(`/comprobantes-aspersion/${m.comprobante.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       setItems((prev) => prev.map((it) => (it.uuid === actualizado.uuid ? actualizado : it)));
@@ -767,6 +784,36 @@ Se abrirá la edición para completarlo.`);
                   title="Dato de la ejecución: no se edita en el borrador"
                   onChange={(e) => setEdicion((m) => ({ ...m, horaFinal: e.target.value }))}
                 />
+              </div>
+              <div className="col-12 small fw-semibold text-secondary mt-3">Reporte operacional de fumigación</div>
+              {[
+                ["tipoEquipo", "Tipo de equipo de aplicación", "text", "col-12", "Ej. Cessna A188 / Air Tractor HK 4193"],
+                ["alturaVuelo", "Altura de vuelo", "text", "col-6", "Ej. Promedio 4 metros"],
+                ["anchoDeposicion", "Ancho de deposición (m)", "number", "col-6", ""],
+                ["concentracionIa", "Concentración del ingrediente activo (g/L)", "number", "col-6", "Ej. 880"],
+                ["personaAutoriza", "Persona que autoriza", "text", "col-6", ""],
+                ["tiempoReentrada", "Tiempo de reentrada (h)", "number", "col-6", ""],
+                ["tiempoCarencia", "Tiempo de carencia (h)", "number", "col-6", ""],
+              ].map(([k, label, tipo, col, ph]) => (
+                <div key={k} className={col}>
+                  <label className="form-label small fw-medium mb-1">{label}</label>
+                  <input type={tipo} min={tipo === "number" ? "0" : undefined} className="form-control form-control-sm rounded-3" placeholder={ph} value={edicion[k]} onChange={(e) => setEdicion((m) => ({ ...m, [k]: e.target.value }))} />
+                </div>
+              ))}
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Manipuladores de plaguicidas</label>
+                {edicion.manipuladores.map((mp, i) => (
+                  <div key={i} className="d-flex gap-2 mb-1">
+                    <input className="form-control form-control-sm rounded-3" placeholder="Nombre y apellido" value={mp.nombre} onChange={(e) => setEdicion((m) => ({ ...m, manipuladores: m.manipuladores.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)) }))} />
+                    <input className="form-control form-control-sm rounded-3" style={{ maxWidth: 160 }} placeholder="Identificación" value={mp.documento} onChange={(e) => setEdicion((m) => ({ ...m, manipuladores: m.manipuladores.map((x, j) => (j === i ? { ...x, documento: e.target.value } : x)) }))} />
+                    <button type="button" className="btn btn-sm btn-link text-danger p-0" title="Quitar" onClick={() => setEdicion((m) => ({ ...m, manipuladores: m.manipuladores.filter((_, j) => j !== i) }))}>
+                      <FiTrash2 />
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="btn btn-sm btn-link text-decoration-none p-0" onClick={() => setEdicion((m) => ({ ...m, manipuladores: [...m.manipuladores, { nombre: "", documento: "" }] }))}>
+                  + Agregar manipulador
+                </button>
               </div>
               <div className="col-12">
                 <label className="form-label small fw-medium mb-1">Observaciones</label>
