@@ -11,6 +11,8 @@ export default function ProductosPage() {
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [trayendoClientes, setTrayendoClientes] = useState(false);
+  const [avisoClientes, setAvisoClientes] = useState("");
   const [search, setSearch] = useState("");
 
   const [productoModal, setProductoModal] = useState(null); // null | {} | producto
@@ -80,7 +82,32 @@ export default function ProductosPage() {
               <FiRefreshCw /> Sincronización con Logística
             </button>
           )}
+          {hasPermission("producto.crear") && (
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm rounded-3 text-nowrap d-flex align-items-center gap-1"
+              disabled={trayendoClientes}
+              title="Asigna a cada producto el cliente que tiene su combo en Logística"
+              onClick={async () => {
+                setTrayendoClientes(true);
+                setAvisoClientes("");
+                setError("");
+                try {
+                  const r = await apiFetch("/productos/sync-clientes-banarica", { method: "POST" });
+                  setAvisoClientes(`Clientes traídos de Logística: ${r.productosActualizados} producto(s) actualizado(s)${r.combosSinProductoEnCorbana ? `; ${r.combosSinProductoEnCorbana} combo(s) aún no están como producto en Corbana` : ""}${r.combosSinCliente ? `; ${r.combosSinCliente} combo(s) sin cliente en Logística` : ""}.`);
+                  await loadProductos();
+                } catch (err) {
+                  setError(err.message);
+                } finally {
+                  setTrayendoClientes(false);
+                }
+              }}
+            >
+              <FiRefreshCw /> {trayendoClientes ? "Trayendo clientes..." : "Traer clientes de Logística"}
+            </button>
+          )}
         </div>
+        {avisoClientes && <div className="alert alert-info py-2 small mt-2 mb-0 w-100">{avisoClientes}</div>}
 
         {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
