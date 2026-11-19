@@ -27,24 +27,48 @@ const tipoLabel = (t) =>
     .replace(/_/g, " ")
     .replace(/^\w/, (c) => c.toUpperCase());
 
-function Dato({ label, children }) {
+// Un dato: etiqueta pequeña en mayúsculas y valor. `ancho`: columnas en pantallas medianas (3 = un cuarto de la fila).
+function Dato({ label, children, ancho = 3 }) {
+  const vacio = children === null || children === undefined || children === "";
   return (
-    <div className="col-6 col-md-3">
-      <div className="text-secondary" style={{ fontSize: "0.68rem" }}>
-        {label}
+    <div className={`col-6 col-md-${ancho}`}>
+      <div className="h-100 rounded-3 px-2 py-1" style={{ backgroundColor: "#f8faf9", border: "1px solid #eef2ef" }}>
+        <div className="text-uppercase text-secondary fw-semibold" style={{ fontSize: "0.6rem", letterSpacing: "0.03em" }}>
+          {label}
+        </div>
+        <div className="fw-medium small text-break">{vacio ? "—" : children}</div>
       </div>
-      <div className="fw-medium small">{children ?? "—"}</div>
     </div>
   );
 }
 
+// Sección en tarjeta con encabezado verde claro.
 function Seccion({ titulo, children }) {
   return (
-    <div className="mb-3">
-      <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>
+    <div className="card border-0 rounded-3 mb-3" style={{ boxShadow: "0 1px 3px rgba(0,0,0,.07)" }}>
+      <div className="px-3 py-2 fw-semibold small rounded-top-3" style={{ color: "#166534", backgroundColor: "#ecfdf3", borderBottom: "1px solid #d1fae5" }}>
         {titulo}
       </div>
-      <div className="row g-2">{children}</div>
+      <div className="p-2">
+        <div className="row g-2">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// Indicador grande del resumen de arriba.
+function Resumen({ label, valor, sub }) {
+  return (
+    <div className="col-6 col-md-3">
+      <div className="h-100 rounded-3 p-2 text-white" style={{ background: "linear-gradient(135deg, #166534, #15803d)" }}>
+        <div className="text-uppercase fw-semibold" style={{ fontSize: "0.6rem", opacity: 0.85, letterSpacing: "0.03em" }}>
+          {label}
+        </div>
+        <div className="fw-bold" style={{ fontSize: "1.05rem", lineHeight: 1.2 }}>
+          {valor || "—"}
+        </div>
+        {sub && <div style={{ fontSize: "0.68rem", opacity: 0.85 }}>{sub}</div>}
+      </div>
     </div>
   );
 }
@@ -93,19 +117,26 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
             </div>
           )}
 
+          {/* Resumen */}
+          <div className="row g-2 mb-3">
+            <Resumen label="Finca" valor={a.finca?.nombre} sub={a.semana?.codigo} />
+            <Resumen
+              label="Fecha de ejecución"
+              valor={a.fecha ? new Date(`${String(a.fecha).slice(0, 10)}T12:00:00-05:00`).toLocaleDateString("es-CO", { timeZone: "America/Bogota", dateStyle: "medium" }) : "—"}
+              sub={`Registrada: ${fmtFechaHora(c.ejecutadoEn)}`}
+            />
+            <Resumen label="Hectáreas aplicadas" valor={num(c.hectareasAplicadas)} sub={`de ${num(c.hectareasProgramadas)} programadas`} />
+            <Resumen label="Volumen por hectárea" valor={c.volumenAplicacionHa != null ? `${num(c.volumenAplicacionHa)} gal/ha` : "—"} sub={`${num(c.galonesTotales)} galones en total`} />
+          </div>
+
           <Seccion titulo="Aspersión">
-            <Dato label="Finca">{a.finca?.nombre}</Dato>
-            <Dato label="Semana">{a.semana?.codigo}</Dato>
-            <Dato label="Fecha programada">{a.fecha}</Dato>
-            <Dato label="Ejecutada">{fmtFechaHora(c.ejecutadoEn)}</Dato>
-            <Dato label="Mezcla">{a.mezcla?.nombre || a.mezcla?.codigo}</Dato>
-            <Dato label="Tipo">{Array.isArray(a.tipo) && a.tipo.length ? a.tipo.map(tipoLabel).join(", ") : "—"}</Dato>
-            <Dato label="Vehículo">{MEDIO_LABEL[c.medio || a.medio] || "—"}</Dato>
-            <Dato label="Pista">{a.pista?.nombre || "—"}</Dato>
+            <Dato label="Mezcla" ancho={12}>
+              {a.mezcla?.nombre || a.mezcla?.codigo}
+            </Dato>
+            <Dato label="Tipo">{Array.isArray(a.tipo) && a.tipo.length ? a.tipo.map(tipoLabel).join(", ") : null}</Dato>
+            <Dato label="Vehículo">{MEDIO_LABEL[c.medio || a.medio]}</Dato>
+            {(c.medio || a.medio) !== "DRON" && <Dato label="Pista">{a.pista?.nombre}</Dato>}
             <Dato label="Almacén">{a.almacen?.nombre}</Dato>
-            <Dato label="Hectáreas programadas">{num(c.hectareasProgramadas)}</Dato>
-            <Dato label="Hectáreas aplicadas">{num(c.hectareasAplicadas)}</Dato>
-            <Dato label="Galones totales">{num(c.galonesTotales)}</Dato>
             <Dato label="Representante Corbana">{a.representanteCorbanaNombre}</Dato>
             <Dato label="Administrador de finca">{a.administradorFincaNombre}</Dato>
             <Dato label="Programó">{nombreUsuario(a.usuario)}</Dato>
@@ -113,26 +144,39 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
           </Seccion>
 
           <Seccion titulo="Aplicación">
-            <Dato label={c.medio === "DRON" ? "Piloto del dron" : "Piloto"}>{c.pilotoColaborador?.nombre || c.piloto}</Dato>
-            {c.pilotoVisible && c.pilotoColaborador && c.pilotoVisible.uuid !== c.pilotoColaborador.uuid && (
-              <Dato label="Piloto certificado (PDF)">{c.pilotoVisible.nombre}</Dato>
-            )}
+            <Dato label={c.medio === "DRON" ? "Piloto del dron" : "Piloto"} ancho={6}>
+              {c.pilotoColaborador?.nombre || c.piloto}
+            </Dato>
+            {c.pilotoVisible && c.pilotoColaborador && c.pilotoVisible.uuid !== c.pilotoColaborador.uuid && <Dato label="Piloto certificado (PDF)">{c.pilotoVisible.nombre}</Dato>}
+            <Dato label="Aeronave">{c.aeronave}</Dato>
+            <Dato label="Tipo de equipo">{c.tipoEquipo}</Dato>
             {(c.participantes || []).some((p) => p.rol === "ASISTENTE") && (
-              <Dato label="Asistentes">
+              <Dato label="Asistentes" ancho={12}>
                 {c.participantes
                   .filter((p) => p.rol === "ASISTENTE")
                   .map((p) => p.colaborador.nombre)
                   .join(", ")}
               </Dato>
             )}
-            <Dato label="Aeronave">{c.aeronave}</Dato>
-            <Dato label="Volumen de aplicación">{c.volumenAplicacionHa != null ? `${num(c.volumenAplicacionHa)} /ha` : "—"}</Dato>
-            <Dato label="Horario">{c.horaInicio || c.horaFinal ? `${c.horaInicio || "—"} a ${c.horaFinal || "—"}` : "—"}</Dato>
+            <Dato label="Horario">{c.horaInicio || c.horaFinal ? `${c.horaInicio || "—"} a ${c.horaFinal || "—"}` : null}</Dato>
+            <Dato label="Altura de vuelo">{c.alturaVuelo}</Dato>
+            <Dato label="Ancho de deposición">{c.anchoDeposicion != null ? `${num(c.anchoDeposicion, 1)} m` : null}</Dato>
             <Dato label="Temperatura">
-              {c.temperaturaInicial != null || c.temperaturaFinal != null ? `${num(c.temperaturaInicial, 1)} °C a ${num(c.temperaturaFinal, 1)} °C` : "—"}
+              {c.temperaturaInicial != null || c.temperaturaFinal != null ? `${num(c.temperaturaInicial, 1)} °C a ${num(c.temperaturaFinal, 1)} °C` : null}
             </Dato>
-            <Dato label="Velocidad del viento">{c.velocidadViento != null ? `${num(c.velocidadViento, 1)} km/h` : "—"}</Dato>
-            <Dato label="Humedad relativa final">{c.humedadRelativaFinal != null ? `${num(c.humedadRelativaFinal, 1)} %` : "—"}</Dato>
+            <Dato label="Velocidad del viento">{c.velocidadViento != null ? `${num(c.velocidadViento, 1)} km/h` : null}</Dato>
+            <Dato label="Humedad relativa final">{c.humedadRelativaFinal != null ? `${num(c.humedadRelativaFinal, 1)} %` : null}</Dato>
+          </Seccion>
+
+          <Seccion titulo="Seguridad">
+            <Dato label="Persona que autoriza" ancho={6}>
+              {c.emitidoPor ? nombreUsuario(c.emitidoPor) : <span className="text-secondary fw-normal">Pendiente de aprobación</span>}
+            </Dato>
+            <Dato label="Tiempo de reentrada">{c.tiempoReentrada != null ? `${num(c.tiempoReentrada, 0)} h` : null}</Dato>
+            <Dato label="Tiempo de carencia">{c.tiempoCarencia != null ? `${num(c.tiempoCarencia, 0)} h` : null}</Dato>
+            <Dato label="Manipuladores de plaguicidas" ancho={12}>
+              {(c.manipuladores || []).length ? c.manipuladores.map((m) => `${m.nombre}${m.documento ? ` (CC ${m.documento})` : ""}`).join(", ") : null}
+            </Dato>
           </Seccion>
 
           {(c.partes || []).length > 1 && (
@@ -182,14 +226,16 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
                   <tr className="table-light text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
                     <th className="fw-medium">Insumo</th>
                     <th className="fw-medium">Unidad</th>
-                    <th className="fw-medium text-end">Dosis por hectárea</th>
+                    <th className="fw-medium text-end" title="Concentración del ingrediente activo configurada en el insumo">Concentración (g/L)</th>
+                    <th className="fw-medium text-end" title="Dosis por hectárea configurada en el insumo">Dosis configurada</th>
+                    <th className="fw-medium text-end" title="Cantidad utilizada ÷ hectáreas de la aspersión">Dosis aplicada</th>
                     <th className="fw-medium text-end">Cantidad utilizada</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(c.insumos || []).length === 0 && (
                     <tr>
-                      <td colSpan={4} className="text-center text-secondary py-3 small">
+                      <td colSpan={6} className="text-center text-secondary py-3 small">
                         Sin insumos registrados.
                       </td>
                     </tr>
@@ -210,6 +256,8 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
                         )}
                       </td>
                       <td className="text-secondary">{i.unidad?.simbolo || i.unidad?.nombre || "—"}</td>
+                      <td className="text-secondary text-end">{i.concentracionIa != null ? num(i.concentracionIa, 0) : "—"}</td>
+                      <td className="text-secondary text-end">{i.dosisPorHectarea != null ? `${num(i.dosisPorHectarea, 3)} ${i.dosisUnidad?.simbolo || i.unidad?.simbolo || ""}/ha` : "—"}</td>
                       <td className="text-secondary text-end">
                         {i.cantidad != null && hectareas > 0 ? `${num(i.cantidad / hectareas, 2)} ${i.unidad?.simbolo || ""}/ha` : "—"}
                       </td>
