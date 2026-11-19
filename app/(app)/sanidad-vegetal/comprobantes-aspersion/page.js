@@ -250,10 +250,21 @@ Se abrirá la edición para completarlo.`);
       const { blob, nombre } = await generarComprobanteAspersionPdfBlob(detalle);
       const fd = new FormData();
       fd.append("pdf", blob, nombre);
-      if (detalle.kmlNombre) {
-        const kml = await apiFetchBlob(`/comprobantes-aspersion/${detalle.uuid}/kml`);
+      if ((detalle.kmls || []).length) {
         const zip = new JSZip();
-        zip.file("doc.kml", kml);
+        if (detalle.kmls.length === 1) {
+          zip.file("doc.kml", await apiFetchBlob(`/comprobantes-aspersion/${detalle.uuid}/kml/${detalle.kmls[0].uuid}`));
+        } else {
+          // Varios recorridos: cada uno en su archivo y un doc.kml que los enlaza (Google Earth los abre todos).
+          const enlaces = [];
+          for (const [i, k] of detalle.kmls.entries()) {
+            const archivo = `recorridos/${i + 1}.kml`;
+            zip.file(archivo, await apiFetchBlob(`/comprobantes-aspersion/${detalle.uuid}/kml/${k.uuid}`));
+            const nombreXml = String(k.nombre || archivo).replace(/[<>&"]/g, "");
+            enlaces.push(`<NetworkLink><name>${nombreXml}</name><Link><href>${archivo}</href></Link></NetworkLink>`);
+          }
+          zip.file("doc.kml", `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Recorridos ${detalle.numero}</name>${enlaces.join("")}</Document></kml>`);
+        }
         const kmz = await zip.generateAsync({ type: "blob", compression: "DEFLATE", mimeType: "application/vnd.google-earth.kmz" });
         fd.append("kmz", kmz, `Recorrido-${detalle.numero}.kmz`);
       }
