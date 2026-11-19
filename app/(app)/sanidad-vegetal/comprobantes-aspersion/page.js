@@ -2,7 +2,7 @@
 
 import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
-import { FiEye, FiDownload, FiEdit2, FiRotateCcw, FiSearch, FiFileText, FiXCircle, FiMail } from "react-icons/fi";
+import { FiEye, FiDownload, FiEdit2, FiRotateCcw, FiSearch, FiFileText, FiXCircle, FiMail, FiTrash2 } from "react-icons/fi";
 import JSZip from "jszip";
 import { apiFetch, apiFetchBlob, apiFetchFormData } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
@@ -64,6 +64,22 @@ export default function ComprobantesAspersionPage() {
   const puedeEmitir = hasPermission("sanidad_vegetal.comprobantes_aspersion.emitir");
   // Anular reemplazó al borrado; el mismo permiso permite regenerar el borrador.
   const puedeAnular = hasPermission("sanidad_vegetal.comprobantes_aspersion.anular");
+  // Eliminar (borrado lógico): el comprobante deja de verse; la aspersión queda ejecutada y el inventario descontado.
+  const puedeEliminar = hasPermission("sanidad_vegetal.comprobantes_aspersion.eliminar");
+
+  async function eliminar(c) {
+    if (!window.confirm(`¿Eliminar el comprobante ${c.numero}? La aspersión queda ejecutada y los insumos siguen descontados del inventario.`)) return;
+    setProcesandoUuid(c.uuid);
+    setError("");
+    try {
+      await apiFetch(`/comprobantes-aspersion/${c.uuid}`, { method: "DELETE" });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setProcesandoUuid("");
+    }
+  }
 
   async function load(f = aplicados, p = page) {
     setLoading(true);
@@ -489,6 +505,11 @@ Se abrirá la edición para completarlo.`);
                               onClick={() => regenerar(c)}
                             >
                               <FiRotateCcw size={15} />
+                            </button>
+                          )}
+                          {puedeEliminar && (
+                            <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex text-danger" title="Eliminar comprobante" disabled={ocupado} onClick={() => eliminar(c)}>
+                              <FiTrash2 size={15} />
                             </button>
                           )}
                           </div>
