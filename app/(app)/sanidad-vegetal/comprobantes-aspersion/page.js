@@ -220,6 +220,12 @@ export default function ComprobantesAspersionPage() {
     });
   }
 
+  // Datos de la ejecución: solo se pueden completar los que quedaron vacíos al ejecutar (los registrados no se cambian).
+  const vacioOriginal = (k) => {
+    const v = edicion?.comprobante?.[k];
+    return v === null || v === undefined || v === "";
+  };
+
   // La edición solo guarda el borrador: se aprueba (emite) desde el detalle del comprobante (clic en la fila).
   async function guardarEdicion() {
     const m = edicion;
@@ -231,6 +237,12 @@ export default function ComprobantesAspersionPage() {
         ...(m.medio === "DRON" ? { pilotoColaboradorUuid: m.pilotoColaboradorUuid || null, asistentesUuids: m.asistentesUuids } : {}),
         medio: m.medio || null,
         observaciones: m.observaciones.trim() || null,
+        // Datos de la ejecución que estaban vacíos y se completaron.
+        ...Object.fromEntries(
+          ["galonesTotales", "volumenAplicacionHa", "velocidadViento", "temperaturaInicial", "temperaturaFinal", "humedadRelativaFinal", "horaInicio", "horaFinal"]
+            .filter((k) => vacioOriginal(k) && String(m[k] ?? "").trim() !== "")
+            .map((k) => [k, k.startsWith("hora") ? m[k] : Number(String(m[k]).replace(",", "."))]),
+        ),
         ...(m.medio === "DRON" ? { aeronave: m.aeronave || null } : {}),
         alturaVuelo: m.alturaVuelo.trim() || null,
         anchoDeposicion: m.anchoDeposicion === "" ? null : Number(m.anchoDeposicion),
@@ -687,8 +699,8 @@ Se abrirá la edición para completarlo.`);
                   min="0"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.galonesTotales}
-                  disabled
-                  title="Dato de la ejecución: no se edita en el borrador"
+                  disabled={!vacioOriginal("galonesTotales")}
+                  title={vacioOriginal("galonesTotales") ? "No se registró al ejecutar: puedes completarlo" : "Dato de la ejecución: no se edita en el borrador"}
                   onChange={(e) => setEdicion((m) => ({ ...m, galonesTotales: e.target.value }))}
                 />
               </div>
@@ -725,8 +737,8 @@ Se abrirá la edición para completarlo.`);
                   step="0.01" min="0"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.volumenAplicacionHa}
-                  disabled
-                  title="Dato de la ejecución: no se edita en el borrador"
+                  disabled={!vacioOriginal("volumenAplicacionHa")}
+                  title={vacioOriginal("volumenAplicacionHa") ? "No se registró al ejecutar: puedes completarlo" : "Dato de la ejecución: no se edita en el borrador"}
                   onChange={(e) => setEdicion((m) => ({ ...m, volumenAplicacionHa: e.target.value }))}
                 />
               </div>
@@ -737,8 +749,8 @@ Se abrirá la edición para completarlo.`);
                   step="0.1" min="0"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.velocidadViento}
-                  disabled
-                  title="Dato de la ejecución: no se edita en el borrador"
+                  disabled={!vacioOriginal("velocidadViento")}
+                  title={vacioOriginal("velocidadViento") ? "No se registró al ejecutar: puedes completarlo" : "Dato de la ejecución: no se edita en el borrador"}
                   onChange={(e) => setEdicion((m) => ({ ...m, velocidadViento: e.target.value }))}
                 />
               </div>
@@ -749,8 +761,8 @@ Se abrirá la edición para completarlo.`);
                   step="0.1"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.temperaturaInicial}
-                  disabled
-                  title="Dato de la ejecución: no se edita en el borrador"
+                  disabled={!vacioOriginal("temperaturaInicial")}
+                  title={vacioOriginal("temperaturaInicial") ? "No se registró al ejecutar: puedes completarlo" : "Dato de la ejecución: no se edita en el borrador"}
                   onChange={(e) => setEdicion((m) => ({ ...m, temperaturaInicial: e.target.value }))}
                 />
               </div>
@@ -761,8 +773,8 @@ Se abrirá la edición para completarlo.`);
                   step="0.1"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.temperaturaFinal}
-                  disabled
-                  title="Dato de la ejecución: no se edita en el borrador"
+                  disabled={!vacioOriginal("temperaturaFinal")}
+                  title={vacioOriginal("temperaturaFinal") ? "No se registró al ejecutar: puedes completarlo" : "Dato de la ejecución: no se edita en el borrador"}
                   onChange={(e) => setEdicion((m) => ({ ...m, temperaturaFinal: e.target.value }))}
                 />
               </div>
@@ -773,8 +785,8 @@ Se abrirá la edición para completarlo.`);
                   step="0.1" min="0" max="100"
                   className="form-control form-control-sm rounded-3"
                   value={edicion.humedadRelativaFinal}
-                  disabled
-                  title="Dato de la ejecución: no se edita en el borrador"
+                  disabled={!vacioOriginal("humedadRelativaFinal")}
+                  title={vacioOriginal("humedadRelativaFinal") ? "No se registró al ejecutar: puedes completarlo" : "Dato de la ejecución: no se edita en el borrador"}
                   onChange={(e) => setEdicion((m) => ({ ...m, humedadRelativaFinal: e.target.value }))}
                 />
               </div>
@@ -785,8 +797,8 @@ Se abrirá la edición para completarlo.`);
                   
                   className="form-control form-control-sm rounded-3"
                   value={edicion.horaInicio}
-                  disabled
-                  title="Dato de la ejecución: no se edita en el borrador"
+                  disabled={!vacioOriginal("horaInicio")}
+                  title={vacioOriginal("horaInicio") ? "No se registró al ejecutar: puedes completarlo" : "Dato de la ejecución: no se edita en el borrador"}
                   onChange={(e) => setEdicion((m) => ({ ...m, horaInicio: e.target.value }))}
                 />
               </div>
@@ -797,8 +809,8 @@ Se abrirá la edición para completarlo.`);
                   
                   className="form-control form-control-sm rounded-3"
                   value={edicion.horaFinal}
-                  disabled
-                  title="Dato de la ejecución: no se edita en el borrador"
+                  disabled={!vacioOriginal("horaFinal")}
+                  title={vacioOriginal("horaFinal") ? "No se registró al ejecutar: puedes completarlo" : "Dato de la ejecución: no se edita en el borrador"}
                   onChange={(e) => setEdicion((m) => ({ ...m, horaFinal: e.target.value }))}
                 />
               </div>
