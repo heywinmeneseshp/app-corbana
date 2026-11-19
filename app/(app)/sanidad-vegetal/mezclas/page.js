@@ -1137,7 +1137,7 @@ export default function ElaboracionesPage() {
           ...(rendimientoNuevo !== undefined ? { rendimiento: rendimientoNuevo } : {}),
           codigo: editarForm.codigo || null,
           nombre:
-            nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid) || editarForm.nombre,
+            editarForm.nombre,
           tipoAgricultura: editarForm.tipoAgricultura || null,
           formulacion: editarForm.formulacion || null,
           ...(editarForm.articuloNombre && editarForm.articuloNombre !== (editarMezcla.articuloElaborado?.nombre || "")
@@ -1396,7 +1396,7 @@ export default function ElaboracionesPage() {
     const resultado = await apiFetch("/inventarios/mezclas/directo", {
       method: "POST",
       body: JSON.stringify({
-        articuloNombre: nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid) || directaForm.articuloNombre,
+        articuloNombre: directaForm.articuloNombre,
         tipoAgricultura: directaForm.tipoAgricultura || null,
         formulacion: directaForm.formulacion || null,
         articuloElaboradoNombre: directaForm.articuloElaboradoNombre || null,
@@ -2138,23 +2138,34 @@ export default function ElaboracionesPage() {
               {/* Nombres al final: el comercial sale en el comprobante; el interno es el que se elige en Programación de aspersiones. */}
               <div className="row g-2 mb-3">
                 <div className="col-12 col-lg-6">
-                  <label className="form-label small fw-medium mb-1">
-                    Nombre comercial (sale en el comprobante) <span className="text-danger">*</span>
-                  </label>
                   {(() => {
                     const auto = nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid);
                     return (
-                      <input
-                        type="text"
-                        required
-                        maxLength={255}
-                        readOnly={Boolean(auto)}
-                        className="form-control form-control-sm rounded-3"
-                        title={auto ? "Se escribe solo: insumo principal y secundarios con su ingrediente activo, la formulación y el volumen por hectárea" : "Marca el insumo principal y elige la formulación para que se escriba solo"}
-                        style={auto ? { backgroundColor: "#f0fdf4" } : undefined}
-                        value={auto || directaForm.articuloNombre}
-                        onChange={(e) => setDirectaForm((f) => ({ ...f, articuloNombre: e.target.value }))}
-                      />
+                      <>
+                        <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-2">
+                          <span>
+                            Nombre comercial (sale en el comprobante) <span className="text-danger">*</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-success py-0 px-2 ms-auto"
+                            style={{ fontSize: "0.72rem" }}
+                            disabled={!auto}
+                            title={auto ? `Escribe: ${auto}` : "Marca el insumo principal y elige la formulación para generarlo"}
+                            onClick={() => setDirectaForm((f) => ({ ...f, articuloNombre: auto }))}
+                          >
+                            Generar nombre
+                          </button>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={255}
+                          className="form-control form-control-sm rounded-3"
+                          value={directaForm.articuloNombre}
+                          onChange={(e) => setDirectaForm((f) => ({ ...f, articuloNombre: e.target.value }))}
+                        />
+                      </>
                     );
                   })()}
                 </div>
@@ -2807,23 +2818,34 @@ export default function ElaboracionesPage() {
               {/* Nombres al final: el comercial sale en el comprobante; el interno es el que se elige en Programación de aspersiones. */}
               <div className="row g-2 mb-3">
                 <div className="col-12 col-lg-6">
-                  <label className="form-label small fw-medium mb-1">
-                    Nombre comercial (sale en el comprobante) <span className="text-danger">*</span>
-                  </label>
                   {(() => {
                     const auto = nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid);
                     return (
-                      <input
-                        type="text"
-                        required
-                        maxLength={255}
-                        readOnly={Boolean(auto)}
-                        className="form-control form-control-sm rounded-3"
-                        title={auto ? "Se escribe solo: insumo principal y secundarios con su ingrediente activo, la formulación y el volumen por hectárea" : "Marca el insumo principal y elige la formulación para que se escriba solo"}
-                        style={auto ? { backgroundColor: "#f0fdf4" } : undefined}
-                        value={auto || editarForm.nombre}
-                        onChange={(e) => setEditarForm((f) => ({ ...f, nombre: e.target.value }))}
-                      />
+                      <>
+                        <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-2">
+                          <span>
+                            Nombre comercial (sale en el comprobante) <span className="text-danger">*</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-success py-0 px-2 ms-auto"
+                            style={{ fontSize: "0.72rem" }}
+                            disabled={!auto}
+                            title={auto ? `Escribe: ${auto}` : "Marca el insumo principal y elige la formulación para generarlo"}
+                            onClick={() => setEditarForm((f) => ({ ...f, nombre: auto }))}
+                          >
+                            Generar nombre
+                          </button>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={255}
+                          className="form-control form-control-sm rounded-3"
+                          value={editarForm.nombre}
+                          onChange={(e) => setEditarForm((f) => ({ ...f, nombre: e.target.value }))}
+                        />
+                      </>
                     );
                   })()}
                 </div>
