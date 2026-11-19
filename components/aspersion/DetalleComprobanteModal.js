@@ -253,6 +253,11 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
                             Secundario
                           </span>
                         )}
+                        {(i.esPrincipal || i.esSecundario) && i.mostrarEnComprobante === false && (
+                          <span className="badge rounded-pill ms-2 text-secondary" style={{ backgroundColor: "#f1f5f9" }} title="Configurado en la mezcla para no mostrarse en el comprobante">
+                            No se muestra en el PDF
+                          </span>
+                        )}
                         {i.esAdicional && (
                           <span className="badge rounded-pill ms-2" style={{ backgroundColor: "#fef3c7", color: "#b45309" }} title="Agregado a esta aspersión; no está en la receta de la mezcla">
                             Adicional

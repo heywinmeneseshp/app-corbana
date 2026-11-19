@@ -203,7 +203,35 @@ function emptyForm() {
 }
 
 function emptyDirectaForm() {
-  return { articuloNombre: "", articuloElaboradoNombre: "", articuloCodigo: "", articuloCategoriaUuid: "", articuloUnidadMedidaUuid: "" };
+  return { articuloNombre: "", articuloElaboradoNombre: "", articuloCodigo: "", articuloCategoriaUuid: "", articuloUnidadMedidaUuid: "", tipoAgricultura: "", formulacion: "" };
+}
+
+const TIPOS_AGRICULTURA = [
+  ["CONVENCIONAL", "Convencional"],
+  ["ORGANICA", "Orgánica"],
+];
+const FORMULACIONES = [
+  ["EMULSION", "En emulsión"],
+  ["SOLUCION", "En solución"],
+  ["SUSPENSION", "En suspensión"],
+];
+
+// Nombre automático de la mezcla: insumo principal y secundarios con su ingrediente activo, la formulación y el volumen por
+// hectárea. Ej.: «POWMYL SC I.A (DIETHOFENCARB) + DITHANE 430 F-MB I.A (MANCOZEB) EN EMULSION A 6 GAL/HA».
+// Devuelve "" mientras falte el principal o la formulación.
+function nombreAutomaticoMezcla(rows, articulos, unidades, formulacion, volumen, unidadUuid) {
+  const principal = rows.find((r) => r.esPrincipal && r.articuloUuid);
+  if (!principal || !formulacion) return "";
+  const parte = (r) => {
+    const a = articulos.find((x) => x.uuid === r.articuloUuid);
+    if (!a) return null;
+    const ia = (a.ingredientesActivos || []).map((i) => i.nombre).filter(Boolean);
+    return `${a.nombre.trim().toUpperCase()}${ia.length ? ` I.A (${ia.join(", ").toUpperCase()})` : ""}`;
+  };
+  const partes = [principal, ...rows.filter((r) => r.esSecundario && !r.esPrincipal && r.articuloUuid)].map(parte).filter(Boolean);
+  const unidad = unidades.find((u) => u.uuid === unidadUuid);
+  const vol = volumen !== "" && volumen != null && Number(volumen) > 0 ? ` A ${Number(volumen).toLocaleString("es-CO", { maximumFractionDigits: 2 })} ${String(unidad?.simbolo || "").toUpperCase()}/HA`.replace(" /HA", "/HA") : "";
+  return `${partes.join(" + ")} EN ${formulacion}${vol}`;
 }
 
 // Sugerencia de código: continúa el correlativo "MEZ-000N" de la última
@@ -229,6 +257,7 @@ function emptyInsumoRow() {
     unidadUuid: "",
     esPrincipal: false,
     esSecundario: false,
+    mostrarEnComprobante: true,
     // Dosis relativa: dos tipos excluyentes (ver utils/dosisRelativa.js en
     // el backend) — PORCENTAJE: X% de otro insumo (ej. 1% del ACEITE
     // BANOLE); POR_VOLUMEN: tasa por unidad de volumen de mezcla total
@@ -585,6 +614,7 @@ function componentesPayloadDesdeRows(rows, { grafoUnidades, articulos, unidades,
         unidadUuid: r.unidadUuid || null,
         esPrincipal: Boolean(r.esPrincipal),
         esSecundario: Boolean(r.esSecundario) && !r.esPrincipal,
+        mostrarEnComprobante: r.mostrarEnComprobante !== false,
         tipoDosis: completa ? tipo : "FIJA",
         referenciaArticuloUuid: completa && tipo === "PORCENTAJE" ? r.referenciaArticuloUuid : null,
         porcentajeReferencia: completa && tipo === "PORCENTAJE" ? Number(r.porcentajeReferencia) : null,
@@ -919,6 +949,8 @@ export default function ElaboracionesPage() {
     setEditarForm({
       codigo: mezcla.codigo || "",
       nombre: mezcla.nombre || "",
+      tipoAgricultura: mezcla.tipoAgricultura || "",
+      formulacion: mezcla.formulacion || "",
       articuloNombre: mezcla.articuloElaborado?.nombre || "",
       dosisPorHectarea: mezcla.dosisPorHectarea != null ? String(mezcla.dosisPorHectarea) : "",
       dosisPorHectareaUnidadUuid: mezcla.dosisPorHectareaUnidad?.uuid || "",
@@ -964,6 +996,7 @@ export default function ElaboracionesPage() {
                 unidadUuid: c.unidad?.uuid || "",
                 esPrincipal: Boolean(c.esPrincipal),
                 esSecundario: Boolean(c.esSecundario),
+                mostrarEnComprobante: c.mostrarEnComprobante !== false,
                 tipoDosis: c.tipoDosis || (c.referenciaArticuloId ? "PORCENTAJE" : "FIJA"),
                 referenciaArticuloUuid: "",
                 porcentajeReferencia: c.porcentajeReferencia != null ? String(c.porcentajeReferencia) : "",
@@ -1065,7 +1098,10 @@ export default function ElaboracionesPage() {
         body: JSON.stringify({
           ...(rendimientoNuevo !== undefined ? { rendimiento: rendimientoNuevo } : {}),
           codigo: editarForm.codigo || null,
-          nombre: editarForm.nombre,
+          nombre:
+            nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid) || editarForm.nombre,
+          tipoAgricultura: editarForm.tipoAgricultura || null,
+          formulacion: editarForm.formulacion || null,
           ...(editarForm.articuloNombre && editarForm.articuloNombre !== (editarMezcla.articuloElaborado?.nombre || "")
             ? { articuloNombre: editarForm.articuloNombre }
             : {}),
@@ -1322,7 +1358,9 @@ export default function ElaboracionesPage() {
     const resultado = await apiFetch("/inventarios/mezclas/directo", {
       method: "POST",
       body: JSON.stringify({
-        articuloNombre: directaForm.articuloNombre,
+        articuloNombre: nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid) || directaForm.articuloNombre,
+        tipoAgricultura: directaForm.tipoAgricultura || null,
+        formulacion: directaForm.formulacion || null,
         articuloElaboradoNombre: directaForm.articuloElaboradoNombre || null,
         articuloCodigo: directaForm.articuloCodigo || null,
         articuloCategoriaUuid: directaForm.articuloCategoriaUuid,
@@ -1686,14 +1724,48 @@ export default function ElaboracionesPage() {
                   <label className="form-label small fw-medium mb-1">
                     Nombre comercial <span className="text-danger">*</span>
                   </label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={150}
-                    className="form-control form-control-sm rounded-3"
-                    value={directaForm.articuloNombre}
-                    onChange={(e) => setDirectaForm((f) => ({ ...f, articuloNombre: e.target.value }))}
-                  />
+                  {(() => {
+                    const auto = nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid);
+                    return (
+                      <input
+                        type="text"
+                        required
+                        maxLength={255}
+                        readOnly={Boolean(auto)}
+                        className="form-control form-control-sm rounded-3"
+                        title={auto ? "Se escribe solo: insumo principal y secundarios con su ingrediente activo, la formulación y el volumen por hectárea" : "Marca el insumo principal y elige la formulación para que se escriba solo"}
+                        style={auto ? { backgroundColor: "#f0fdf4" } : undefined}
+                        value={auto || directaForm.articuloNombre}
+                        onChange={(e) => setDirectaForm((f) => ({ ...f, articuloNombre: e.target.value }))}
+                      />
+                    );
+                  })()}
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small fw-medium mb-1">
+                    Tipo <span className="text-danger">*</span>
+                  </label>
+                  <select required className="form-select form-select-sm rounded-3" value={directaForm.tipoAgricultura} onChange={(e) => setDirectaForm((f) => ({ ...f, tipoAgricultura: e.target.value }))}>
+                    <option value="">Elige...</option>
+                    {TIPOS_AGRICULTURA.map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small fw-medium mb-1">
+                    Formulación <span className="text-danger">*</span>
+                  </label>
+                  <select required className="form-select form-select-sm rounded-3" value={directaForm.formulacion} onChange={(e) => setDirectaForm((f) => ({ ...f, formulacion: e.target.value }))}>
+                    <option value="">Elige...</option>
+                    {FORMULACIONES.map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="col-4">
                   <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-1">
@@ -1836,7 +1908,7 @@ export default function ElaboracionesPage() {
                       <th style={{ width: "7rem" }}>Cantidad</th>
                       <th style={{ minWidth: "10rem" }}>% de otro</th>
                       <th className="text-center" style={{ width: "5rem" }}>
-                        Principal / 2°
+                        Principal / 2° / Mostrar
                       </th>
                       <th className="text-center" style={{ minWidth: "7rem" }}>
                         Dosis informativa
@@ -1948,6 +2020,15 @@ export default function ElaboracionesPage() {
                             disabled={!row.articuloUuid || row.esPrincipal}
                             onChange={(e) => updateInsumoRow(row.key, { esSecundario: e.target.checked })}
                             title="Insumo secundario: su información (ingrediente activo, concentración y dosis) también sale en el comprobante de aspersión"
+                          />
+                          <input
+                            type="checkbox"
+                            className="form-check-input ms-2"
+                            style={{ accentColor: "#0369a1" }}
+                            checked={row.mostrarEnComprobante !== false}
+                            disabled={!(row.esPrincipal || row.esSecundario)}
+                            onChange={(e) => updateInsumoRow(row.key, { mostrarEnComprobante: e.target.checked })}
+                            title="Mostrar (marcado) o no mostrar este insumo en el comprobante de aspersión"
                           />
                         </td>
                         <td className="small text-center text-secondary">
@@ -2370,13 +2451,48 @@ export default function ElaboracionesPage() {
                   <label className="form-label small fw-medium mb-1">
                     Nombre comercial <span className="text-danger">*</span>
                   </label>
-                  <input
-                    type="text"
-                    required
-                    className="form-control form-control-sm rounded-3"
-                    value={editarForm.nombre}
-                    onChange={(e) => setEditarForm((f) => ({ ...f, nombre: e.target.value }))}
-                  />
+                  {(() => {
+                    const auto = nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid);
+                    return (
+                      <input
+                        type="text"
+                        required
+                        maxLength={255}
+                        readOnly={Boolean(auto)}
+                        className="form-control form-control-sm rounded-3"
+                        title={auto ? "Se escribe solo: insumo principal y secundarios con su ingrediente activo, la formulación y el volumen por hectárea" : "Marca el insumo principal y elige la formulación para que se escriba solo"}
+                        style={auto ? { backgroundColor: "#f0fdf4" } : undefined}
+                        value={auto || editarForm.nombre}
+                        onChange={(e) => setEditarForm((f) => ({ ...f, nombre: e.target.value }))}
+                      />
+                    );
+                  })()}
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small fw-medium mb-1">
+                    Tipo <span className="text-danger">*</span>
+                  </label>
+                  <select required className="form-select form-select-sm rounded-3" value={editarForm.tipoAgricultura || ""} onChange={(e) => setEditarForm((f) => ({ ...f, tipoAgricultura: e.target.value }))}>
+                    <option value="">Elige...</option>
+                    {TIPOS_AGRICULTURA.map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small fw-medium mb-1">
+                    Formulación <span className="text-danger">*</span>
+                  </label>
+                  <select required className="form-select form-select-sm rounded-3" value={editarForm.formulacion || ""} onChange={(e) => setEditarForm((f) => ({ ...f, formulacion: e.target.value }))}>
+                    <option value="">Elige...</option>
+                    {FORMULACIONES.map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="col-12 col-lg-4">
                   <label className="form-label small fw-medium mb-1">Artículo elaborado (nombre interno)</label>
@@ -2466,7 +2582,7 @@ export default function ElaboracionesPage() {
                           <th style={{ width: "7rem" }}>Cantidad</th>
                       <th style={{ minWidth: "10rem" }}>% de otro</th>
                           <th className="text-center" style={{ width: "5rem" }}>
-                            Principal / 2°
+                            Principal / 2° / Mostrar
                           </th>
                           <th className="text-center" style={{ minWidth: "7rem" }}>
                             Dosis informativa
@@ -2584,6 +2700,15 @@ export default function ElaboracionesPage() {
                                 disabled={!row.articuloUuid || row.esPrincipal}
                                 onChange={(e) => updateEditarInsumoRow(row.key, { esSecundario: e.target.checked })}
                                 title="Insumo secundario: su información (ingrediente activo, concentración y dosis) también sale en el comprobante de aspersión"
+                              />
+                              <input
+                                type="checkbox"
+                                className="form-check-input ms-2"
+                                style={{ accentColor: "#0369a1" }}
+                                checked={row.mostrarEnComprobante !== false}
+                                disabled={!(row.esPrincipal || row.esSecundario)}
+                                onChange={(e) => updateEditarInsumoRow(row.key, { mostrarEnComprobante: e.target.checked })}
+                                title="Mostrar (marcado) o no mostrar este insumo en el comprobante de aspersión"
                               />
                             </td>
                             <td className="small text-center text-secondary">
