@@ -2,7 +2,7 @@
 
 import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
-import { FiEye, FiDownload, FiEdit2, FiRotateCcw, FiSearch, FiFileText, FiXCircle, FiMail, FiTrash2 } from "react-icons/fi";
+import { FiEye, FiDownload, FiEdit2, FiRotateCcw, FiSearch, FiFileText, FiXCircle, FiMail, FiTrash2, FiRefreshCcw } from "react-icons/fi";
 import JSZip from "jszip";
 import { apiFetch, apiFetchBlob, apiFetchFormData } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
@@ -50,6 +50,8 @@ export default function ComprobantesAspersionPage() {
   // (se aplican con el botón Filtrar o con Enter).
   const [filtros, setFiltros] = useState({ search: "", estado: "", fincaUuid: "" });
   const [aplicados, setAplicados] = useState({ search: "", estado: "", fincaUuid: "" });
+  // Ver los comprobantes eliminados (borrado lógico) para restaurarlos.
+  const [verEliminados, setVerEliminados] = useState(false);
 
   const [edicion, setEdicion] = useState(null);
   // Anulación: { comprobante, motivo, error }.
@@ -67,6 +69,27 @@ export default function ComprobantesAspersionPage() {
   // Eliminar (borrado lógico): el comprobante deja de verse; la aspersión queda ejecutada y el inventario descontado.
   const puedeEliminar = hasPermission("sanidad_vegetal.comprobantes_aspersion.eliminar");
 
+  function alternarEliminados() {
+    const v = !verEliminados;
+    setVerEliminados(v);
+    if (page === 1) load(aplicados, 1, v);
+    else setPage(1);
+  }
+
+  async function restaurar(c) {
+    if (!window.confirm(`¿Restaurar el comprobante ${c.numero}? Vuelve a la lista con el estado que tenía.`)) return;
+    setProcesandoUuid(c.uuid);
+    setError("");
+    try {
+      await apiFetch(`/comprobantes-aspersion/${c.uuid}/restaurar`, { method: "POST" });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setProcesandoUuid("");
+    }
+  }
+
   async function eliminar(c) {
     if (!window.confirm(`¿Eliminar el comprobante ${c.numero}? La aspersión queda ejecutada y los insumos siguen descontados del inventario.`)) return;
     setProcesandoUuid(c.uuid);
@@ -81,7 +104,7 @@ export default function ComprobantesAspersionPage() {
     }
   }
 
-  async function load(f = aplicados, p = page) {
+  async function load(f = aplicados, p = page, eliminados = verEliminados) {
     setLoading(true);
     setError("");
     try {
@@ -89,6 +112,7 @@ export default function ComprobantesAspersionPage() {
       if (f.search) qs.set("search", f.search);
       if (f.estado) qs.set("estado", f.estado);
       if (f.fincaUuid) qs.set("fincaUuid", f.fincaUuid);
+      if (eliminados) qs.set("eliminados", "true");
       const { items: rows, meta: m } = await apiFetch(`/comprobantes-aspersion?${qs}`);
       setItems(rows);
       setMeta(m);
@@ -400,6 +424,17 @@ Se abrirá la edición para completarlo.`);
               <button type="submit" className="btn btn-brand btn-sm rounded-3">
                 Filtrar
               </button>
+              {puedeEliminar && (
+                <button
+                  type="button"
+                  className={`btn btn-sm rounded-3 text-nowrap ${verEliminados ? "btn-danger" : "btn-outline-secondary"}`}
+                  onClick={alternarEliminados}
+                  title="Ver los comprobantes eliminados para restaurarlos"
+                >
+                  <FiTrash2 size={13} className="me-1" />
+                  {verEliminados ? "Viendo eliminados" : "Ver eliminados"}
+                </button>
+              )}
               {(aplicados.search || aplicados.estado || aplicados.fincaUuid || filtros.search || filtros.estado || filtros.fincaUuid) && (
                 <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={limpiarFiltros}>
                   Limpiar
@@ -453,9 +488,9 @@ Se abrirá la edición para completarlo.`);
                     return (
                       <tr
                         key={c.uuid}
-                        style={{ cursor: "pointer", opacity: anulado ? 0.7 : 1 }}
-                        title="Ver el detalle de la aspersión"
-                        onClick={() => abrirDetalle(c)}
+                        style={{ cursor: verEliminados ? "default" : "pointer", opacity: anulado || verEliminados ? 0.7 : 1 }}
+                        title={verEliminados ? `Eliminado el ${fmtFecha(c.deletedAt)}` : "Ver el detalle de la aspersión"}
+                        onClick={() => !verEliminados && abrirDetalle(c)}
                       >
                         <td className="fw-medium text-nowrap">{c.aspersion?.semana?.codigo || "—"}</td>
                         <td className="text-nowrap">{fmtFecha(c.ejecutadoEn)}</td>
@@ -471,6 +506,12 @@ Se abrirá la edición para completarlo.`);
                         </td>
                         <td onClick={(e) => e.stopPropagation()} style={{ cursor: "default" }}>
                           <div className="d-flex justify-content-end gap-1 flex-nowrap">
+                          {verEliminados ? (
+                            <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex align-items-center gap-1 text-success text-decoration-none" title="Restaurar el comprobante" disabled={ocupado} onClick={() => restaurar(c)}>
+                              <FiRefreshCcw size={15} /> Restaurar
+                            </button>
+                          ) : (
+                          <>
                           <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex text-secondary" title="Ver PDF" onClick={() => verPdf(c)}>
                             <FiEye size={15} />
                           </button>
@@ -522,6 +563,8 @@ Se abrirá la edición para completarlo.`);
                             <button type="button" className="btn btn-sm btn-link p-1 d-inline-flex text-danger" title="Eliminar comprobante" disabled={ocupado} onClick={() => eliminar(c)}>
                               <FiTrash2 size={15} />
                             </button>
+                          )}
+                          </>
                           )}
                           </div>
                         </td>
