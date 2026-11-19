@@ -4552,33 +4552,35 @@ export default function AspersionesPage() {
                     medio={ejecutarModal.aspersion.medio}
                     valor={ejecutarModal}
                     onChange={(patch) => setEjecutarModal((m) => ({ ...m, ...patch }))}
+                    despuesDelPiloto={
+                      <>
+                        <label className="form-label small fw-medium mb-1">
+                          {ejecutarModal.aspersion.medio === "DRON" ? "Dron" : "Aeronave"} <span className="text-danger">*</span>
+                        </label>
+                        {ejecutarModal.aspersion.medio === "DRON" ? (
+                          <select className="form-select form-select-sm rounded-3" required value={ejecutarModal.aeronave} onChange={(e) => setEjecutarModal((m) => ({ ...m, aeronave: e.target.value }))}>
+                            <option value="">{ejecutarModal.drones === null ? "Cargando drones..." : "Elige el dron"}</option>
+                            {(ejecutarModal.drones || []).map((d) => (
+                              <option key={d.uuid} value={d.nombre}>
+                                {d.nombre}
+                                {d.codigo ? ` (${d.codigo})` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            required
+                            maxLength={150}
+                            className="form-control form-control-sm rounded-3"
+                            placeholder="Ej. H-K 232"
+                            value={ejecutarModal.aeronave}
+                            onChange={(e) => setEjecutarModal((m) => ({ ...m, aeronave: e.target.value }))}
+                          />
+                        )}
+                      </>
+                    }
                   />
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small fw-medium mb-1">
-                    {ejecutarModal.aspersion.medio === "DRON" ? "Dron" : "Aeronave"} <span className="text-danger">*</span>
-                  </label>
-                  {ejecutarModal.aspersion.medio === "DRON" ? (
-                    <select className="form-select form-select-sm rounded-3" required value={ejecutarModal.aeronave} onChange={(e) => setEjecutarModal((m) => ({ ...m, aeronave: e.target.value }))}>
-                      <option value="">{ejecutarModal.drones === null ? "Cargando drones..." : "Elige el dron"}</option>
-                      {(ejecutarModal.drones || []).map((d) => (
-                        <option key={d.uuid} value={d.nombre}>
-                          {d.nombre}
-                          {d.codigo ? ` (${d.codigo})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      required
-                      maxLength={150}
-                      className="form-control form-control-sm rounded-3"
-                      placeholder="Ej. H-K 232"
-                      value={ejecutarModal.aeronave}
-                      onChange={(e) => setEjecutarModal((m) => ({ ...m, aeronave: e.target.value }))}
-                    />
-                  )}
                 </div>
                 {Number(ejecutarModal.hectareasAplicadas) > 0 && Number(ejecutarModal.hectareasAplicadas) < Number(ejecutarModal.aspersion.hectareas) && (
                   <div className="col-12">

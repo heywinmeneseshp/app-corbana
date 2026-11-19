@@ -20,7 +20,8 @@ const cargarDisponibles = () => {
 // Con DRON: el piloto se elige del listado de colaboradores con cargo «Piloto de Dron» y se agregan asistentes (sin límite); cada
 // uno suma las hectáreas aplicadas (pago por hectárea). Con avión, el piloto es externo y se escribe.
 // `valor`: { piloto, pilotoColaboradorUuid, asistentesUuids }; `onChange(patch)`.
-export default function PilotoAsistentes({ medio, valor, onChange, inputClass = "form-control form-control-sm rounded-3" }) {
+// `despuesDelPiloto`: campo que va entre el piloto y los asistentes (p. ej. la aeronave al ejecutar).
+export default function PilotoAsistentes({ medio, valor, onChange, inputClass = "form-control form-control-sm rounded-3", despuesDelPiloto = null }) {
   const [disp, setDisp] = useState({ pilotos: [], asistentes: [] });
   const [error, setError] = useState("");
   const conDron = medio === "DRON";
@@ -47,16 +48,19 @@ export default function PilotoAsistentes({ medio, valor, onChange, inputClass = 
 
   if (!conDron) {
     return (
-      <div>
-        <label className="form-label small fw-medium mb-1">Piloto del avión *</label>
-        <input className={inputClass} maxLength={150} value={valor.piloto || ""} onChange={(e) => onChange({ piloto: e.target.value })} placeholder="Nombre del piloto" />
+      <div className="row g-2">
+        <div className={despuesDelPiloto ? "col-md-6" : "col-12"}>
+          <label className="form-label small fw-medium mb-1">Piloto del avión *</label>
+          <input className={inputClass} maxLength={150} value={valor.piloto || ""} onChange={(e) => onChange({ piloto: e.target.value })} placeholder="Nombre del piloto" />
+        </div>
+        {despuesDelPiloto && <div className="col-md-6">{despuesDelPiloto}</div>}
       </div>
     );
   }
 
   return (
     <div className="row g-2">
-      <div className="col-md-5">
+      <div className={despuesDelPiloto ? "col-md-6" : "col-md-5"}>
         <label className="form-label small fw-medium mb-1">Piloto del dron *</label>
         <select
           className="form-select form-select-sm rounded-3"
@@ -85,7 +89,8 @@ export default function PilotoAsistentes({ medio, valor, onChange, inputClass = 
           </div>
         )}
       </div>
-      <div className="col-md-7">
+      {despuesDelPiloto && <div className="col-md-6">{despuesDelPiloto}</div>}
+      <div className={despuesDelPiloto ? "col-12" : "col-md-7"}>
         <label className="form-label small fw-medium mb-1">Asistentes</label>
         <TagPicker
           items={asistentesItems}
