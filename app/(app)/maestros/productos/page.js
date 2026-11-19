@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { FiPlus, FiRefreshCw, FiSearch, FiEdit2, FiTrash2, FiSave, FiX, FiBox } from "react-icons/fi";
 import { apiFetch } from "@/lib/api";
+import TagPicker from "@/components/TagPicker";
 import ModalShell from "@/components/ModalShell";
 import RequirePermission from "@/components/RequirePermission";
 import { hasPermission } from "@/lib/auth";
@@ -221,8 +222,14 @@ function ProductoModal({ producto, onClose, onSaved }) {
   const [cantidadPalets, setCantidadPalets] = useState(producto?.cantidadPalets ?? "");
   const [cantidadMinipalets, setCantidadMinipalets] = useState(producto?.cantidadMinipalets ?? "");
   const [estado, setEstado] = useState(producto ? producto.estado : true);
-  // Clientes del producto (como en Logística), separados por coma.
-  const [clientes, setClientes] = useState((producto?.clientes || []).join(", "));
+  // Clientes del producto: se eligen del listado de clientes de Logística.
+  const [clientes, setClientes] = useState((producto?.clientes || []).map((c) => ({ uuid: c, label: c })));
+  const [clientesLogistica, setClientesLogistica] = useState([]);
+  useEffect(() => {
+    apiFetch("/productos/clientes-banarica")
+      .then((lista) => setClientesLogistica(Array.isArray(lista) ? lista : []))
+      .catch(() => setClientesLogistica([]));
+  }, []);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -241,10 +248,7 @@ function ProductoModal({ producto, onClose, onSaved }) {
         cajasPorMinipalet: numOrNull(cajasPorMinipalet),
         cantidadPalets: numOrNull(cantidadPalets),
         cantidadMinipalets: numOrNull(cantidadMinipalets),
-        clientes: clientes
-          .split(",")
-          .map((c) => c.trim())
-          .filter(Boolean),
+        clientes: clientes.map((c) => c.uuid),
         estado,
       };
       await apiFetch(producto ? `/productos/${producto.uuid}` : "/productos", {
@@ -276,8 +280,13 @@ function ProductoModal({ producto, onClose, onSaved }) {
 
         <div className="mb-3">
           <label className="form-label small fw-medium">Clientes</label>
-          <input type="text" className="form-control rounded-3" placeholder="AFC, Tucan..." value={clientes} onChange={(e) => setClientes(e.target.value)} />
-          <div className="form-text small">Clientes a los que se vende este producto, separados por coma (como en Logística). Sirve para ver las cajas por cliente.</div>
+          <TagPicker
+            items={[...new Set([...clientesLogistica, ...clientes.map((c) => c.uuid)])].map((c) => ({ uuid: c, label: c }))}
+            selected={clientes}
+            onChange={setClientes}
+            placeholder={clientesLogistica.length ? "Buscar cliente de Logística..." : "Cargando clientes de Logística..."}
+          />
+          <div className="form-text small">Clientes de Logística a los que se vende este producto. Sirve para ver las cajas por cliente.</div>
         </div>
 
         <div className="row g-3 mb-3">
