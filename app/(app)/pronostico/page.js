@@ -175,7 +175,7 @@ function ProductosSemanal({ data, puedeEditar }) {
               )}
             </div>
           )}
-          {cfg && <PorProducto resultado={resultado} ocultas={SIN_OCULTAS} productos={productos} onChange={setProductos} puedeEditar={puedeEditar} nombreEscenario="Proyección semanal" soloNormal />}
+          {cfg && <PorProducto resultado={resultado} ocultas={SIN_OCULTAS} productos={productos} onChange={setProductos} puedeEditar={puedeEditar} nombreEscenario="Proyección semanal" soloNormal filtroCliente />}
         </div>
       )}
     </div>

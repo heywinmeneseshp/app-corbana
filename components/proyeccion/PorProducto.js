@@ -193,7 +193,8 @@ function NuevoProductoModal({ onClose, onCreado }) {
 // el peso de la caja de referencia (tasa de conversión, hoy 18.6) y se reparte entre productos: contenedores fijos por semana, % de
 // los kilos y un producto que se queda con el resto. Cada producto convierte sus kilos en cajas con su peso neto. Una sola mezcla para todas las fincas.
 // `soloNormal`: sin el selector conservador / normal / optimista (la proyección semanal reparte solo las cajas normales).
-export default function PorProducto({ resultado, ocultas, productos, onChange, puedeEditar, nombreEscenario = "", soloNormal = false }) {
+// `filtroCliente`: muestra un selector de cliente (según los clientes de cada producto) para ver solo las cajas de ese cliente.
+export default function PorProducto({ resultado, ocultas, productos, onChange, puedeEditar, nombreEscenario = "", soloNormal = false, filtroCliente = false }) {
   const tasa = resultado.meta.tasaConversion ?? 18.6;
   const [catalogo, setCatalogo] = useState([]);
   const [texto, setTexto] = useState("");
@@ -205,6 +206,10 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
   const campoCajas = ESCENARIOS.find((e) => e.id === escenario).campo;
   const nombreEscenarioCajas = ESCENARIOS.find((e) => e.id === escenario).label;
   const [abierto, setAbierto] = useState(true); // panel de productos desplegado o colapsado
+  // Filtro por cliente: el reparto se calcula con todos los productos, pero la tabla y el Excel muestran solo los del cliente elegido.
+  const [cliente, setCliente] = useState("");
+  const clientesDisponibles = useMemo(() => [...new Set(productos.flatMap((p) => p.clientes || []))].sort((a, b) => a.localeCompare(b, "es")), [productos]);
+  const prodVista = cliente ? productos.filter((p) => (p.clientes || []).includes(cliente)) : productos;
   const [fincasNuevo, setFincasNuevo] = useState([]); // fincas del producto que se va a agregar en modo FINCA
   const [nuevoProducto, setNuevoProducto] = useState(false);
   const fincasLista = resultado.aprovechamiento || [];
@@ -371,7 +376,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
     for (const p of productos) totales.productos[p.uuid] += f.productos[p.uuid] || 0;
   }
   // Total de cajas reales (una a una, sin convertir a cajas de referencia): suma de las cajas de todos los productos.
-  const sumaCajas = (mapa) => productos.reduce((a, p) => a + (mapa[p.uuid] || 0), 0);
+  const sumaCajas = (mapa) => prodVista.reduce((a, p) => a + (mapa[p.uuid] || 0), 0);
   const totalCajasReales = sumaCajas(totales.productos);
   // Lo asignado a los productos (ya redondeado) convertido a cajas de referencia: kilos de los productos ÷ tasa. La diferencia con lo
   // proyectado es lo que sobra (+) o falta (−) por redondear a contenedores completos.
@@ -402,7 +407,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
     const fino = { style: "thin", color: { argb: "FFB9C9BE" } };
     const todosFinos = { top: fino, bottom: fino, left: fino, right: fino };
     const centrado = { horizontal: "center", vertical: "middle", wrapText: true };
-    const titulosProd = productos.map((p) => p.nombre); // solo el nombre del producto
+    const titulosProd = prodVista.map((p) => p.nombre); // solo el nombre del producto
     const cabeceras = [periodoNombre("semana"), `Cajas ${fmt(tasa, 1)}`, "Kilos", ...titulosProd, "Total cajas\nuna a una", `Asignado ${fmt(tasa, 1)}\nconvertido`, `Diferencia ${fmt(tasa, 1)}\nasignado − proyectado`];
 
     const hoja = (nombre, per) => {
@@ -430,7 +435,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
       for (const f of construirVista(per)) {
         const r = ws.getRow(fila++);
         const asign = asignado18(f.productos);
-        const valores = [f.titulo, Math.round(f.cajas), Math.round(f.kg), ...productos.map((p) => (f.productos[p.uuid] === null || f.productos[p.uuid] === undefined ? null : Math.round(f.productos[p.uuid]))), Math.round(sumaCajas(f.productos)), Math.round(asign), Math.round((asign - f.cajas) * 10) / 10];
+        const valores = [f.titulo, Math.round(f.cajas), Math.round(f.kg), ...prodVista.map((p) => (f.productos[p.uuid] === null || f.productos[p.uuid] === undefined ? null : Math.round(f.productos[p.uuid]))), Math.round(sumaCajas(f.productos)), Math.round(asign), Math.round((asign - f.cajas) * 10) / 10];
         const colorFila = f.esSemestre ? "FFA8CDB5" : f.esSubtotal ? "FFCFE5D6" : f.faltante ? "FFFFF4E5" : null;
         valores.forEach((v, i) => {
           const c = r.getCell(i + 1);
@@ -453,7 +458,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
       // Total del año
       const rt = ws.getRow(fila);
       const asignT = asignado18(totales.productos);
-      const valoresT = ["Total año", Math.round(totales.cajas), Math.round(totales.kg), ...productos.map((p) => Math.round(totales.productos[p.uuid])), Math.round(totalCajasReales), Math.round(asignT), Math.round((asignT - totales.cajas) * 10) / 10];
+      const valoresT = ["Total año", Math.round(totales.cajas), Math.round(totales.kg), ...prodVista.map((p) => Math.round(totales.productos[p.uuid])), Math.round(totalCajasReales), Math.round(asignT), Math.round((asignT - totales.cajas) * 10) / 10];
       valoresT.forEach((v, i) => {
         const c = rt.getCell(i + 1);
         c.value = v;
@@ -694,6 +699,19 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
               </button>
             ))}
           </div>
+          {filtroCliente && (
+            <div className="d-flex align-items-center gap-2">
+              <span className="small text-secondary">Cliente</span>
+              <select className="form-select form-select-sm" style={{ width: "auto" }} value={cliente} onChange={(e) => setCliente(e.target.value)} title={clientesDisponibles.length ? "Ver solo las cajas de los productos de un cliente" : "Los productos aún no tienen cliente asignado (Maestros → Productos)"}>
+                <option value="">Todos</option>
+                {clientesDisponibles.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {!soloNormal && (
           <div className="d-flex align-items-center gap-2">
             <span className="small text-secondary">Escenario</span>
@@ -732,7 +750,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                   <th className="text-center" style={encabezado}>
                     Kilos
                   </th>
-                  {productos.map((p) => (
+                  {prodVista.map((p) => (
                     <th key={p.uuid} className="text-center" style={{ ...encabezado, minWidth: 120 }} title={`${detalleModo(p)} · ${fmt(p.pesoNeto, 3)} kg por caja`}>
                       {p.nombre}
                       <div className="fw-normal" style={{ fontSize: "0.7rem" }}>
@@ -746,6 +764,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                       una a una
                     </div>
                   </th>
+                  {!cliente && (<>
                   <th className="text-center" style={{ ...encabezado, minWidth: 120 }} title="Lo asignado a los productos (con el redondeo a contenedores) convertido a cajas de referencia: kilos de los productos ÷ tasa">
                     Asignado {fmt(tasa, 1)}
                     <div className="fw-normal" style={{ fontSize: "0.7rem" }}>
@@ -758,6 +777,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                       asignado − proyectado
                     </div>
                   </th>
+                  </>)}
                 </tr>
               </thead>
               <tbody>
@@ -773,7 +793,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                     </td>
                     <td className="text-center" style={sub}>{fmt(f.cajas)}</td>
                     <td className="text-center" style={sub}>{fmt(f.kg)}</td>
-                    {productos.map((p) => (
+                    {prodVista.map((p) => (
                       <td key={p.uuid} className="text-center fw-semibold" style={sub} title={p.cajasPorContenedor > 0 && f.productos[p.uuid] !== null ? `${fmt(f.productos[p.uuid] / p.cajasPorContenedor, 2)} contenedores` : undefined}>
                         {fmt(f.productos[p.uuid])}
                       </td>
@@ -781,11 +801,13 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                     <td className="text-center fw-bold" style={{ background: f.esSubtotal ? colorSub : pie, ...(f.esSubtotal ? { borderTop: bordeSub, borderBottom: bordeSub } : {}) }}>
                       {fmt(sumaCajas(f.productos))}
                     </td>
+                    {!cliente && (<>
                     <td className="text-center" style={sub}>{fmt(asignado18(f.productos))}</td>
                     <td style={sub} className={`text-center fw-semibold ${asignado18(f.productos) - f.cajas < -0.5 ? "text-danger" : asignado18(f.productos) - f.cajas > 0.5 ? "text-success" : ""}`} title={`${fmt(kgAsignados(f.productos) - f.kg)} kg`}>
                       {asignado18(f.productos) - f.cajas > 0 ? "+" : ""}
                       {fmt(asignado18(f.productos) - f.cajas, 1)}
                     </td>
+                    </>)}
                   </tr>
                   );
                 })}
@@ -795,7 +817,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                   <td className="text-center" style={{ position: "sticky", left: 0, ...encabezado }}>Total año</td>
                   <td className="text-center" style={{ background: pie }}>{fmt(totales.cajas)}</td>
                   <td className="text-center" style={{ background: pie }}>{fmt(totales.kg)}</td>
-                  {productos.map((p) => (
+                  {prodVista.map((p) => (
                     <td key={p.uuid} className="text-center" style={{ background: pie }}>
                       {fmt(totales.productos[p.uuid])}
                     </td>
@@ -803,11 +825,13 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
                   <td className="text-center" style={{ ...encabezado }}>
                     {fmt(totalCajasReales)}
                   </td>
+                  {!cliente && (<>
                   <td className="text-center" style={{ background: pie }}>{fmt(asignado18(totales.productos))}</td>
                   <td className="text-center" style={{ background: pie }} title={`${fmt(kgAsignados(totales.productos) - totales.kg)} kg`}>
                     {asignado18(totales.productos) - totales.cajas > 0 ? "+" : ""}
                     {fmt(asignado18(totales.productos) - totales.cajas, 1)}
                   </td>
+                  </>)}
                 </tr>
               </tfoot>
             </table>

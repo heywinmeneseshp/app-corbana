@@ -121,6 +121,7 @@ export default function ProductosPage() {
                       <td>
                         <p className="fw-medium mb-0">{p.nombre}</p>
                         {p.codigo && <p className="small text-secondary mb-0">Código: {p.codigo}</p>}
+                        {p.clientes?.length > 0 && <p className="small text-secondary mb-0">Clientes: {p.clientes.join(", ")}</p>}
                       </td>
                       <td className="text-end">{p.pesoNeto ?? "—"}</td>
                       <td className="text-end">{p.pesoBruto ?? "—"}</td>
@@ -193,6 +194,8 @@ function ProductoModal({ producto, onClose, onSaved }) {
   const [cantidadPalets, setCantidadPalets] = useState(producto?.cantidadPalets ?? "");
   const [cantidadMinipalets, setCantidadMinipalets] = useState(producto?.cantidadMinipalets ?? "");
   const [estado, setEstado] = useState(producto ? producto.estado : true);
+  // Clientes del producto (como en Logística), separados por coma.
+  const [clientes, setClientes] = useState((producto?.clientes || []).join(", "));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -211,6 +214,10 @@ function ProductoModal({ producto, onClose, onSaved }) {
         cajasPorMinipalet: numOrNull(cajasPorMinipalet),
         cantidadPalets: numOrNull(cantidadPalets),
         cantidadMinipalets: numOrNull(cantidadMinipalets),
+        clientes: clientes
+          .split(",")
+          .map((c) => c.trim())
+          .filter(Boolean),
         estado,
       };
       await apiFetch(producto ? `/productos/${producto.uuid}` : "/productos", {
@@ -238,6 +245,12 @@ function ProductoModal({ producto, onClose, onSaved }) {
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
           />
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label small fw-medium">Clientes</label>
+          <input type="text" className="form-control rounded-3" placeholder="AFC, Tucan..." value={clientes} onChange={(e) => setClientes(e.target.value)} />
+          <div className="form-text small">Clientes a los que se vende este producto, separados por coma (como en Logística). Sirve para ver las cajas por cliente.</div>
         </div>
 
         <div className="row g-3 mb-3">
