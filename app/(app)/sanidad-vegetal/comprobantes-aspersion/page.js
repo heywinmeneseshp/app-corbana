@@ -207,7 +207,6 @@ export default function ComprobantesAspersionPage() {
       alturaVuelo: c.alturaVuelo || "",
       anchoDeposicion: c.anchoDeposicion != null ? String(Number(c.anchoDeposicion)) : "",
       concentracionIa: c.concentracionIa != null ? String(Number(c.concentracionIa)) : "",
-      personaAutoriza: c.personaAutoriza || "",
       tiempoReentrada: c.tiempoReentrada != null ? String(Number(c.tiempoReentrada)) : "4",
       tiempoCarencia: c.tiempoCarencia != null ? String(Number(c.tiempoCarencia)) : "0",
       manipuladores: (c.manipuladores || []).length ? c.manipuladores.map((m) => ({ nombre: m.nombre || "", documento: m.documento || "" })) : [{ nombre: "", documento: "" }],
@@ -230,7 +229,6 @@ export default function ComprobantesAspersionPage() {
         alturaVuelo: m.alturaVuelo.trim() || null,
         anchoDeposicion: m.anchoDeposicion === "" ? null : Number(m.anchoDeposicion),
         concentracionIa: m.concentracionIa === "" ? null : Number(m.concentracionIa),
-        personaAutoriza: m.personaAutoriza.trim() || null,
         tiempoReentrada: m.tiempoReentrada === "" ? null : Number(m.tiempoReentrada),
         tiempoCarencia: m.tiempoCarencia === "" ? null : Number(m.tiempoCarencia),
         manipuladores: m.manipuladores.filter((x) => x.nombre.trim()).map((x) => ({ nombre: x.nombre.trim(), documento: x.documento.trim() })),
@@ -791,7 +789,6 @@ Se abrirá la edición para completarlo.`);
                 ["alturaVuelo", "Altura de vuelo", "text", "col-6", "Ej. Promedio 4 metros"],
                 ["anchoDeposicion", "Ancho de deposición (m)", "number", "col-6", ""],
                 ["concentracionIa", "Concentración del ingrediente activo (g/L)", "number", "col-6", "Ej. 880"],
-                ["personaAutoriza", "Persona que autoriza", "text", "col-6", ""],
                 ["tiempoReentrada", "Tiempo de reentrada (h)", "number", "col-6", ""],
                 ["tiempoCarencia", "Tiempo de carencia (h)", "number", "col-6", ""],
               ].map(([k, label, tipo, col, ph]) => (
