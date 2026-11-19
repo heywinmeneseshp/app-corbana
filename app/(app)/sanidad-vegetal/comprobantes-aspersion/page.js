@@ -55,6 +55,8 @@ export default function ComprobantesAspersionPage() {
   const [verEliminados, setVerEliminados] = useState(false);
 
   const [edicion, setEdicion] = useState(null);
+  // Drones de Inventarios → Equipos, para elegir la aeronave cuando la aspersión es con dron.
+  const [drones, setDrones] = useState(null);
   // Anulación: { comprobante, motivo, error }.
   const [anulacion, setAnulacion] = useState(null);
   // Detalle al hacer clic en la fila: { comprobante, cargando }.
@@ -184,6 +186,11 @@ export default function ComprobantesAspersionPage() {
   }
 
   function abrirEdicion(c, { volverADetalle = false } = {}) {
+    if (drones === null) {
+      apiFetch("/comprobantes-aspersion/participantes-disponibles")
+        .then((d) => setDrones(d.drones || []))
+        .catch(() => setDrones([]));
+    }
     setEdicion({
       comprobante: c,
       volverADetalle,
@@ -224,6 +231,7 @@ export default function ComprobantesAspersionPage() {
         ...(m.medio === "DRON" ? { pilotoColaboradorUuid: m.pilotoColaboradorUuid || null, asistentesUuids: m.asistentesUuids } : {}),
         medio: m.medio || null,
         observaciones: m.observaciones.trim() || null,
+        ...(m.medio === "DRON" ? { aeronave: m.aeronave || null } : {}),
         alturaVuelo: m.alturaVuelo.trim() || null,
         anchoDeposicion: m.anchoDeposicion === "" ? null : Number(m.anchoDeposicion),
         tiempoReentrada: m.tiempoReentrada === "" ? null : Number(m.tiempoReentrada),
@@ -685,16 +693,30 @@ Se abrirá la edición para completarlo.`);
                 />
               </div>
               <div className="col-12">
-                <label className="form-label small fw-medium mb-1">Aeronave</label>
-                <input
-                  type="text"
-                  maxLength={150}
-                  className="form-control form-control-sm rounded-3"
-                  value={edicion.aeronave}
-                  disabled
-                  title="Dato de la ejecución: no se edita en el borrador"
-                  onChange={(e) => setEdicion((m) => ({ ...m, aeronave: e.target.value }))}
-                />
+                <label className="form-label small fw-medium mb-1">{edicion.medio === "DRON" ? "Dron" : "Aeronave"}</label>
+                {edicion.medio === "DRON" ? (
+                  <select className="form-select form-select-sm rounded-3" value={edicion.aeronave} onChange={(e) => setEdicion((m) => ({ ...m, aeronave: e.target.value }))}>
+                    <option value="">Elige el dron</option>
+                    {/* El valor guardado se conserva aunque no esté en la lista (p. ej. escrito antes a mano). */}
+                    {edicion.aeronave && !(drones || []).some((d) => d.nombre === edicion.aeronave) && <option value={edicion.aeronave}>{edicion.aeronave}</option>}
+                    {(drones || []).map((d) => (
+                      <option key={d.uuid} value={d.nombre}>
+                        {d.nombre}
+                        {d.codigo ? ` (${d.codigo})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    maxLength={150}
+                    className="form-control form-control-sm rounded-3"
+                    value={edicion.aeronave}
+                    disabled
+                    title="Dato de la ejecución: no se edita en el borrador"
+                    onChange={(e) => setEdicion((m) => ({ ...m, aeronave: e.target.value }))}
+                  />
+                )}
               </div>
               <div className="col-6">
                 <label className="form-label small fw-medium mb-1">Volumen de aplicación por hectárea (gal/ha)</label>
