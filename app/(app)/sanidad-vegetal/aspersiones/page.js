@@ -4596,23 +4596,7 @@ export default function AspersionesPage() {
                     />
                   </div>
                 )}
-                {(ejecutarModal.candidatas || []).length > 0 && (
-                  <div className="col-12">
-                    <label className="form-label small fw-medium mb-1">Es del mismo ciclo que… (opcional)</label>
-                    <select
-                      className="form-select form-select-sm rounded-3"
-                      value={ejecutarModal.cicloCon}
-                      onChange={(e) => setEjecutarModal((m) => ({ ...m, cicloCon: e.target.value }))}
-                    >
-                      <option value="">No, es una aplicación aparte</option>
-                      {ejecutarModal.candidatas.map((c) => (
-                        <option key={c.uuid} value={c.uuid}>
-                          {c.numero} · {c.fecha} · {c.hectareas} ha · {c.mezcla}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                {/* «Es del mismo ciclo que…» ya no se pregunta al ejecutar. */}
                 <div className="col-12">
                   <label className="form-label small fw-medium mb-1">Observaciones</label>
                   <textarea
