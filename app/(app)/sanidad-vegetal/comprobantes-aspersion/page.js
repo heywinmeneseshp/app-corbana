@@ -453,7 +453,7 @@ Se abrirá la edición para completarlo.`);
               <thead>
                 <tr className="table-light text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
                   <th className="fw-medium text-nowrap">Semana</th>
-                  <th className="fw-medium text-nowrap">Ejecutada</th>
+                  <th className="fw-medium text-nowrap" title="Fecha en que estaba programada la aspersión">Fecha</th>
                   <th className="fw-medium">Finca</th>
                   <th className="fw-medium">Mezcla</th>
                   <th className="fw-medium text-nowrap">Vehículo</th>
@@ -493,7 +493,9 @@ Se abrirá la edición para completarlo.`);
                         onClick={() => !verEliminados && abrirDetalle(c)}
                       >
                         <td className="fw-medium text-nowrap">{c.aspersion?.semana?.codigo || "—"}</td>
-                        <td className="text-nowrap">{fmtFecha(c.ejecutadoEn)}</td>
+                        <td className="text-nowrap" title={`Ejecución registrada: ${fmtFecha(c.ejecutadoEn)}`}>
+                          {c.aspersion?.fecha ? new Date(`${String(c.aspersion.fecha).slice(0, 10)}T12:00:00-05:00`).toLocaleDateString("es-CO", { timeZone: "America/Bogota", dateStyle: "medium" }) : fmtFecha(c.ejecutadoEn)}
+                        </td>
                         <td>{c.aspersion?.finca?.nombre || "—"}</td>
                         <td className="text-secondary" style={{ lineHeight: 1.25 }}>{c.aspersion?.mezcla?.nombre || c.aspersion?.mezcla?.codigo || "—"}</td>
                         <td className="text-secondary text-nowrap">{MEDIO_LABEL[c.medio] || "—"}</td>
