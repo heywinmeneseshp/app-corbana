@@ -7,7 +7,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // recientemente primero (`ultimoUsoEn`; las nunca usadas van al final, por
 // nombre). Se confirma con clic, con Enter (toma la sugerida resaltada) o
 // escribiendo el nombre/código exacto y saliendo del campo.
-const etiqueta = (m) => `${m.nombre || m.codigo}`;
+// En Programación de aspersiones se elige por el nombre INTERNO (artículo elaborado); el comercial es el que sale en el comprobante.
+const etiqueta = (m) => `${m.articuloElaborado?.nombre || m.nombre || m.codigo}`;
 const detalle = (m) => {
   const dosis = m.dosisPorHectarea != null ? Number(m.dosisPorHectarea).toFixed(2) : null;
   const unidad = m.dosisPorHectareaUnidad?.simbolo || m.unidadRendimiento?.simbolo || "";
@@ -40,7 +41,7 @@ export default function MezclaAutocomplete({ mezclas, value, onChange, placehold
     const seleccionada = value ? porUuid[value] : null;
     // Con una mezcla ya elegida y el texto intacto se muestran todas, no solo la elegida.
     if (!palabras.length || (seleccionada && text === etiqueta(seleccionada))) return ordenadas.slice(0, limit);
-    return ordenadas.filter((m) => palabras.every((p) => `${m.nombre || ""} ${m.codigo || ""}`.toLowerCase().includes(p))).slice(0, limit);
+    return ordenadas.filter((m) => palabras.every((p) => `${m.articuloElaborado?.nombre || ""} ${m.nombre || ""} ${m.codigo || ""}`.toLowerCase().includes(p))).slice(0, limit);
   }, [ordenadas, text, value, porUuid, limit]);
 
   useEffect(() => {

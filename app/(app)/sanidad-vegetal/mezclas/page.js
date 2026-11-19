@@ -202,7 +202,7 @@ function emptyForm() {
   };
 }
 
-// Tipo de insumo en la receta: Principal (uno solo), Secundario (varios) o ninguno; y si se muestra en el comprobante de aspersión.
+// Tipo de insumo en la receta: Principal (uno solo), Secundario (varios) o ninguno.
 function RolInsumo({ row, onPrincipal, onCambio }) {
   const rol = row.esPrincipal ? "PRINCIPAL" : row.esSecundario ? "SECUNDARIO" : "";
   return (
@@ -222,13 +222,21 @@ function RolInsumo({ row, onPrincipal, onCambio }) {
         <option value="PRINCIPAL">Principal</option>
         <option value="SECUNDARIO">Secundario</option>
       </select>
-      {rol && (
-        <label className="d-flex align-items-center justify-content-center gap-1 mt-1 small text-secondary" style={{ cursor: "pointer", fontSize: "0.72rem" }}>
-          <input type="checkbox" className="form-check-input m-0" checked={row.mostrarEnComprobante !== false} onChange={(e) => onCambio({ mostrarEnComprobante: e.target.checked })} />
-          Mostrar en comprobante
-        </label>
-      )}
     </div>
+  );
+}
+
+// Columna «Mostrar en comprobante»: solo para el insumo principal y los secundarios.
+function MostrarInsumo({ row, onCambio }) {
+  if (!row.esPrincipal && !row.esSecundario) return <span className="text-secondary small">—</span>;
+  return (
+    <input
+      type="checkbox"
+      className="form-check-input"
+      checked={row.mostrarEnComprobante !== false}
+      onChange={(e) => onCambio({ mostrarEnComprobante: e.target.checked })}
+      title="Marcado: este insumo sale en el comprobante de aspersión. Desmarcado: no sale."
+    />
   );
 }
 
@@ -1750,27 +1758,6 @@ export default function ElaboracionesPage() {
                     onChange={(e) => setDirectaForm((f) => ({ ...f, articuloCodigo: e.target.value }))}
                   />
                 </div>
-                <div className="col-5">
-                  <label className="form-label small fw-medium mb-1">
-                    Nombre comercial <span className="text-danger">*</span>
-                  </label>
-                  {(() => {
-                    const auto = nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid);
-                    return (
-                      <input
-                        type="text"
-                        required
-                        maxLength={255}
-                        readOnly={Boolean(auto)}
-                        className="form-control form-control-sm rounded-3"
-                        title={auto ? "Se escribe solo: insumo principal y secundarios con su ingrediente activo, la formulación y el volumen por hectárea" : "Marca el insumo principal y elige la formulación para que se escriba solo"}
-                        style={auto ? { backgroundColor: "#f0fdf4" } : undefined}
-                        value={auto || directaForm.articuloNombre}
-                        onChange={(e) => setDirectaForm((f) => ({ ...f, articuloNombre: e.target.value }))}
-                      />
-                    );
-                  })()}
-                </div>
                 <div className="col-6 col-lg-2">
                   <label className="form-label small fw-medium mb-1">
                     Tipo <span className="text-danger">*</span>
@@ -1831,22 +1818,6 @@ export default function ElaboracionesPage() {
                 </div>
               </div>
 
-              <div className="row g-2 mb-2">
-                <div className="col-6">
-                  <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-1">
-                    Artículo elaborado (nombre interno)
-                    <FiInfo size={13} className="text-secondary" title="Nombre del artículo de inventario que se crea para esta mezcla. Si lo dejas vacío se llamará 'Mezcla MEZ-000N' (el consecutivo)." />
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={150}
-                    className="form-control form-control-sm rounded-3"
-                    placeholder="Opcional (por defecto: Mezcla MEZ-000N)"
-                    value={directaForm.articuloElaboradoNombre}
-                    onChange={(e) => setDirectaForm((f) => ({ ...f, articuloElaboradoNombre: e.target.value }))}
-                  />
-                </div>
-              </div>
 
               <div className="row g-2 mb-2">
                 <div className="col-4">
@@ -1939,6 +1910,9 @@ export default function ElaboracionesPage() {
                       <th style={{ minWidth: "10rem" }}>% de otro</th>
                       <th className="text-center" style={{ minWidth: "9rem" }}>
                         Tipo de insumo
+                      </th>
+                      <th className="text-center" style={{ width: "6rem" }}>
+                        Mostrar en comprobante
                       </th>
                       <th className="text-center" style={{ minWidth: "7rem" }}>
                         Dosis informativa
@@ -2035,6 +2009,9 @@ export default function ElaboracionesPage() {
                         {celdaDosisRelativa(row, insumoRows, updateInsumoRow, { unidades, articulos, grafoUnidades, totalRef: totalRefCrear, aguaLitros: aguaLitrosCrear, deshabilitado: sinRegla })}
                         <td className="text-center">
                           <RolInsumo row={row} onPrincipal={() => marcarPrincipal(row.key)} onCambio={(patch) => updateInsumoRow(row.key, patch)} />
+                        </td>
+                        <td className="text-center">
+                          <MostrarInsumo row={row} onCambio={(patch) => updateInsumoRow(row.key, patch)} />
                         </td>
                         <td className="small text-center text-secondary">
 <div className="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
@@ -2158,6 +2135,44 @@ export default function ElaboracionesPage() {
                 );
               })()}
 
+              {/* Nombres al final: el comercial sale en el comprobante; el interno es el que se elige en Programación de aspersiones. */}
+              <div className="row g-2 mb-3">
+                <div className="col-12 col-lg-6">
+                  <label className="form-label small fw-medium mb-1">
+                    Nombre comercial (sale en el comprobante) <span className="text-danger">*</span>
+                  </label>
+                  {(() => {
+                    const auto = nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid);
+                    return (
+                      <input
+                        type="text"
+                        required
+                        maxLength={255}
+                        readOnly={Boolean(auto)}
+                        className="form-control form-control-sm rounded-3"
+                        title={auto ? "Se escribe solo: insumo principal y secundarios con su ingrediente activo, la formulación y el volumen por hectárea" : "Marca el insumo principal y elige la formulación para que se escriba solo"}
+                        style={auto ? { backgroundColor: "#f0fdf4" } : undefined}
+                        value={auto || directaForm.articuloNombre}
+                        onChange={(e) => setDirectaForm((f) => ({ ...f, articuloNombre: e.target.value }))}
+                      />
+                    );
+                  })()}
+                </div>
+                <div className="col-12 col-lg-6">
+                  <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-1">
+                    Nombre interno (lista de Programación de aspersiones)
+                    <FiInfo size={13} className="text-secondary" title="Nombre del artículo de inventario que se crea para esta mezcla. Si lo dejas vacío se llamará 'Mezcla MEZ-000N' (el consecutivo)." />
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={150}
+                    className="form-control form-control-sm rounded-3"
+                    placeholder="Opcional (por defecto: Mezcla MEZ-000N)"
+                    value={directaForm.articuloElaboradoNombre}
+                    onChange={(e) => setDirectaForm((f) => ({ ...f, articuloElaboradoNombre: e.target.value }))}
+                  />
+                </div>
+              </div>
               <div className="mb-3">
                 <label className="form-label small fw-medium">Almacén</label>
                 <select
@@ -2452,27 +2467,6 @@ export default function ElaboracionesPage() {
                     onChange={(e) => setEditarForm((f) => ({ ...f, codigo: e.target.value }))}
                   />
                 </div>
-                <div className="col-12 col-lg-4">
-                  <label className="form-label small fw-medium mb-1">
-                    Nombre comercial <span className="text-danger">*</span>
-                  </label>
-                  {(() => {
-                    const auto = nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid);
-                    return (
-                      <input
-                        type="text"
-                        required
-                        maxLength={255}
-                        readOnly={Boolean(auto)}
-                        className="form-control form-control-sm rounded-3"
-                        title={auto ? "Se escribe solo: insumo principal y secundarios con su ingrediente activo, la formulación y el volumen por hectárea" : "Marca el insumo principal y elige la formulación para que se escriba solo"}
-                        style={auto ? { backgroundColor: "#f0fdf4" } : undefined}
-                        value={auto || editarForm.nombre}
-                        onChange={(e) => setEditarForm((f) => ({ ...f, nombre: e.target.value }))}
-                      />
-                    );
-                  })()}
-                </div>
                 <div className="col-6 col-lg-2">
                   <label className="form-label small fw-medium mb-1">
                     Tipo <span className="text-danger">*</span>
@@ -2498,15 +2492,6 @@ export default function ElaboracionesPage() {
                       </option>
                     ))}
                   </select>
-                </div>
-                <div className="col-12 col-lg-4">
-                  <label className="form-label small fw-medium mb-1">Artículo elaborado (nombre interno)</label>
-                  <input
-                    type="text"
-                    className="form-control form-control-sm rounded-3"
-                    value={editarForm.articuloNombre || ""}
-                    onChange={(e) => setEditarForm((f) => ({ ...f, articuloNombre: e.target.value }))}
-                  />
                 </div>
                 <div className="col-7 col-lg-2">
                   <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-1">
@@ -2588,6 +2573,9 @@ export default function ElaboracionesPage() {
                       <th style={{ minWidth: "10rem" }}>% de otro</th>
                           <th className="text-center" style={{ minWidth: "9rem" }}>
                             Tipo de insumo
+                          </th>
+                          <th className="text-center" style={{ width: "6rem" }}>
+                            Mostrar en comprobante
                           </th>
                           <th className="text-center" style={{ minWidth: "7rem" }}>
                             Dosis informativa
@@ -2690,6 +2678,9 @@ export default function ElaboracionesPage() {
                             {celdaDosisRelativa(row, editarInsumoRows, updateEditarInsumoRow, { unidades, articulos, grafoUnidades, totalRef: totalRefEditar, aguaLitros: aguaLitrosEditar, deshabilitado: sinRegla })}
                             <td className="text-center">
                               <RolInsumo row={row} onPrincipal={() => marcarPrincipalEditar(row.key)} onCambio={(patch) => updateEditarInsumoRow(row.key, patch)} />
+                            </td>
+                            <td className="text-center">
+                              <MostrarInsumo row={row} onCambio={(patch) => updateEditarInsumoRow(row.key, patch)} />
                             </td>
                             <td className="small text-center text-secondary">
 <div className="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
@@ -2812,6 +2803,40 @@ export default function ElaboracionesPage() {
                   })()}
                 </>
               )}
+
+              {/* Nombres al final: el comercial sale en el comprobante; el interno es el que se elige en Programación de aspersiones. */}
+              <div className="row g-2 mb-3">
+                <div className="col-12 col-lg-6">
+                  <label className="form-label small fw-medium mb-1">
+                    Nombre comercial (sale en el comprobante) <span className="text-danger">*</span>
+                  </label>
+                  {(() => {
+                    const auto = nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid);
+                    return (
+                      <input
+                        type="text"
+                        required
+                        maxLength={255}
+                        readOnly={Boolean(auto)}
+                        className="form-control form-control-sm rounded-3"
+                        title={auto ? "Se escribe solo: insumo principal y secundarios con su ingrediente activo, la formulación y el volumen por hectárea" : "Marca el insumo principal y elige la formulación para que se escriba solo"}
+                        style={auto ? { backgroundColor: "#f0fdf4" } : undefined}
+                        value={auto || editarForm.nombre}
+                        onChange={(e) => setEditarForm((f) => ({ ...f, nombre: e.target.value }))}
+                      />
+                    );
+                  })()}
+                </div>
+                <div className="col-12 col-lg-6">
+                  <label className="form-label small fw-medium mb-1">Nombre interno (lista de Programación de aspersiones)</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm rounded-3"
+                    value={editarForm.articuloNombre || ""}
+                    onChange={(e) => setEditarForm((f) => ({ ...f, articuloNombre: e.target.value }))}
+                  />
+                </div>
+              </div>
 
               <div className="d-flex justify-content-end gap-2">
                 <button type="button" className="btn btn-sm btn-link text-secondary text-decoration-none" onClick={() => setEditarOpen(false)}>
