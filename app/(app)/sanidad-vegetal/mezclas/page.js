@@ -215,7 +215,7 @@ function RolInsumo({ row, onPrincipal, onCambio }) {
         onChange={(e) => {
           const v = e.target.value;
           if (v === "PRINCIPAL") onPrincipal();
-          else onCambio({ esPrincipal: false, esSecundario: v === "SECUNDARIO" });
+          else onCambio({ esPrincipal: false, esSecundario: v === "SECUNDARIO", ...(v === "SECUNDARIO" && row.mostrarEnComprobante === undefined ? { mostrarEnComprobante: true } : {}) });
         }}
       >
         <option value="">—</option>
@@ -257,7 +257,9 @@ const FORMULACIONES = [
 // Nombre automático de la mezcla: insumo principal y secundarios con su ingrediente activo, la formulación y el volumen por
 // hectárea. Ej.: «POWMYL SC I.A (DIETHOFENCARB) + DITHANE 430 F-MB I.A (MANCOZEB) EN EMULSION A 6 GAL/HA».
 // Devuelve "" mientras falte el principal o la formulación.
-function nombreAutomaticoMezcla(rows, articulos, unidades, formulacion, volumen, unidadUuid) {
+// `incluirOcultos`: el nombre interno lleva todos los insumos; el comercial omite los marcados «no mostrar en el comprobante».
+function nombreAutomaticoMezcla(rows, articulos, unidades, formulacion, volumen, unidadUuid, { incluirOcultos = false } = {}) {
+  const visible = (r) => incluirOcultos || r.mostrarEnComprobante !== false;
   const principal = rows.find((r) => r.esPrincipal && r.articuloUuid);
   if (!principal || !formulacion) return "";
   const parte = (r) => {
@@ -266,7 +268,8 @@ function nombreAutomaticoMezcla(rows, articulos, unidades, formulacion, volumen,
     const ia = (a.ingredientesActivos || []).map((i) => i.nombre).filter(Boolean);
     return `${a.nombre.trim().toUpperCase()}${ia.length ? ` I.A (${ia.join(", ").toUpperCase()})` : ""}`;
   };
-  const partes = [principal, ...rows.filter((r) => r.esSecundario && !r.esPrincipal && r.articuloUuid)].map(parte).filter(Boolean);
+  const partes = [principal, ...rows.filter((r) => r.esSecundario && !r.esPrincipal && r.articuloUuid)].filter(visible).map(parte).filter(Boolean);
+  if (!partes.length) return "";
   const unidad = unidades.find((u) => u.uuid === unidadUuid);
   const vol = volumen !== "" && volumen != null && Number(volumen) > 0 ? ` A ${Number(volumen).toLocaleString("es-CO", { maximumFractionDigits: 2 })} ${String(unidad?.simbolo || "").toUpperCase()}/HA`.replace(" /HA", "/HA") : "";
   return `${partes.join(" + ")} EN ${formulacion}${vol}`;
@@ -2170,13 +2173,27 @@ export default function ElaboracionesPage() {
                   })()}
                 </div>
                 <div className="col-12 col-lg-6">
-                  <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-1">
-                    Nombre interno (lista de Programación de aspersiones)
-                    <FiInfo size={13} className="text-secondary" title="Nombre del artículo de inventario que se crea para esta mezcla. Si lo dejas vacío se llamará 'Mezcla MEZ-000N' (el consecutivo)." />
+                  <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-2">
+                    <span>Nombre interno (lista de Programación de aspersiones)</span>
+                    {(() => {
+                      const auto = nombreAutomaticoMezcla(insumoRows, articulos, unidades, directaForm.formulacion, form.volumenPorHectarea, form.volumenPorHectareaUnidadUuid, { incluirOcultos: true });
+                      return (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-success py-0 px-2 ms-auto"
+                          style={{ fontSize: "0.72rem" }}
+                          disabled={!auto}
+                          title={auto ? `Escribe (con todos los insumos, también los que no se muestran): ${auto}` : "Marca el insumo principal y elige la formulación para generarlo"}
+                          onClick={() => setDirectaForm((f) => ({ ...f, articuloElaboradoNombre: auto }))}
+                        >
+                          Generar nombre
+                        </button>
+                      );
+                    })()}
                   </label>
                   <input
                     type="text"
-                    maxLength={150}
+                    maxLength={255}
                     className="form-control form-control-sm rounded-3"
                     placeholder="Opcional (por defecto: Mezcla MEZ-000N)"
                     value={directaForm.articuloElaboradoNombre}
@@ -2850,7 +2867,24 @@ export default function ElaboracionesPage() {
                   })()}
                 </div>
                 <div className="col-12 col-lg-6">
-                  <label className="form-label small fw-medium mb-1">Nombre interno (lista de Programación de aspersiones)</label>
+                  <label className="form-label small fw-medium mb-1 d-flex align-items-center gap-2">
+                    <span>Nombre interno (lista de Programación de aspersiones)</span>
+                    {(() => {
+                      const auto = nombreAutomaticoMezcla(editarInsumoRows, articulos, unidades, editarForm.formulacion, editarForm.dosisPorHectarea, editarForm.dosisPorHectareaUnidadUuid, { incluirOcultos: true });
+                      return (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-success py-0 px-2 ms-auto"
+                          style={{ fontSize: "0.72rem" }}
+                          disabled={!auto}
+                          title={auto ? `Escribe (con todos los insumos, también los que no se muestran): ${auto}` : "Marca el insumo principal y elige la formulación para generarlo"}
+                          onClick={() => setEditarForm((f) => ({ ...f, articuloNombre: auto }))}
+                        >
+                          Generar nombre
+                        </button>
+                      );
+                    })()}
+                  </label>
                   <input
                     type="text"
                     className="form-control form-control-sm rounded-3"
