@@ -1853,8 +1853,16 @@ export default function AspersionesPage() {
       asistentesUuids: [],
       hectareasAplicadas: String(Number(aspersion.hectareas)),
       observaciones: "",
+      // Aeronave: con dron se elige de los drones de Inventarios → Equipos; con avión se escribe.
+      aeronave: "",
+      drones: null,
       error: "",
     });
+    if (aspersion.medio === "DRON") {
+      apiFetch("/comprobantes-aspersion/participantes-disponibles")
+        .then((d) => setEjecutarModal((m) => (m && m.aspersion.uuid === aspersion.uuid ? { ...m, drones: d.drones || [] } : m)))
+        .catch(() => setEjecutarModal((m) => (m && m.aspersion.uuid === aspersion.uuid ? { ...m, drones: [] } : m)));
+    }
   }
 
   async function confirmarEjecutar(e) {
@@ -1863,6 +1871,10 @@ export default function AspersionesPage() {
     const conDron = m.aspersion.medio === "DRON";
     if (conDron ? !m.pilotoColaboradorUuid : !m.piloto.trim()) {
       setEjecutarModal({ ...m, error: conDron ? "Elige el piloto del dron." : "Escribe el nombre del piloto." });
+      return;
+    }
+    if (!m.aeronave.trim()) {
+      setEjecutarModal({ ...m, error: conDron ? "Elige el dron." : "Escribe la aeronave (avión)." });
       return;
     }
     const aplicadas = Number(m.hectareasAplicadas);
@@ -1874,6 +1886,7 @@ export default function AspersionesPage() {
       piloto: m.piloto.trim(),
       ...(conDron ? { pilotoColaboradorUuid: m.pilotoColaboradorUuid, asistentesUuids: m.asistentesUuids } : {}),
       hectareasAplicadas: aplicadas,
+      aeronave: m.aeronave.trim(),
       ...(m.observaciones.trim() ? { observaciones: m.observaciones.trim() } : {}),
       // Ejecución parcial: lo que falta queda como parte pendiente del mismo ciclo.
       ...(aplicadas < Number(m.aspersion.hectareas) && m.fechaParteRestante ? { fechaParteRestante: m.fechaParteRestante } : {}),
@@ -4540,6 +4553,32 @@ export default function AspersionesPage() {
                     valor={ejecutarModal}
                     onChange={(patch) => setEjecutarModal((m) => ({ ...m, ...patch }))}
                   />
+                </div>
+                <div className="col-12 col-md-6">
+                  <label className="form-label small fw-medium mb-1">
+                    {ejecutarModal.aspersion.medio === "DRON" ? "Dron" : "Aeronave"} <span className="text-danger">*</span>
+                  </label>
+                  {ejecutarModal.aspersion.medio === "DRON" ? (
+                    <select className="form-select form-select-sm rounded-3" required value={ejecutarModal.aeronave} onChange={(e) => setEjecutarModal((m) => ({ ...m, aeronave: e.target.value }))}>
+                      <option value="">{ejecutarModal.drones === null ? "Cargando drones..." : "Elige el dron"}</option>
+                      {(ejecutarModal.drones || []).map((d) => (
+                        <option key={d.uuid} value={d.nombre}>
+                          {d.nombre}
+                          {d.codigo ? ` (${d.codigo})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      required
+                      maxLength={150}
+                      className="form-control form-control-sm rounded-3"
+                      placeholder="Ej. H-K 232"
+                      value={ejecutarModal.aeronave}
+                      onChange={(e) => setEjecutarModal((m) => ({ ...m, aeronave: e.target.value }))}
+                    />
+                  )}
                 </div>
                 {Number(ejecutarModal.hectareasAplicadas) > 0 && Number(ejecutarModal.hectareasAplicadas) < Number(ejecutarModal.aspersion.hectareas) && (
                   <div className="col-12">
