@@ -204,7 +204,6 @@ export default function ComprobantesAspersionPage() {
       horaInicio: c.horaInicio || "",
       horaFinal: c.horaFinal || "",
       // Datos del reporte operacional de fumigación.
-      tipoEquipo: c.tipoEquipo || "",
       alturaVuelo: c.alturaVuelo || "",
       anchoDeposicion: c.anchoDeposicion != null ? String(Number(c.anchoDeposicion)) : "",
       tiempoReentrada: c.tiempoReentrada != null ? String(Number(c.tiempoReentrada)) : "4",
@@ -225,7 +224,6 @@ export default function ComprobantesAspersionPage() {
         ...(m.medio === "DRON" ? { pilotoColaboradorUuid: m.pilotoColaboradorUuid || null, asistentesUuids: m.asistentesUuids } : {}),
         medio: m.medio || null,
         observaciones: m.observaciones.trim() || null,
-        tipoEquipo: m.tipoEquipo.trim() || null,
         alturaVuelo: m.alturaVuelo.trim() || null,
         anchoDeposicion: m.anchoDeposicion === "" ? null : Number(m.anchoDeposicion),
         tiempoReentrada: m.tiempoReentrada === "" ? null : Number(m.tiempoReentrada),
@@ -784,7 +782,6 @@ Se abrirá la edición para completarlo.`);
               </div>
               <div className="col-12 small fw-semibold text-secondary mt-3">Reporte operacional de fumigación</div>
               {[
-                ["tipoEquipo", "Tipo de equipo de aplicación", "text", "col-12", "Ej. Cessna A188 / Air Tractor HK 4193"],
                 ["alturaVuelo", "Altura de vuelo", "text", "col-6", "Ej. Promedio 4 metros"],
                 ["anchoDeposicion", "Ancho de deposición (m)", "number", "col-6", ""],
                 ["tiempoReentrada", "Tiempo de reentrada (h)", "number", "col-6", ""],

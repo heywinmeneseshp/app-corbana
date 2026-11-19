@@ -149,7 +149,6 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
             </Dato>
             {c.pilotoVisible && c.pilotoColaborador && c.pilotoVisible.uuid !== c.pilotoColaborador.uuid && <Dato label="Piloto certificado (PDF)">{c.pilotoVisible.nombre}</Dato>}
             <Dato label="Aeronave">{c.aeronave}</Dato>
-            <Dato label="Tipo de equipo">{c.tipoEquipo}</Dato>
             {(c.participantes || []).some((p) => p.rol === "ASISTENTE") && (
               <Dato label="Asistentes" ancho={12}>
                 {c.participantes
