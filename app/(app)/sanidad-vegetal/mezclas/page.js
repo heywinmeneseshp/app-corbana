@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
-import { FiPlus, FiEye, FiX, FiInfo, FiUploadCloud, FiDownload, FiArchive, FiRotateCcw, FiTrash2, FiEdit2, FiSliders, FiFilter, FiChevronRight } from "react-icons/fi";
+import { FiPlus, FiEye, FiX, FiInfo, FiUploadCloud, FiDownload, FiArchive, FiRotateCcw, FiTrash2, FiEdit2, FiSliders, FiFilter, FiChevronRight, FiCopy } from "react-icons/fi";
 import { apiFetch, apiUpload, apiFetchTodos } from "@/lib/api";
 import { hasAnyPermission, hasPermission } from "@/lib/auth";
 import { esAdministrador } from "@/lib/laborEstados";
@@ -1029,48 +1029,77 @@ export default function ElaboracionesPage() {
         unidadRendimientoUuid: detalle.unidadRendimiento?.uuid || "",
         galonesReferencia: rendimientoEnGalones != null ? String(Math.round(rendimientoEnGalones * 100) / 100) : "",
       }));
-      setEditarInsumoRows(
-        componentes.length
-          ? (() => {
-              const base = componentes.map((c) => ({
-                key: c.uuid || Math.random().toString(36).slice(2),
-                articuloUuid: c.articulo?.uuid || "",
-                cantidad: c.cantidad != null ? String(c.cantidad) : "",
-                unidadUuid: c.unidad?.uuid || "",
-                esPrincipal: Boolean(c.esPrincipal),
-                esSecundario: Boolean(c.esSecundario),
-                mostrarEnComprobante: c.mostrarEnComprobante !== false,
-                tipoDosis: c.tipoDosis || (c.referenciaArticuloId ? "PORCENTAJE" : "FIJA"),
-                referenciaArticuloUuid: "",
-                porcentajeReferencia: c.porcentajeReferencia != null ? String(c.porcentajeReferencia) : "",
-                tasa: c.tasa != null ? String(c.tasa) : "",
-                // tasaUnidadId/dosisUnidadId (numéricos) → uuid para los
-                // selects (unidades ya trae id + uuid del combo sin filtro
-                // de atributos).
-                tasaUnidadUuid: c.tasaUnidadId ? unidades.find((u) => u.id === c.tasaUnidadId)?.uuid || "" : "",
-                dosisPorHectarea: c.dosisPorHectarea != null ? String(c.dosisPorHectarea) : "",
-                dosisUnidadUuid: c.dosisUnidadId ? unidades.find((u) => u.id === c.dosisUnidadId)?.uuid || "" : "",
-              }));
-              // referenciaArticuloId (numérico) → uuid del artículo para el
-              // select (se resuelve en segunda pasada porque necesita la
-              // lista completa; si el único renglón con ese artículo es él
-              // mismo, se deja vacío y el backend lo rechaza al guardar).
-              base.forEach((r, i) => {
-                const refId = componentes[i].referenciaArticuloId;
-                if (refId && componentes[i].porcentajeReferencia != null) {
-                  const idx = componentes.findIndex((x, k) => k !== i && x.articulo?.id === refId);
-                  r.referenciaArticuloUuid = idx >= 0 ? base[idx]?.articuloUuid || "" : "";
-                }
-              });
-              // Recetas guardadas con el ACONDICIONADOR en otra unidad (Kg) quedan en g/L al editarlas.
-              return aplicarReglasAcondicionador(base, articulos, unidades);
-            })()
-          : [emptyInsumoRow()],
-      );
+      setEditarInsumoRows(filasDeReceta(componentes));
     } catch (err) {
       setEditarError(err.message);
     } finally {
       setEditarLoading(false);
+    }
+  }
+
+  // Filas del formulario a partir de los componentes de una receta guardada (Editar y Duplicar).
+  function filasDeReceta(componentes) {
+    if (!componentes.length) return [emptyInsumoRow()];
+    const base = componentes.map((c) => ({
+      key: c.uuid || Math.random().toString(36).slice(2),
+      articuloUuid: c.articulo?.uuid || "",
+      cantidad: c.cantidad != null ? String(c.cantidad) : "",
+      unidadUuid: c.unidad?.uuid || "",
+      esPrincipal: Boolean(c.esPrincipal),
+      esSecundario: Boolean(c.esSecundario),
+      mostrarEnComprobante: c.mostrarEnComprobante !== false,
+      tipoDosis: c.tipoDosis || (c.referenciaArticuloId ? "PORCENTAJE" : "FIJA"),
+      referenciaArticuloUuid: "",
+      porcentajeReferencia: c.porcentajeReferencia != null ? String(c.porcentajeReferencia) : "",
+      tasa: c.tasa != null ? String(c.tasa) : "",
+      // tasaUnidadId/dosisUnidadId (numéricos) → uuid para los
+      // selects (unidades ya trae id + uuid del combo sin filtro
+      // de atributos).
+      tasaUnidadUuid: c.tasaUnidadId ? unidades.find((u) => u.id === c.tasaUnidadId)?.uuid || "" : "",
+      dosisPorHectarea: c.dosisPorHectarea != null ? String(c.dosisPorHectarea) : "",
+      dosisUnidadUuid: c.dosisUnidadId ? unidades.find((u) => u.id === c.dosisUnidadId)?.uuid || "" : "",
+    }));
+    // referenciaArticuloId (numérico) → uuid del artículo para el
+    // select (se resuelve en segunda pasada porque necesita la
+    // lista completa; si el único renglón con ese artículo es él
+    // mismo, se deja vacío y el backend lo rechaza al guardar).
+    base.forEach((r, i) => {
+      const refId = componentes[i].referenciaArticuloId;
+      if (refId && componentes[i].porcentajeReferencia != null) {
+        const idx = componentes.findIndex((x, k) => k !== i && x.articulo?.id === refId);
+        r.referenciaArticuloUuid = idx >= 0 ? base[idx]?.articuloUuid || "" : "";
+      }
+    });
+    // Recetas guardadas con el ACONDICIONADOR en otra unidad (Kg) quedan en g/L al editarlas.
+    return aplicarReglasAcondicionador(base, articulos, unidades);
+  }
+
+  // Duplicar: abre «Nueva mezcla» con la receta, el tipo, la formulación y el volumen de otra; los nombres quedan vacíos para
+  // generarlos (o escribirlos) y se guarda como una mezcla nueva.
+  async function duplicarMezcla(mezcla) {
+    try {
+      const detalle = await apiFetch(`/inventarios/mezclas/${mezcla.uuid}`);
+      const componentes = detalle.versiones?.[0]?.componentes || [];
+      setForm({
+        ...emptyForm(),
+        cantidadElaborada: detalle.rendimiento != null ? String(detalle.rendimiento) : "1",
+        volumenPorHectarea: detalle.dosisPorHectarea != null ? String(detalle.dosisPorHectarea) : "",
+        volumenPorHectareaUnidadUuid: detalle.dosisPorHectareaUnidad?.uuid || "",
+      });
+      setDirectaForm({
+        ...emptyDirectaForm(),
+        articuloCodigo: siguienteCodigoSugerido(todasLasMezclas),
+        articuloUnidadMedidaUuid: detalle.unidadRendimiento?.uuid || "",
+        tipoAgricultura: detalle.tipoAgricultura || "",
+        formulacion: detalle.formulacion || "",
+      });
+      // Claves nuevas: las filas son de la mezcla nueva, no de la original.
+      setInsumoRows(filasDeReceta(componentes).map((r) => ({ ...r, key: Math.random().toString(36).slice(2) })));
+      setBorradorRecuperado(false);
+      setFormError("");
+      setModalOpen(true);
+    } catch (err) {
+      alert(err.message);
     }
   }
 
@@ -1684,6 +1713,11 @@ export default function ElaboracionesPage() {
                           {hasPermission("inventario.mezclas.editar") && (
                             <button type="button" className="btn btn-sm btn-link p-1 me-1 text-secondary" title="Editar" onClick={() => abrirEditar(m)}>
                               <FiEdit2 />
+                            </button>
+                          )}
+                          {hasPermission("inventario.mezclas.elaborar") && (
+                            <button type="button" className="btn btn-sm btn-link p-1 me-1 text-secondary" title="Duplicar: crear una mezcla nueva a partir de esta" onClick={() => duplicarMezcla(m)}>
+                              <FiCopy />
                             </button>
                           )}
                           {esAdmin && (
