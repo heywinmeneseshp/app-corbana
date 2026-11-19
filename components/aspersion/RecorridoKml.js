@@ -100,7 +100,7 @@ export default function RecorridoKml({ comprobante: c, editable = false, onCambi
         </span>
         {editable && (
           <button type="button" className="btn btn-sm btn-outline-success rounded-3 d-flex align-items-center gap-1 ms-auto" disabled={Boolean(trabajando)} onClick={() => inputRef.current?.click()}>
-            <FiUpload /> {kmls.length ? "Agregar KML / KMZ" : "Subir KML / KMZ"}
+            <FiUpload /> {kmls.length ? "Subir otro KML / KMZ" : "Subir KML / KMZ"}
           </button>
         )}
       </div>
