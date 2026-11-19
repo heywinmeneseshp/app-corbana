@@ -2305,7 +2305,10 @@ export default function AspersionesPage() {
                         <td className="fw-medium text-nowrap">{a.semana?.codigo || "—"}</td>
                         <td className="text-nowrap">{a.fecha}</td>
                         <td >{a.finca?.nombre || "—"}</td>
-                        <td className="text-secondary" style={{ lineHeight: 1.25 }}>{a.mezcla?.nombre || a.mezcla?.codigo || "—"}</td>
+                        {/* En la tabla, el nombre interno; el comercial (el del PDF) al pasar el cursor. */}
+                        <td className="text-secondary" style={{ lineHeight: 1.25 }} title={a.mezcla?.nombre ? `Nombre comercial: ${a.mezcla.nombre}` : undefined}>
+                          {a.mezcla?.articuloElaborado?.nombre || a.mezcla?.nombre || a.mezcla?.codigo || "—"}
+                        </td>
                         <td className="text-secondary text-nowrap">{a.medio === "DRON" ? "Dron" : a.medio === "AVION" ? "Avión" : "—"}</td>
                         <td className="text-secondary text-center">{a.diasDesdeUltima != null ? a.diasDesdeUltima : "—"}</td>
                         <td className="text-secondary">
@@ -4345,7 +4348,7 @@ export default function AspersionesPage() {
               <div className="rounded-3 p-2 mb-3 small" style={{ backgroundColor: "#f0fdf4" }}>
                 <div><strong>{ejecutarModal.aspersion.numero}</strong> · {ejecutarModal.aspersion.finca?.nombre}</div>
                 <div className="text-secondary">
-                  {ejecutarModal.aspersion.mezcla?.nombre || ejecutarModal.aspersion.mezcla?.codigo} ·{" "}
+                  {ejecutarModal.aspersion.mezcla?.articuloElaborado?.nombre || ejecutarModal.aspersion.mezcla?.nombre || ejecutarModal.aspersion.mezcla?.codigo} ·{" "}
                   {ejecutarModal.aspersion.medio === "DRON" ? "Dron" : ejecutarModal.aspersion.medio === "AVION" ? "Avión" : "—"} ·{" "}
                   {Number(ejecutarModal.aspersion.hectareas)} ha programadas
                 </div>
