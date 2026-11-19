@@ -2393,7 +2393,7 @@ export default function AspersionesPage() {
                                 <FiEdit2 size={15} />
                               </button>
                             )}
-                            {a.estado === "PROGRAMADA" && a.correoEnviadoEn && hasPermission("sanidad_vegetal.aspersiones.ejecutar") && (
+                            {a.estado === "PROGRAMADA" && (a.correoEnviadoEn || hasPermission("sanidad_vegetal.aspersiones.ejecutar_sin_aviso")) && hasPermission("sanidad_vegetal.aspersiones.ejecutar") && (
                               <button
                                 type="button"
                                 className="btn btn-sm btn-link p-1 d-inline-flex"
@@ -2489,7 +2489,7 @@ export default function AspersionesPage() {
                                     <FiCalendar size={13} /> Reprogramar
                                   </button>
                                 )}
-                                {p.estado === "PROGRAMADA" && p.correoEnviadoEn && hasPermission("sanidad_vegetal.aspersiones.ejecutar") && (
+                                {p.estado === "PROGRAMADA" && (p.correoEnviadoEn || hasPermission("sanidad_vegetal.aspersiones.ejecutar_sin_aviso")) && hasPermission("sanidad_vegetal.aspersiones.ejecutar") && (
                                   <button type="button" className="btn btn-sm btn-brand rounded-3 d-inline-flex align-items-center gap-1" onClick={(e) => {
                                     e.stopPropagation();
                                     abrirParte(p, abrirEjecutar);
