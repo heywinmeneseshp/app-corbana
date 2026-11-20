@@ -10,6 +10,13 @@ const num = (v) => Number(v ?? 0).toLocaleString("es", { maximumFractionDigits: 
 export default function ParametrosFinca({ filas, params, onChange, deshabilitado }) {
   const pctPorFinca = params.pctNoCosechadoPorFinca || {};
   const haPorFinca = params.hectareasBasePorFinca || {};
+  const conGlobal = new Set(params.fincasPromedioGlobal || []);
+  const alternarGlobal = (uuid, marcado) => {
+    const s = new Set(conGlobal);
+    if (marcado) s.add(uuid);
+    else s.delete(uuid);
+    onChange({ ...params, fincasPromedioGlobal: [...s] });
+  };
 
   const cambiar = (clave, uuid, valor) => {
     const actual = { ...(params[clave] || {}) };
@@ -49,6 +56,9 @@ export default function ParametrosFinca({ filas, params, onChange, deshabilitado
           <thead className="table-light">
             <tr>
               <th>Finca</th>
+              <th className="text-center" style={{ width: 110 }} title="Proyecta la finca con los promedios de todas las fincas (embolse por hectárea, ratio y tasas de cosecha). Úsalo cuando sus históricos están errados.">
+                Promedios globales
+              </th>
               <th className="text-end">Aprov. histórico</th>
               <th className="text-end">No cosechado histórico</th>
               <th style={{ width: 130 }}>No cosechado aplicado (%)</th>
@@ -66,7 +76,17 @@ export default function ParametrosFinca({ filas, params, onChange, deshabilitado
                 <tr key={f.fincaUuid}>
                   <td className="fw-medium">
                     {f.fincaNombre}
-                    {f.fuenteTasas === "global" && <span className="badge text-bg-light border ms-2 fw-normal" title="Pocas cohortes propias: usa las tasas de todas las fincas">tasas globales</span>}
+                    {f.fuenteTasas === "global" && !conGlobal.has(f.fincaUuid) && <span className="badge text-bg-light border ms-2 fw-normal" title="Pocas cohortes propias: usa las tasas de todas las fincas">tasas globales</span>}
+                  </td>
+                  <td className="text-center">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      disabled={deshabilitado}
+                      checked={conGlobal.has(f.fincaUuid)}
+                      onChange={(e) => alternarGlobal(f.fincaUuid, e.target.checked)}
+                      title="Marcado: esta finca usa los promedios globales en vez de su histórico"
+                    />
                   </td>
                   <td className="text-end">{pct(f.aprovechamientoHistorico)}</td>
                   <td className="text-end">{pct(f.noCosechadoHistorico)}</td>

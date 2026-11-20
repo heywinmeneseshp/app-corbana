@@ -252,6 +252,47 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
     };
   };
 
+  // Cajas de una finca en una semana proyectada, escritas a mano: se convierten en el ratio (cajas ÷ racimos de esa semana) y se
+  // guardan como ratio manual. Vacío = vuelve al ratio automático.
+  const celdaCajas = (f, clave, base) => {
+    const k = `cj|${f.uuid}|${clave}`;
+    const c = celdas.get(`${f.uuid}|${clave}`);
+    if (!editable || !c || c.realF > 0 || !(c.racimos > 0)) return base; // semana real o sin racimos: solo lectura
+    const fijado = manualDe(f.uuid, clave) !== undefined || c.manual > 0;
+    if (editando === k) {
+      return {
+        ...base,
+        contenido: (
+          <input
+            autoFocus
+            type="number"
+            step="1"
+            min="0"
+            className="form-control form-control-sm text-end p-0 px-1"
+            style={{ width: 88, fontSize: "0.78rem" }}
+            defaultValue={Math.round(c.cajas)}
+            placeholder="automático"
+            onBlur={(e) => {
+              const n = Number(String(e.target.value).replace(",", "."));
+              fijarRatio(f.uuid, clave, String(e.target.value).trim() === "" || !(n > 0) ? "" : String(n / c.racimos));
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") setEditando(null);
+            }}
+          />
+        ),
+        editando: true,
+      };
+    }
+    return {
+      ...base,
+      title: "Clic para escribir las cajas de esta finca y semana: el ratio se ajusta solo (cajas ÷ racimos). Vacío = automático.",
+      style: { ...base.style, cursor: "text", ...(fijado ? { color: "#b45309", background: "#fff7ed" } : { textDecoration: "underline dotted #9ca3af", textUnderlineOffset: 3 }) },
+      onClick: () => setEditando(k),
+    };
+  };
+
   // Ratio TOTAL de una semana: se reparte entre las fincas con semana proyectada, escalando el ratio de cada una por el mismo factor para que el total
   // de la semana (cajas / racimos) quede en el valor escrito. Las fincas con semana real no se tocan. Vacío = vuelve al automático.
   const fijarRatioTotal = (clave, texto) => {
@@ -322,6 +363,7 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
       DATOS.map((d, di) => {
         let c = celdaDe(d.id, obtener(f.uuid), { ...(di === 0 ? grupo : {}), ...borde, ...(fondo ? { background: fondo } : {}), ...(color ? { color } : {}) });
         if (d.id === "ratio" && clave !== undefined) c = celdaRatio(f, clave, c);
+        if (d.id === "cajas" && clave !== undefined) c = celdaCajas(f, clave, c);
         if (d.id === "ephs" && clave !== undefined) c = celdaEmbHa(f, clave, c);
         return (
           <td key={`${f.uuid}-${d.id}`} style={c.style} title={c.title} onClick={c.onClick}>

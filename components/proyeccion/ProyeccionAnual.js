@@ -20,7 +20,7 @@ import FincasExternas from "./FincasExternas";
 import ParametrosFinca from "./ParametrosFinca";
 import ResultadosProyeccion from "./ResultadosProyeccion";
 
-const PARAMS_VACIOS = { rampaPct: 50, rampaSemanas: 12, aniosHistoricos: 3, anios: [], pctNoCosechado: null, pctNoCosechadoPorFinca: {}, hectareasBasePorFinca: {}, ratioManual: {}, embPorHaManual: {} };
+const PARAMS_VACIOS = { rampaPct: 50, rampaSemanas: 12, aniosHistoricos: 3, anios: [], pctNoCosechado: null, pctNoCosechadoPorFinca: {}, hectareasBasePorFinca: {}, ratioManual: {}, embPorHaManual: {}, fincasPromedioGlobal: [] };
 const mismoJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // Proyección anual de embolses y cajas: escenarios con nombre, plan de hectáreas nuevas por finca y semana, parámetros
