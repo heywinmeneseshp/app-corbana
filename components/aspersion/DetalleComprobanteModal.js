@@ -158,7 +158,7 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
               </Dato>
             )}
             <Dato label="Horario">{c.horaInicio || c.horaFinal ? `${c.horaInicio || "—"} a ${c.horaFinal || "—"}` : null}</Dato>
-            <Dato label="Altura de vuelo">{c.alturaVuelo}</Dato>
+            <Dato label="Altura de vuelo">{c.alturaVuelo && /^\s*\d+([.,]\d+)?\s*$/.test(c.alturaVuelo) ? `${String(c.alturaVuelo).trim()} m` : c.alturaVuelo}</Dato>
             <Dato label="Ancho de deposición">{c.anchoDeposicion != null ? `${num(c.anchoDeposicion, 1)} m` : null}</Dato>
             <Dato label="Temperatura">
               {c.temperaturaInicial != null || c.temperaturaFinal != null ? `${num(c.temperaturaInicial, 1)} °C a ${num(c.temperaturaFinal, 1)} °C` : null}
