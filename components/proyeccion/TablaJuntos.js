@@ -1,7 +1,7 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
-import { FiChevronDown, FiChevronRight } from "react-icons/fi";
+import { Fragment, useMemo, useRef, useState } from "react";
+import { FiChevronDown, FiChevronRight, FiDownload, FiUpload } from "react-icons/fi";
 
 // Vista «Embolses, aprovechamiento, racimos, ratio y cajas»: una fila por semana (o mes); cada finca (y el total) es un grupo de cinco columnas que
 // se lee de izquierda a derecha como el cálculo: embolses × aprovechamiento = racimos; racimos × ratio = cajas.
@@ -252,6 +252,99 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
     };
   };
 
+  // ── Cajas manuales desde Excel ──
+  // Plantilla: cada finca y semana proyectada (sin cajas reales) con sus racimos y las cajas que da hoy la proyección. Al subirla, cada
+  // fila cuyas cajas cambiaron se guarda como ratio manual (cajas ÷ racimos); las que quedan igual no se tocan; vacía = automático.
+  const inputExcel = useRef(null);
+  const [msgExcel, setMsgExcel] = useState("");
+  const editablesExcel = () => {
+    const lista = [];
+    for (const f of fincas) {
+      for (const [k, c] of celdas) {
+        const [uuid, clave] = k.split("|");
+        if (uuid !== f.uuid || c.realF > 0 || !(c.racimos > 0)) continue;
+        lista.push({ f, clave, c });
+      }
+    }
+    return lista.sort((a, b) => a.f.nombre.localeCompare(b.f.nombre, "es") || String(a.clave).localeCompare(String(b.clave)));
+  };
+  async function descargarPlantillaCajas() {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Cajas");
+    ws.columns = [
+      { header: "Finca", key: "finca", width: 26 },
+      { header: "Semana", key: "semana", width: 12 },
+      { header: "Racimos", key: "racimos", width: 12 },
+      { header: "Cajas", key: "cajas", width: 12 },
+    ];
+    ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } };
+    for (const { f, clave, c } of editablesExcel()) ws.addRow({ finca: f.nombre, semana: clave, racimos: Math.round(c.racimos), cajas: Math.round(c.cajas) });
+    const buffer = await wb.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cajas-manuales-${resultado?.meta?.anio || ""}.xlsx`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function subirExcelCajas(file) {
+    if (!file) return;
+    setMsgExcel("");
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(await file.arrayBuffer());
+      const ws = wb.worksheets[0];
+      const cab = {};
+      ws.getRow(1).eachCell((cell, col) => (cab[String(cell.value || "").trim().toLowerCase()] = col));
+      if (!cab.finca || !cab.semana || !cab.cajas) throw new Error("El archivo debe tener las columnas Finca, Semana y Cajas (usa la plantilla).");
+      const porNombre = new Map(fincas.map((f) => [f.nombre.trim().toLowerCase(), f]));
+      const todos = { ...(params?.ratioManual || {}) };
+      let cambiadas = 0;
+      let quitadas = 0;
+      const errores = [];
+      ws.eachRow((row, n) => {
+        if (n === 1) return;
+        const texto = (col) => {
+          const v = row.getCell(col).value;
+          return String(v && typeof v === "object" && "result" in v ? v.result : v ?? "").trim();
+        };
+        const nombre = texto(cab.finca);
+        const clave = texto(cab.semana);
+        const cajasTxt = texto(cab.cajas);
+        if (!nombre && !clave) return;
+        const f = porNombre.get(nombre.toLowerCase());
+        const c = f && celdas.get(`${f.uuid}|${clave}`);
+        if (!f || !c) return errores.push(`fila ${n}: ${nombre} ${clave} no está en la proyección`);
+        if (c.realF > 0 || !(c.racimos > 0)) return errores.push(`fila ${n}: ${nombre} ${clave} tiene cajas reales o no tiene racimos`);
+        const deFinca = { ...(todos[f.uuid] || {}) };
+        if (cajasTxt === "") {
+          if (deFinca[clave] !== undefined) quitadas += 1;
+          delete deFinca[clave];
+        } else {
+          const cajas = Number(cajasTxt.replace(",", "."));
+          if (!(cajas >= 0)) return errores.push(`fila ${n}: cajas «${cajasTxt}» no es un número`);
+          if (Math.round(cajas) === Math.round(c.cajas)) return; // sin cambio
+          deFinca[clave] = Math.round(Math.min(5, Math.max(0.0001, cajas / c.racimos)) * 10000) / 10000;
+          cambiadas += 1;
+        }
+        if (Object.keys(deFinca).length) todos[f.uuid] = deFinca;
+        else delete todos[f.uuid];
+      });
+      if (cambiadas || quitadas) onParamsChange({ ...params, ratioManual: todos });
+      setMsgExcel(
+        `${cambiadas} semana(s) con cajas nuevas${quitadas ? `, ${quitadas} vuelven al automático` : ""}. Pulsa «Guardar y calcular» para guardarlas.` +
+          (errores.length ? ` No se tomaron ${errores.length}: ${errores.slice(0, 5).join("; ")}${errores.length > 5 ? "…" : ""}` : ""),
+      );
+    } catch (err) {
+      setMsgExcel(err.message);
+    } finally {
+      if (inputExcel.current) inputExcel.current.value = "";
+    }
+  }
+
   // Cajas de una finca en una semana proyectada, escritas a mano: se convierten en el ratio (cajas ÷ racimos de esa semana) y se
   // guardan como ratio manual. Vacío = vuelve al ratio automático.
   const celdaCajas = (f, clave, base) => {
@@ -385,6 +478,18 @@ export default function TablaJuntos({ resultado, periodo, ocultas, onGraficas, p
 
   return (
     <div>
+      {editable && (
+        <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <button type="button" className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" onClick={descargarPlantillaCajas} title="Excel con cada finca y semana proyectada y sus cajas actuales">
+            <FiDownload /> Plantilla de cajas
+          </button>
+          <button type="button" className="btn btn-sm btn-outline-success d-flex align-items-center gap-1" onClick={() => inputExcel.current?.click()} title="Sube las cajas editadas: cada cambio se guarda como ratio manual (cajas ÷ racimos)">
+            <FiUpload /> Subir cajas (Excel)
+          </button>
+          <input ref={inputExcel} type="file" accept=".xlsx" className="d-none" onChange={(e) => subirExcelCajas(e.target.files?.[0])} />
+          {msgExcel && <span className="small text-secondary">{msgExcel}</span>}
+        </div>
+      )}
       <p className="small text-secondary mb-2">
         Cada finca se lee de izquierda a derecha: <strong>embolses × aprovechamiento = racimos</strong>, y <strong>racimos × ratio = cajas</strong>. En cursiva, un aprovechamiento sin dato real
         todavía (usa el % aplicado a la finca). Haz clic en una semana para ver de qué cintas y edades salen sus racimos.{puedeEditar && periodo === "semana" && " Haz clic en el ratio de una semana proyectada para fijarlo a mano y luego pulsa Guardar y calcular."}
