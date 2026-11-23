@@ -64,8 +64,16 @@ function ReporteSemanalRacimos() {
   const [semanas, setSemanas] = useState([]);
   const [anio, setAnio] = useState(new Date().getFullYear());
   const [semanaUuid, setSemanaUuid] = useState("");
+  const [fincas, setFincas] = useState([]);
+  const [fincaUuid, setFincaUuid] = useState(""); // vacío = todas
   const [descargando, setDescargando] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    apiFetch("/fincas?limit=100")
+      .then((res) => setFincas(res.items || []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     apiFetch(`/semanas?limit=55&anio=${anio}`)
@@ -75,18 +83,21 @@ function ReporteSemanalRacimos() {
 
   async function descargar(tipo, archivo) {
     if (!semanaUuid) {
-      setError("Seleccioná primero la semana a descargar.");
+      setError("Selecciona primero la semana a descargar.");
       return;
     }
     setError("");
     setDescargando(tipo);
     try {
       const params = new URLSearchParams({ semanaUuid, tipo });
+      if (fincaUuid) params.set("fincaUuid", fincaUuid);
       const blob = await apiFetchBlob(`/racimo-movimientos/exportar-semanal?${params.toString()}`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `registro-${archivo}-${semanaUuid}.xlsx`;
+      const nombreFinca = fincas.find((f) => f.uuid === fincaUuid)?.nombre;
+      const codigoSemana = semanas.find((s) => s.uuid === semanaUuid)?.codigo || semanaUuid;
+      a.download = `registro-${archivo}-${codigoSemana}${nombreFinca ? `-${nombreFinca}` : ""}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -117,10 +128,21 @@ function ReporteSemanalRacimos() {
         <div className="col-6 col-md-4">
           <label className="form-label small fw-medium">Semana a descargar</label>
           <select className="form-select rounded-3" value={semanaUuid} onChange={(e) => setSemanaUuid(e.target.value)}>
-            <option value="">Seleccioná una semana</option>
+            <option value="">Selecciona una semana</option>
             {semanas.map((s) => (
               <option key={s.uuid} value={s.uuid}>
                 {s.codigo}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="col-12 col-md-5">
+          <label className="form-label small fw-medium">Finca</label>
+          <select className="form-select rounded-3" value={fincaUuid} onChange={(e) => setFincaUuid(e.target.value)}>
+            <option value="">Todas</option>
+            {fincas.map((f) => (
+              <option key={f.uuid} value={f.uuid}>
+                {f.nombre}
               </option>
             ))}
           </select>
