@@ -1,5 +1,6 @@
 "use client";
 
+import { separarPuntos } from "@/lib/textoObservacion";
 import { useEffect, useState } from "react";
 import {
   FiCheck,
@@ -275,9 +276,10 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
                 {visita.lotes
                   .filter((l) => l.observacion)
                   .map((l) => (
-                    <p key={l.uuid} className="small text-secondary mb-1">
-                      <strong>{l.loteNombre}:</strong> {l.observacion}
-                    </p>
+                    <div key={l.uuid} className="small text-secondary mb-2">
+                      <strong>{l.loteNombre}:</strong>
+                      <div style={{ whiteSpace: "pre-line", lineHeight: 1.5 }}>{separarPuntos(l.observacion)}</div>
+                    </div>
                   ))}
               </div>
             )}
