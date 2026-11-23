@@ -285,7 +285,7 @@ export default function InsumosSanidadVegetalPage() {
       stockMinimo: String(insumo.stockMinimo ?? 0),
       stockMaximo: insumo.stockMaximo != null ? String(insumo.stockMaximo) : "",
       dosisPorHectarea: insumo.dosisPorHectarea != null ? String(insumo.dosisPorHectarea) : "",
-      concentracionIa: insumo.concentracionIa != null ? String(Number(insumo.concentracionIa)) : "",
+      concentracionIa: insumo.concentracionIa ?? "",
       dosisUnidadUuid: insumo.dosisUnidad?.uuid || "",
       estado: insumo.estado,
       almacenes: (insumo.almacenes || []).map((a) => ({ uuid: a.uuid, label: a.nombre, sublabel: a.codigo })),
@@ -319,7 +319,7 @@ export default function InsumosSanidadVegetalPage() {
         stockMinimo: form.stockMinimo === "" ? null : Number(form.stockMinimo),
         stockMaximo: form.stockMaximo === "" ? null : Number(form.stockMaximo),
         dosisPorHectarea: form.dosisPorHectarea === "" ? null : Number(form.dosisPorHectarea),
-        concentracionIa: form.concentracionIa === "" ? null : Number(form.concentracionIa),
+        concentracionIa: String(form.concentracionIa ?? "").trim() || null,
         dosisUnidadUuid: form.dosisUnidadUuid || null,
         almacenUuids: form.almacenes.map((a) => a.uuid),
         ingredientesActivoUuids: form.ingredientesActivos.map((i) => i.uuid),
@@ -542,7 +542,7 @@ export default function InsumosSanidadVegetalPage() {
                   <th className="fw-medium text-start">Nombre</th>
                   <th className="fw-medium text-start">Ingredientes activos</th>
                   <th className="fw-medium text-center">Dosis por hectárea</th>
-                  <th className="fw-medium text-center">Concentración (g/L)</th>
+                  <th className="fw-medium text-center">Concentración</th>
                   {verEliminados && <th className="fw-medium text-center">Eliminado</th>}
                   <th className="fw-medium text-center">Acciones</th>
                 </tr>
@@ -593,7 +593,7 @@ export default function InsumosSanidadVegetalPage() {
                           ? `${Number(i.dosisPorHectarea).toFixed(3)} ${i.dosisUnidad?.simbolo || ""}/ha`
                           : "—"}
                       </td>
-                      <td className="text-secondary text-center text-nowrap">{i.concentracionIa != null ? Number(i.concentracionIa).toLocaleString("es-CO") : "—"}</td>
+                      <td className="text-secondary text-center text-nowrap">{i.concentracionIa || "—"}</td>
                       <td>
                         <div className="d-flex justify-content-center gap-1 flex-nowrap">
                           {hasPermission("inventario.articulos.editar") && (
@@ -637,7 +637,7 @@ export default function InsumosSanidadVegetalPage() {
                           ? `${Number(i.dosisPorHectarea).toFixed(3)} ${i.dosisUnidad?.simbolo || ""}/ha`
                           : "—"}
                       </td>
-                      <td className="text-secondary text-center text-nowrap">{i.concentracionIa != null ? Number(i.concentracionIa).toLocaleString("es-CO") : "—"}</td>
+                      <td className="text-secondary text-center text-nowrap">{i.concentracionIa || "—"}</td>
                       <td className="text-secondary text-center text-nowrap">
                         {i.deletedAt ? new Date(i.deletedAt).toLocaleString("es-CO") : "—"}
                       </td>
@@ -801,18 +801,17 @@ export default function InsumosSanidadVegetalPage() {
 
               <div className="mb-3">
                 <label className="form-label small fw-medium">
-                  Concentración (g/L)
+                  Concentración
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  type="text"
+                  maxLength={100}
                   className="form-control rounded-3"
-                  placeholder="Ej. 880"
+                  placeholder="Ej. 880 g/L"
                   value={form.concentracionIa}
                   onChange={(e) => setForm((f) => ({ ...f, concentracionIa: e.target.value }))}
                 />
-                <p className="form-text small mb-0">Opcional — gramos de ingrediente activo por litro. Sale en el comprobante de aspersión.</p>
+                <p className="form-text small mb-0">Opcional — como se quiera mostrar (ej. 880 g/L). Sale en el comprobante de aspersión.</p>
               </div>
 
               <div className="mb-3">

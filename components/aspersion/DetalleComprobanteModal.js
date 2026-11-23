@@ -225,7 +225,7 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
                   <tr className="table-light text-secondary" style={{ borderBottom: "1px solid #e9ecef" }}>
                     <th className="fw-medium">Insumo</th>
                     <th className="fw-medium">Unidad</th>
-                    <th className="fw-medium text-end" title="Concentración del ingrediente activo configurada en el insumo">Concentración (g/L)</th>
+                    <th className="fw-medium text-end" title="Concentración configurada en el insumo">Concentración</th>
                     <th className="fw-medium text-end" title="Dosis por hectárea configurada en el insumo">Dosis configurada</th>
                     <th className="fw-medium text-end" title="Cantidad utilizada ÷ hectáreas de la aspersión">Dosis aplicada</th>
                     <th className="fw-medium text-end">Cantidad utilizada</th>
@@ -265,7 +265,7 @@ export default function DetalleComprobanteModal({ comprobante: c, cargando, onCl
                         )}
                       </td>
                       <td className="text-secondary">{i.unidad?.simbolo || i.unidad?.nombre || "—"}</td>
-                      <td className="text-secondary text-end">{i.concentracionIa != null ? num(i.concentracionIa, 0) : "—"}</td>
+                      <td className="text-secondary text-end">{i.concentracionIa || "—"}</td>
                       <td className="text-secondary text-end">{i.dosisPorHectarea != null ? `${num(i.dosisPorHectarea, 3)} ${i.dosisUnidad?.simbolo || i.unidad?.simbolo || ""}/ha` : "—"}</td>
                       <td className="text-secondary text-end">
                         {i.cantidad != null && hectareas > 0 ? `${num(i.cantidad / hectareas, 2)} ${i.unidad?.simbolo || ""}/ha` : "—"}
