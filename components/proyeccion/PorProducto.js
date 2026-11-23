@@ -299,6 +299,10 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
     if (nuevo === "MANUAL") setEditandoManual(p.uuid);
   };
 
+  // Cajas de las fincas externas por semana (de su estimación, pestaña Fincas externas): se suman si se marca «Incluir fincas externas».
+  const externasPorSemana = useMemo(() => new Map((resultado.porSemana || []).filter((s) => s.cajasExternas > 0).map((s) => [s.semanaCodigo, Number(s.cajasExternas)])), [resultado]);
+  const [conExternas, setConExternas] = useState(false);
+
   // Cajas 18.6 de cada semana del escenario elegido (en semanas reales los tres valen lo mismo), sumando solo las fincas visibles.
   const semanas = useMemo(() => {
     const m = new Map();
@@ -310,8 +314,10 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
       t.porFinca[f.fincaUuid] = (t.porFinca[f.fincaUuid] || 0) + cajasFila;
       m.set(f.semanaCodigo, t);
     }
+    // Fincas externas: sus cajas se suman a la semana y entran al reparto general (no a productos FINCA).
+    if (conExternas) for (const t of m.values()) t.cajas += externasPorSemana.get(t.semanaCodigo) || 0;
     return [...m.values()];
-  }, [resultado, ocultas, campoCajas]);
+  }, [resultado, ocultas, campoCajas, conExternas, externasPorSemana]);
 
   const filasSemana = semanas.map((s) => {
     const kg = s.cajas * tasa;
@@ -424,7 +430,7 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
       const ws = wb.addWorksheet(nombre, { views: [{ state: "frozen", xSplit: 1, ySplit: 4 }] });
       const ncol = cabeceras.length;
       ws.mergeCells(1, 1, 1, ncol);
-      ws.getCell(1, 1).value = `Proyección ${resultado.meta.anio}${nombreEscenario ? ` · ${nombreEscenario}` : ""} · Cajas por producto${soloNormal ? "" : ` · Escenario ${nombreEscenarioCajas}`}`;
+      ws.getCell(1, 1).value = `Proyección ${resultado.meta.anio}${nombreEscenario ? ` · ${nombreEscenario}` : ""} · Cajas por producto${soloNormal ? "" : ` · Escenario ${nombreEscenarioCajas}`}${conExternas ? " · Incluye fincas externas" : ""}`;
       ws.getCell(1, 1).font = { bold: true, size: 14, color: { argb: verde } };
       ws.getCell(1, 1).alignment = { horizontal: "center" };
       ws.mergeCells(2, 1, 2, ncol);
@@ -728,6 +734,12 @@ export default function PorProducto({ resultado, ocultas, productos, onChange, p
               </button>
             ))}
           </div>
+          {externasPorSemana.size > 0 && (
+            <label className="d-flex align-items-center gap-1 small text-secondary mb-0" style={{ cursor: "pointer" }} title="Suma las cajas de las fincas externas (su estimación) a cada semana y las reparte entre los productos">
+              <input type="checkbox" className="form-check-input m-0" checked={conExternas} onChange={(e) => setConExternas(e.target.checked)} />
+              Incluir fincas externas
+            </label>
+          )}
           {filtroCliente && (
             <div className="d-flex align-items-center gap-2">
               <span className="small text-secondary">Cliente</span>
