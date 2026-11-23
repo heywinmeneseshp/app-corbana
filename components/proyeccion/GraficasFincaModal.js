@@ -170,6 +170,9 @@ function TotalesCajas({ datos, series }) {
 // (otra finca, varias fincas en promedio, todas, y uno o varios años reales o la proyección), como en los gráficos de Clima.
 export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }) {
   const anioProy = resultado.meta.anio;
+  // Fincas que suman en las gráficas (hectáreas e indicadores): arranca con las que se abrieron y se puede cambiar aquí.
+  const [seleccion, setSeleccion] = useState(() => new Set(uuids));
+  const selKey = [...seleccion].sort().join(",");
   // Años históricos ocultos (y fuera del promedio). Arranca respetando los "años históricos usados" del escenario: los que
   // el escenario no usa para proyectar quedan desmarcados (se pueden volver a marcar para compararlos).
   const [excluidos, setExcluidos] = useState(() => {
@@ -284,7 +287,7 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
 
   const { datos, anios } = useMemo(() => {
     const opciones = { anioActual, excluirUltimas, excluidos };
-    const base = armarSeries(resultado, new Set(uuids), 1, opciones);
+    const base = armarSeries(resultado, seleccion, 1, opciones);
     const sinExcluir = { anioActual, excluirUltimas, excluidos: new Set() };
     // Una serie por comparación: la proyección y/o los años reales elegidos, promediados semana a semana si son varios.
     const series = comparaciones.map((c) => {
@@ -304,7 +307,8 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
       return { ...r, ...extra };
     });
     return { datos, anios: base.anios };
-  }, [resultado, uuids, excluidos, excluirUltimas, anioActual, comparaciones, fincasLista]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resultado, selKey, excluidos, excluirUltimas, anioActual, comparaciones, fincasLista]);
 
   const alternarAnio = (y) =>
     setExcluidos((prev) => {
@@ -328,6 +332,39 @@ export default function GraficasFincaModal({ resultado, uuids, titulo, onClose }
         {comparaciones.length > 0 && " Las líneas de colores son las comparaciones que agregaste."}
         {hayPromedioPorFinca && " Cuando comparas varias fincas (o todas), embolses, cajas y hectáreas se muestran como promedio por finca para que la escala sea comparable."}
       </p>
+      {/* Fincas que suman en las gráficas: solo las marcadas (hectáreas, embolses, cajas y ratio de su suma). */}
+      {fincasLista.length > 1 && (
+        <div className="d-flex flex-wrap align-items-center gap-2 mb-2 px-2 py-1 rounded-1" style={{ background: "#f1f6f2" }}>
+          <span className="small fw-semibold">Fincas ({seleccion.size})</span>
+          <button type="button" className="btn btn-sm btn-link p-0 small" onClick={() => setSeleccion(new Set(fincasLista.map((f) => f.uuid)))}>
+            Todas
+          </button>
+          <button type="button" className="btn btn-sm btn-link p-0 small" onClick={() => setSeleccion(new Set())}>
+            Ninguna
+          </button>
+          {fincasLista.map((f) => (
+            <div key={f.uuid} className="form-check mb-0">
+              <input
+                type="checkbox"
+                className="form-check-input"
+                id={`gf-finca-${f.uuid}`}
+                checked={seleccion.has(f.uuid)}
+                onChange={() =>
+                  setSeleccion((prev) => {
+                    const n = new Set(prev);
+                    if (n.has(f.uuid)) n.delete(f.uuid);
+                    else n.add(f.uuid);
+                    return n;
+                  })
+                }
+              />
+              <label className="form-check-label small" htmlFor={`gf-finca-${f.uuid}`}>
+                {f.nombre}
+              </label>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="d-flex flex-wrap align-items-center gap-3 mb-2 px-2 py-1 rounded-1" style={{ background: "#f1f6f2" }}>
         <span className="small fw-semibold">Años</span>
         {anios.map((y, i) => (
