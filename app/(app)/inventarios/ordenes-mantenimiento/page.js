@@ -526,6 +526,8 @@ export default function OrdenesMantenimientoPage() {
                       ))}
                     </select>
                   </div>
+                  {/* Al ejecutar no se pregunta la prioridad: el trabajo ya se hizo. */}
+                  {!modal.ejecutar && (
                   <div className="col-6 col-md-3">
                     <label className="form-label small fw-medium mb-1">Prioridad</label>
                     <select className="form-select form-select-sm rounded-3" value={modal.form.prioridad} onChange={(e) => setForm({ prioridad: e.target.value })}>
@@ -536,6 +538,7 @@ export default function OrdenesMantenimientoPage() {
                       ))}
                     </select>
                   </div>
+                  )}
                   {!modal.ejecutar && (
                   <div className="col-6 col-md-3">
                     <label className="form-label small fw-medium mb-1">Estado</label>
