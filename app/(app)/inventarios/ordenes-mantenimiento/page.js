@@ -294,6 +294,8 @@ export default function OrdenesMantenimientoPage() {
     }
   }
   const planSel = modal ? planes.find((p) => p.uuid === modal.form.planUuid) : null;
+  // Al ejecutar la fila es Fecha · Tipo (· Lectura): repartida en partes iguales, sin huecos.
+  const colFila = !modal?.ejecutar ? "col-6 col-md-3" : campoLectura(planSel) ? "col-12 col-md-4" : "col-6";
   const planesDelEquipo = modal ? planes.filter((p) => !modal.form.equipoUuid || p.equipo?.uuid === modal.form.equipoUuid) : [];
 
   return (
@@ -512,11 +514,11 @@ export default function OrdenesMantenimientoPage() {
                     </label>
                     <input type="text" required maxLength={2000} className="form-control form-control-sm rounded-3" value={modal.form.descripcion} onChange={(e) => setForm({ descripcion: e.target.value })} />
                   </div>
-                  <div className="col-6 col-md-3">
+                  <div className={colFila}>
                     <label className="form-label small fw-medium mb-1">{modal.ejecutar ? "Fecha de ejecución" : "Fecha"}</label>
                     <input type="date" required className="form-control form-control-sm rounded-3" value={modal.form.fecha} onChange={(e) => setForm({ fecha: e.target.value })} />
                   </div>
-                  <div className="col-6 col-md-3">
+                  <div className={colFila}>
                     <label className="form-label small fw-medium mb-1">Tipo</label>
                     <select className="form-select form-select-sm rounded-3" value={modal.form.tipo} onChange={(e) => setForm({ tipo: e.target.value })}>
                       {TIPOS_MANTENIMIENTO.map((t) => (
@@ -552,7 +554,7 @@ export default function OrdenesMantenimientoPage() {
                   </div>
                   )}
                   {modal.ejecutar && campoLectura(planSel) && (
-                    <div className="col-6 col-md-3">
+                    <div className={colFila}>
                       <label className="form-label small fw-medium mb-1">
                         {campoLectura(planSel).label} <span className="text-danger">*</span>
                       </label>
