@@ -14,26 +14,10 @@ import { BarraSelecciones, useSelecciones } from "@/components/reportes/Seleccio
 import SelectorSemanaDias from "@/components/reportes/SelectorSemanaDias";
 import { ClimaGraficos, ConteoGraficos, InfeccionGraficos } from "@/components/reportes/SanidadGraficosTabs";
 
-const LIMITES_SB_SEMANA = [{ valor: 1200, color: "#dc2626" }];
-const LINEAS_SB_SEMANA = [{ key: "promedio", label: "Promedio", color: "#16a34a" }];
 const LINEAS_SB_HOJA = [
   { key: "h3", label: "Suma Bruta Hoja 3", color: "#2563eb", filtro: (i) => i.hoja === 3 },
   { key: "h5", label: "Suma Bruta Hoja 5", color: "#f59e0b", filtro: (i) => i.hoja === 5 },
 ];
-
-const INFO_SB_SEMANA = (
-  <>
-    <p className="fw-semibold mb-1">Suma Bruta por planta</p>
-    <p className="mb-2">SB_planta = Hoja_3_val + Hoja_4_val + Hoja_5_val</p>
-    <p className="fw-semibold mb-1">Promedio de la finca</p>
-    <p className="mb-2">SB_Finca = (Σ SB_planta) / N.° de lotes evaluados</p>
-    <p className="mb-0 fst-italic">
-      No se divide entre la cantidad de plantas: cada lote suma todas sus plantas evaluadas y ese total
-      es lo que se promedia entre lotes — así un lote con más plantas evaluadas no pesa más que uno con
-      menos.
-    </p>
-  </>
-);
 
 const INFO_SB_HOJA = (
   <>
@@ -71,16 +55,6 @@ function SumaBrutaGraficos({ sel }) {
 
   return (
     <>
-      <GraficoSemanalComparable
-        titulo="Promedio de Suma Bruta por Semana"
-        info={<InfoTooltip texto={INFO_SB_SEMANA} />}
-        endpoint="/evaluaciones/suma-bruta-promedio"
-        series={sel.series}
-        lineas={LINEAS_SB_SEMANA}
-        limites={LIMITES_SB_SEMANA}
-        mensajeVacio="No hay evaluaciones de Suma Bruta para mostrar."
-        ayuda="Cada punto es el promedio de Suma Bruta de esa semana de registro."
-      />
       <GraficoSemanalComparable
         titulo="Promedio de Suma Bruta por Hoja"
         info={<InfoTooltip texto={INFO_SB_HOJA} />}
