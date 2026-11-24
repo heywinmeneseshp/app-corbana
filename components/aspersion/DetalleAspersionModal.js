@@ -4,6 +4,7 @@
 // receta (insumos con su dosis por hectárea y la cantidad) y, al final, los botones «Enviar aviso», «Marcar como revisado»
 // (su firma va en el aviso) y «Ejecutar aspersión» si está programada.
 // Si ya se ejecutó, las cantidades son las definitivas (las que se descontaron del inventario).
+import { textoGalones } from "@/lib/galones";
 import { FiCheck, FiMail, FiCheckCircle, FiDownload } from "react-icons/fi";
 import ModalShell from "@/components/ModalShell";
 import { descargarDetalleAspersionPdf } from "@/lib/aspersionDetallePdf";
@@ -157,9 +158,8 @@ export default function DetalleAspersionModal({
             <Dato label="Pista">{a.pista?.nombre || "—"}</Dato>
             <Dato label="Hectáreas">{`${num(hectareas)} ha`}</Dato>
             <Dato label="Cantidad a preparar">
-              {a.cantidadCalculada != null
-                ? `${num(a.cantidadCalculada)} ${a.mezcla?.unidadRendimiento?.simbolo || ""}`
-                : "—"}
+              {/* Siempre en galones. */}
+              {textoGalones(a.cantidadCalculada, a.mezcla?.unidadRendimiento)}
             </Dato>
             <Dato label="Almacén" ancho="col-6">
               {a.almacen?.nombre}
