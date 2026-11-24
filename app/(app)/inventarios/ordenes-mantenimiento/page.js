@@ -202,6 +202,7 @@ export default function OrdenesMantenimientoPage() {
       if (modal.ejecutar) {
         const campo = campoLectura(planes.find((p) => p.uuid === f.planUuid));
         if (campo && String(f.lectura ?? "").trim() === "") throw new Error(`Escribe ${campo.label.toLowerCase()} del equipo al hacer el mantenimiento.`);
+        if (!modal.evidencias?.length) throw new Error("Sube la evidencia del mantenimiento (al menos una foto o PDF).");
         body.estado = "ABIERTA";
         const creada = await apiFetch("/inventarios/ordenes-mantenimiento", { method: "POST", body: JSON.stringify(body) });
         try {
@@ -714,10 +715,12 @@ export default function OrdenesMantenimientoPage() {
 
                 {modal.ejecutar && (
                   <div className="mt-2">
-                    <label className="form-label small fw-medium mb-1">Evidencia (fotos o PDF, se guardan en Google Drive)</label>
+                    <label className="form-label small fw-medium mb-1">Evidencia (fotos o PDF, se guardan en Google Drive) <span className="text-danger">*</span>
+                    </label>
                     <input
                       type="file"
                       multiple
+                      required
                       accept="image/*,application/pdf"
                       className="form-control form-control-sm rounded-3"
                       onChange={(e) => {
