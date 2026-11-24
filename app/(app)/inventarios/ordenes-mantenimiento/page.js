@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FiPlus, FiEdit2, FiTrash2, FiCheckCircle, FiX, FiFileText } from "react-icons/fi";
-import { apiFetch, apiFetchTodos } from "@/lib/api";
+import { apiFetch, apiFetchFormData, apiFetchTodos } from "@/lib/api";
 import { hasPermission } from "@/lib/auth";
 import RequirePermission from "@/components/RequirePermission";
 import ModalShell from "@/components/ModalShell";
@@ -14,6 +14,14 @@ import { AYUDA_ORDENES } from "@/lib/ayudaEquipos";
 import { TIPOS_MANTENIMIENTO, PRIORIDADES, ESTADOS_ORDEN, Insignia, TextoPrioridad, etiqueta, formatoFecha, hoyIso, dinero } from "@/lib/mantenimiento";
 
 const clave = () => Math.random().toString(36).slice(2);
+// Lectura que se pide al ejecutar según la periodicidad del plan (por días o meses basta la fecha de ejecución).
+function campoLectura(plan) {
+  if (!plan) return null;
+  if (plan.periodicidadUnidad === "KILOMETROS") return { label: "Kilometraje al ejecutar (km)" };
+  if (["HORAS", "HOROMETRO"].includes(plan.periodicidadUnidad)) return { label: "Horómetro al ejecutar (h)" };
+  return null;
+}
+
 const vacio = () => ({
   equipoUuid: "",
   planUuid: "",
@@ -86,10 +94,15 @@ export default function OrdenesMantenimientoPage() {
         const params = new URLSearchParams(window.location.search);
         if (params.get("nueva")) {
           const plan = (p.items || []).find((x) => x.uuid === params.get("planUuid"));
+          // «Ejecutar» desde un plan o una programación: el mantenimiento ya se hizo, así que la orden se guarda y se cierra
+          // (sin preguntar el estado), con su fecha de ejecución, la lectura del tablero (planes por km u horas) y la evidencia.
           setModal({
             editing: null,
+            ejecutar: true,
+            evidencias: [],
             form: {
               ...vacio(),
+              lectura: "",
               equipoUuid: params.get("equipoUuid") || "",
               planUuid: params.get("planUuid") || "",
               programacionUuid: params.get("programacionUuid") || "",
@@ -186,7 +199,33 @@ export default function OrdenesMantenimientoPage() {
           .map((m) => ({ descripcion: m.descripcion.trim(), horas: num(m.horas), costoHora: num(m.costoHora), responsableUuid: m.responsableUuid || null })),
         servicios: f.servicios.filter((s) => s.descripcion.trim()).map((s) => ({ descripcion: s.descripcion.trim(), proveedor: s.proveedor || null, costo: num(s.costo) })),
       };
-      if (modal.editing) await apiFetch(`/inventarios/ordenes-mantenimiento/${modal.editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
+      if (modal.ejecutar) {
+        const campo = campoLectura(planes.find((p) => p.uuid === f.planUuid));
+        if (campo && String(f.lectura ?? "").trim() === "") throw new Error(`Escribe ${campo.label.toLowerCase()} del equipo al hacer el mantenimiento.`);
+        body.estado = "ABIERTA";
+        const creada = await apiFetch("/inventarios/ordenes-mantenimiento", { method: "POST", body: JSON.stringify(body) });
+        try {
+          // Evidencia (fotos o PDF) a Google Drive.
+          if (modal.evidencias?.length) {
+            const fd = new FormData();
+            modal.evidencias.forEach((a) => fd.append("archivos", a));
+            fd.append("tipo", "FOTO");
+            await apiFetchFormData(`/inventarios/ordenes-mantenimiento/${creada.uuid}/adjuntos`, fd);
+          }
+          await apiFetch(`/inventarios/ordenes-mantenimiento/${creada.uuid}/cerrar`, {
+            method: "POST",
+            body: JSON.stringify({
+              almacenUuid: f.almacenUuid || null,
+              fechaEjecucion: f.fecha,
+              ...(campo ? { lectura: Number(String(f.lectura).replace(",", ".")) } : {}),
+            }),
+          });
+        } catch (err) {
+          // La orden ya quedó creada (abierta): se recarga la lista para que se pueda completar y cerrar desde allí.
+          load();
+          throw new Error(`La orden ${creada.numero || ""} quedó creada pero sin cerrar: ${err.message}`);
+        }
+      } else if (modal.editing) await apiFetch(`/inventarios/ordenes-mantenimiento/${modal.editing.uuid}`, { method: "PUT", body: JSON.stringify(body) });
       else await apiFetch("/inventarios/ordenes-mantenimiento", { method: "POST", body: JSON.stringify(body) });
       setModal(null);
       load();
@@ -254,6 +293,7 @@ export default function OrdenesMantenimientoPage() {
       setGenerandoInforme(false);
     }
   }
+  const planSel = modal ? planes.find((p) => p.uuid === modal.form.planUuid) : null;
   const planesDelEquipo = modal ? planes.filter((p) => !modal.form.equipoUuid || p.equipo?.uuid === modal.form.equipoUuid) : [];
 
   return (
@@ -410,7 +450,7 @@ export default function OrdenesMantenimientoPage() {
 
         {modal && (
           <ModalShell
-            title={modal.editing ? `${editable ? "Editar" : "Ver"} orden ${modal.editing.numero}` : "Nueva orden de mantenimiento"}
+            title={modal.editing ? `${editable ? "Editar" : "Ver"} orden ${modal.editing.numero}` : modal.ejecutar ? "Ejecutar mantenimiento" : "Nueva orden de mantenimiento"}
             onClose={() => setModal(null)}
             size="xl"
           >
@@ -473,7 +513,7 @@ export default function OrdenesMantenimientoPage() {
                     <input type="text" required maxLength={2000} className="form-control form-control-sm rounded-3" value={modal.form.descripcion} onChange={(e) => setForm({ descripcion: e.target.value })} />
                   </div>
                   <div className="col-6 col-md-3">
-                    <label className="form-label small fw-medium mb-1">Fecha</label>
+                    <label className="form-label small fw-medium mb-1">{modal.ejecutar ? "Fecha de ejecución" : "Fecha"}</label>
                     <input type="date" required className="form-control form-control-sm rounded-3" value={modal.form.fecha} onChange={(e) => setForm({ fecha: e.target.value })} />
                   </div>
                   <div className="col-6 col-md-3">
@@ -496,6 +536,7 @@ export default function OrdenesMantenimientoPage() {
                       ))}
                     </select>
                   </div>
+                  {!modal.ejecutar && (
                   <div className="col-6 col-md-3">
                     <label className="form-label small fw-medium mb-1">Estado</label>
                     <select className="form-select form-select-sm rounded-3" value={modal.form.estado} onChange={(e) => setForm({ estado: e.target.value })}>
@@ -506,6 +547,24 @@ export default function OrdenesMantenimientoPage() {
                       ))}
                     </select>
                   </div>
+                  )}
+                  {modal.ejecutar && campoLectura(planSel) && (
+                    <div className="col-6 col-md-3">
+                      <label className="form-label small fw-medium mb-1">
+                        {campoLectura(planSel).label} <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        required
+                        className="form-control form-control-sm rounded-3"
+                        value={modal.form.lectura}
+                        onChange={(e) => setForm({ lectura: e.target.value })}
+                        placeholder={planSel?.lecturaActual != null ? `Última: ${planSel.lecturaActual}` : ""}
+                      />
+                    </div>
+                  )}
                   <div className="col-6">
                     <label className="form-label small fw-medium mb-1">Responsable</label>
                     <select className="form-select form-select-sm rounded-3" value={modal.form.responsableUuid} onChange={(e) => setForm({ responsableUuid: e.target.value })}>
@@ -648,6 +707,23 @@ export default function OrdenesMantenimientoPage() {
                   </datalist>
                 </div>
 
+                {modal.ejecutar && (
+                  <div className="mt-2">
+                    <label className="form-label small fw-medium mb-1">Evidencia (fotos o PDF, se guardan en Google Drive)</label>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*,application/pdf"
+                      className="form-control form-control-sm rounded-3"
+                      onChange={(e) => {
+                        const archivos = [...(e.target.files || [])].slice(0, 10);
+                        setModal((m) => ({ ...m, evidencias: archivos }));
+                      }}
+                    />
+                    {modal.evidencias?.length > 0 && <div className="small text-secondary mt-1">{modal.evidencias.length} archivo(s) seleccionado(s)</div>}
+                  </div>
+                )}
+
                 <div className="mt-2 mb-3">
                   <label className="form-label small fw-medium mb-1">Observaciones</label>
                   <textarea className="form-control form-control-sm rounded-3" rows={2} maxLength={1000} value={modal.form.observaciones} onChange={(e) => setForm({ observaciones: e.target.value })} />
@@ -668,7 +744,7 @@ export default function OrdenesMantenimientoPage() {
                 </button>
                 {editable && (
                   <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={saving}>
-                    {saving ? "Guardando..." : "Guardar"}
+                    {saving ? "Guardando..." : modal.ejecutar ? "Registrar ejecución" : "Guardar"}
                   </button>
                 )}
               </div>
