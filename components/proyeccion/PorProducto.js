@@ -10,7 +10,11 @@ import ModalShell from "@/components/ModalShell";
 const fmt = (n, d = 0) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d }));
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 // Una semana pertenece al mes donde cae la mayoría de sus días: con semanas de lunes a domingo es el mes de su jueves (4.º día).
-const mesDe = (fechaInicio) => new Date(new Date(`${String(fechaInicio).slice(0, 10)}T00:00:00Z`).getTime() + 3 * 86400000).getUTCMonth();
+// Mes de la semana: el de su jueves, salvo en 2027 la que empieza en junio (la semana 26), que cuenta en junio: cierra el primer semestre.
+const mesDe = (fecha) => {
+  const lunes = new Date(`${String(fecha).slice(0, 10)}T00:00:00Z`);
+  return lunes.getUTCFullYear() === 2027 && lunes.getUTCMonth() === 5 ? 5 : new Date(lunes.getTime() + 3 * 86400000).getUTCMonth();
+};
 const encabezado = { background: "#166534", color: "#fff" };
 const primeraCol = "#e8f6ee";
 const pie = "#d1ecdc";

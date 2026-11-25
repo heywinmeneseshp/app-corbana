@@ -3,7 +3,11 @@
 // lo mismo, así que los números coinciden.
 const CAMPOS = ["hectareas", "hectareasEfectivas", "embolses", "embolsesBajo", "embolsesAlto", "racimos", "cajas", "cajasBajo", "cajasAlto"];
 const r2 = (n) => Math.round(n * 100) / 100;
-const mesDe = (fecha) => new Date(new Date(`${fecha}T00:00:00Z`).getTime() + 3 * 86400000).getUTCMonth() + 1; // mes del jueves de la semana
+// Mes de la semana: el de su jueves, salvo en 2027 la que empieza en junio (la semana 26), que cuenta en junio: cierra el primer semestre.
+const mesDe = (fecha) => {
+  const lunes = new Date(`${String(fecha).slice(0, 10)}T00:00:00Z`);
+  return lunes.getUTCFullYear() === 2027 && lunes.getUTCMonth() === 5 ? 6 : new Date(lunes.getTime() + 3 * 86400000).getUTCMonth() + 1;
+};
 const hayValor = (v) => v !== undefined && v !== null && v !== "";
 
 // Totales por semana, mes y año (mismas reglas que el servidor: las hectáreas son un nivel y se promedian).

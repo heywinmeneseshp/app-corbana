@@ -19,7 +19,11 @@ const metricas = (tasa) => [
 const COLORES = { proyeccion: "#16a34a", bajo: "#d97706", alto: "#2563eb", a1: "#64748b", a2: "#a8a29e" };
 
 const fmt = (n) => Number(n ?? 0).toLocaleString("es", { maximumFractionDigits: 0 });
-const mesDe = (fecha) => new Date(new Date(`${fecha}T00:00:00Z`).getTime() + 3 * 86400000).getUTCMonth(); // mes del jueves
+// Mes de la semana: el de su jueves, salvo en 2027 la que empieza en junio (la semana 26), que cuenta en junio: cierra el primer semestre.
+const mesDe = (fecha) => {
+  const lunes = new Date(`${String(fecha).slice(0, 10)}T00:00:00Z`);
+  return lunes.getUTCFullYear() === 2027 && lunes.getUTCMonth() === 5 ? 5 : new Date(lunes.getTime() + 3 * 86400000).getUTCMonth();
+};
 
 // Tabla finca × semana (o finca × mes) con totales por columna y por fila.
 const fmtD = (n, d) => Number(n ?? 0).toLocaleString("es", { minimumFractionDigits: d, maximumFractionDigits: d });
