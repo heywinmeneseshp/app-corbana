@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiPlus, FiUser } from "react-icons/fi";
 import { apiFetch, apiFetchTodos } from "@/lib/api";
-import { hasPermission } from "@/lib/auth";
+import { getCurrentUser, hasPermission } from "@/lib/auth";
+import BotonConfiguracion from "@/components/BotonConfiguracion";
 import ModalShell from "@/components/ModalShell";
 
 // Usuarios de los colaboradores (Maestros → Colaboradores; sin `modulo`, de todos los módulos): lista los que tienen usuario y permite
 // crear el usuario de uno que no tiene. El usuario queda vinculado al colaborador y SOLO con el rol que configuró el
-// administrador (tuerca de la pestaña Colaboradores); basta con poder editar colaboradores.
+// administrador (tuerca de la pestaña Usuarios); basta con poder editar colaboradores.
 const P = {
   SANIDAD_VEGETAL: "sanidad_vegetal.colaboradores.editar",
   GENERAL: "colaborador.editar",
@@ -22,6 +23,25 @@ export default function UsuariosColaboradores({ modulo = null }) {
   const [buscar, setBuscar] = useState("");
   const [nuevo, setNuevo] = useState(null); // { colaboradorUuid, usuario, password, email, guardando, error }
   const puedeCrear = hasPermission(P[modulo] || P.GENERAL);
+  // Tuerca (solo el administrador): rol con el que se crean los usuarios. { roles, rolUuid, guardando, error } mientras se configura.
+  const esAdmin = (getCurrentUser()?.roles || []).includes("Administrador");
+  const [configRol, setConfigRol] = useState(null);
+  const abrirConfig = () => {
+    setConfigRol({ roles: [], rolUuid: rol?.uuid || "", guardando: false, error: "" });
+    apiFetch("/roles?limit=100")
+      .then((d) => setConfigRol((c) => (c ? { ...c, roles: d.items || [] } : c)))
+      .catch((err) => setConfigRol((c) => (c ? { ...c, error: err.message } : c)));
+  };
+  const guardarConfig = async () => {
+    setConfigRol((c) => ({ ...c, guardando: true, error: "" }));
+    try {
+      const d = await apiFetch("/colaboradores/config/rol-usuarios", { method: "PUT", body: JSON.stringify({ rolUuid: configRol.rolUuid || null }) });
+      setRol(d?.rol || null);
+      setConfigRol(null);
+    } catch (err) {
+      setConfigRol((c) => ({ ...c, guardando: false, error: err.message }));
+    }
+  };
 
   async function cargar() {
     setCargando(true);
@@ -86,13 +106,14 @@ export default function UsuariosColaboradores({ modulo = null }) {
         <span className="small text-secondary">
           Rol de los usuarios nuevos: <strong>{rol ? rol.nombre : "sin configurar"}</strong>
         </span>
-        <div className="ms-auto">
+        <div className="ms-auto d-flex align-items-center gap-2">
+          {esAdmin && <BotonConfiguracion title="Configurar el rol de los usuarios creados desde Colaboradores" onClick={abrirConfig} />}
           {puedeCrear && (
             <button
               type="button"
               className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2"
               disabled={!rol}
-              title={rol ? "Crear el usuario de un colaborador" : "El administrador todavía no configuró el rol (tuerca ⚙ de la pestaña Colaboradores)"}
+              title={rol ? "Crear el usuario de un colaborador" : "El administrador todavía no configuró el rol (tuerca ⚙ de esta pestaña)"}
               onClick={() => setNuevo({ colaboradorUuid: "", usuario: "", password: "", email: "", guardando: false, error: "" })}
             >
               <FiPlus /> Nuevo usuario
@@ -144,6 +165,38 @@ export default function UsuariosColaboradores({ modulo = null }) {
             </table>
           </div>
         </div>
+      )}
+
+      {configRol && (
+        <ModalShell title="Rol de los usuarios creados desde Colaboradores" onClose={() => setConfigRol(null)}>
+          <p className="small text-secondary">
+            Quien puede editar colaboradores podrá crearles un usuario, que quedará solo con este rol. Elige un rol con los permisos justos.
+          </p>
+          <select
+            className="form-select form-select-sm rounded-3 mb-2"
+            value={configRol.rolUuid}
+            onChange={(e) => setConfigRol((c) => ({ ...c, rolUuid: e.target.value }))}
+          >
+            <option value="">Sin configurar (no se pueden crear usuarios)</option>
+            {configRol.roles.map((x) => (
+              <option key={x.uuid} value={x.uuid}>
+                {x.nombre}
+              </option>
+            ))}
+          </select>
+          {configRol.roles.find((x) => x.uuid === configRol.rolUuid)?.nombre === "Administrador" && (
+            <div className="alert alert-warning py-2 small">Ojo: con este rol, quien edita colaboradores podría crear administradores.</div>
+          )}
+          {configRol.error && <div className="alert alert-danger py-2 small">{configRol.error}</div>}
+          <div className="d-flex justify-content-end gap-2">
+            <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setConfigRol(null)}>
+              Cancelar
+            </button>
+            <button type="button" className="btn btn-brand btn-sm rounded-3" disabled={configRol.guardando} onClick={guardarConfig}>
+              {configRol.guardando ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+        </ModalShell>
       )}
 
       {nuevo && (
