@@ -285,13 +285,13 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
                             {b.texto}
                           </div>
                         ) : b.tipo === "parrafo" ? (
-                          <p key={i} className="mb-2 text-secondary" style={{ lineHeight: 1.5 }}>
+                          <p key={i} className="mb-2 text-secondary" style={{ lineHeight: 1.5, textAlign: "justify" }}>
                             {b.texto}
                           </p>
                         ) : (
                           <div key={i} className="d-flex gap-2 mb-1 text-secondary" style={{ paddingLeft: 4, lineHeight: 1.5 }}>
                             <span>{b.marca}</span>
-                            <span>{b.texto}</span>
+                            <span style={{ textAlign: "justify" }}>{b.texto}</span>
                           </div>
                         ),
                       )}
