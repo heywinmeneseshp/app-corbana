@@ -179,14 +179,17 @@ export default function UsuariosColaboradores({ modulo = null }) {
                     </td>
                     {puedeCrear && (
                       <td className="pe-3 text-end">
-                        <button
-                          type="button"
-                          className={`btn btn-link btn-sm p-0 text-decoration-none ${c.usuario.estado === false ? "text-success" : "text-danger"}`}
-                          disabled={cambiando === c.uuid}
-                          onClick={() => cambiarEstado(c)}
-                        >
-                          {cambiando === c.uuid ? "..." : c.usuario.estado === false ? "Activar" : "Desactivar"}
-                        </button>
+                        <div className="form-check form-switch d-inline-block mb-0" title={c.usuario.estado === false ? "Activar usuario" : "Desactivar usuario"}>
+                          <input
+                            type="checkbox"
+                            role="switch"
+                            className="form-check-input"
+                            style={{ cursor: "pointer" }}
+                            checked={c.usuario.estado !== false}
+                            disabled={cambiando === c.uuid}
+                            onChange={() => cambiarEstado(c)}
+                          />
+                        </div>
                       </td>
                     )}
                   </tr>
