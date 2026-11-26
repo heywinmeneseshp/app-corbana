@@ -1,5 +1,6 @@
 "use client";
 
+import FirmaDibujoModal from "@/components/FirmaDibujoModal";
 import { prepararKmlParaEarth } from "@/lib/kmlEarth";
 import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
@@ -263,6 +264,9 @@ export default function ComprobantesAspersionPage() {
     }
   }
 
+  // Ventana para dibujar la firma la primera vez que se aprueba ({ resolve } mientras está abierta).
+  const [pedirFirma, setPedirFirma] = useState(null);
+
   // Devuelve true si quedó emitido (aprobado).
   async function emitir(c) {
     const faltan = [
@@ -283,7 +287,17 @@ Se abrirá la edición para completarlo.`);
     if (!confirm(`¿Aprobar (emitir) el comprobante ${c.numero}? Después ya no se podrá editar.`)) return false;
     setProcesandoUuid(c.uuid);
     try {
-      const actualizado = await apiFetch(`/comprobantes-aspersion/${c.uuid}/emitir`, { method: "POST", body: JSON.stringify({}) });
+      let actualizado;
+      try {
+        actualizado = await apiFetch(`/comprobantes-aspersion/${c.uuid}/emitir`, { method: "POST", body: JSON.stringify({}) });
+      } catch (err) {
+        // Primera vez que esta persona aprueba sin firma en su perfil: se dibuja, se guarda en el perfil y se reintenta.
+        if (!err.errores?.some((e) => e.field === "firma")) throw err;
+        const firma = await new Promise((resolve) => setPedirFirma({ resolve }));
+        setPedirFirma(null);
+        if (!firma) return false;
+        actualizado = await apiFetch(`/comprobantes-aspersion/${c.uuid}/emitir`, { method: "POST", body: JSON.stringify({ firma }) });
+      }
       setItems((prev) => prev.map((it) => (it.uuid === actualizado.uuid ? actualizado : it)));
       return true;
     } catch (err) {
@@ -395,6 +409,13 @@ Se abrirá la edición para completarlo.`);
 
   return (
     <RequirePermission code="menu.sanidad_vegetal.comprobantes_aspersion">
+      {pedirFirma && (
+        <FirmaDibujoModal
+          texto="Es la primera vez que apruebas un comprobante: dibuja tu firma. Quedará guardada en tu perfil y no se volverá a pedir."
+          onGuardar={(dataUrl) => pedirFirma.resolve(dataUrl)}
+          onCancelar={() => pedirFirma.resolve(null)}
+        />
+      )}
       <div className="p-3 p-md-4">
         <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
           <div>
