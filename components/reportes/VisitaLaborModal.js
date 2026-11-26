@@ -1,6 +1,6 @@
 "use client";
 
-import { separarPuntos } from "@/lib/textoObservacion";
+import { bloquesObservacion } from "@/lib/textoObservacion";
 import { useEffect, useState } from "react";
 import {
   FiCheck,
@@ -276,9 +276,25 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
                 {visita.lotes
                   .filter((l) => l.observacion)
                   .map((l) => (
-                    <div key={l.uuid} className="small text-secondary mb-2">
-                      <strong>{l.loteNombre}:</strong>
-                      <div style={{ whiteSpace: "pre-line", lineHeight: 1.5 }}>{separarPuntos(l.observacion)}</div>
+                    <div key={l.uuid} className="small mb-3">
+                      <div className="fw-semibold text-success border-bottom pb-1 mb-2">Lote {l.loteNombre}</div>
+                      {/* Párrafos separados, títulos en negrita y viñetas con sangría (mismo formato que el PDF). */}
+                      {bloquesObservacion(l.observacion).map((b, i) =>
+                        b.tipo === "titulo" ? (
+                          <div key={i} className="fw-semibold mt-2 mb-1">
+                            {b.texto}
+                          </div>
+                        ) : b.tipo === "parrafo" ? (
+                          <p key={i} className="mb-2 text-secondary" style={{ lineHeight: 1.5 }}>
+                            {b.texto}
+                          </p>
+                        ) : (
+                          <div key={i} className="d-flex gap-2 mb-1 text-secondary" style={{ paddingLeft: 4, lineHeight: 1.5 }}>
+                            <span>{b.marca}</span>
+                            <span>{b.texto}</span>
+                          </div>
+                        ),
+                      )}
                     </div>
                   ))}
               </div>
