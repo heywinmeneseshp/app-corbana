@@ -183,6 +183,8 @@ export default function ColaboradoresModulo({ modulo = null }) {
     (usuarioActual?.fincaIds || []).length > 0;
   const [users, setUsers] = useState([]);
   const [usuarioDe, setUsuarioDe] = useState(null); // colaborador al que se le crea o vincula un usuario
+  const [rolUsuarios, setRolUsuarios] = useState(null); // rol con el que se crean los usuarios (configurado por el administrador)
+  const [configRol, setConfigRol] = useState(null); // { roles, rolUuid, guardando, error } mientras el administrador lo configura
   const [usuarioForm, setUsuarioForm] = useState({
     modo: "crear",
     usuario: "",
@@ -229,6 +231,9 @@ export default function ColaboradoresModulo({ modulo = null }) {
       .catch(() => {});
     apiFetch("/labores?limit=100")
       .then(({ items }) => setLabores(items))
+      .catch(() => {});
+    apiFetch("/colaboradores/config/rol-usuarios")
+      .then((d) => setRolUsuarios(d?.rol || null))
       .catch(() => {});
     if (hasPermission("menu.maestros.usuarios"))
       apiFetch("/users?limit=100")
@@ -330,6 +335,10 @@ export default function ColaboradoresModulo({ modulo = null }) {
   );
   const puedeGestionarUsuario =
     hasPermission(P.editar) && hasPermission("menu.maestros.usuarios");
+  // Crear el usuario de un colaborador: basta con poder editar colaboradores; queda con el rol que configuró el administrador.
+  // Vincular un usuario existente o desvincularlo sigue requiriendo acceso a Maestros → Usuarios.
+  const puedeCrearUsuario = hasPermission(P.editar);
+  const esAdmin = (getCurrentUser()?.roles || []).includes("Administrador");
 
   // Al crear un colaborador desde un usuario existente se copian sus datos.
   function elegirUsuarioParaNuevo(userUuid) {
@@ -491,6 +500,21 @@ export default function ColaboradoresModulo({ modulo = null }) {
               onClick={() => setVerSolicitudes(true)}
             >
               Solicitudes de rostro
+            </button>
+          )}
+          {esAdmin && (
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm rounded-3"
+              title="Rol con el que se crean los usuarios desde Colaboradores"
+              onClick={() => {
+                setConfigRol({ roles: [], rolUuid: rolUsuarios?.uuid || "", guardando: false, error: "" });
+                apiFetch("/roles?limit=100")
+                  .then((d) => setConfigRol((c) => (c ? { ...c, roles: d.items || [] } : c)))
+                  .catch((err) => setConfigRol((c) => (c ? { ...c, error: err.message } : c)));
+              }}
+            >
+              Rol de usuarios
             </button>
           )}
           {hasPermission(P.crear) && (
@@ -739,11 +763,11 @@ export default function ColaboradoresModulo({ modulo = null }) {
                             <FiUser />
                           </button>
                         )}
-                        {puedeGestionarUsuario && !c.usuario && (
+                        {puedeCrearUsuario && !c.usuario && (
                           <button
                             type="button"
                             className="btn btn-sm btn-link text-secondary p-1"
-                            title="Crear o vincular usuario"
+                            title={puedeGestionarUsuario ? "Crear o vincular usuario" : "Crear usuario"}
                             onClick={() => abrirUsuario(c)}
                           >
                             <FiUserPlus />
@@ -1029,6 +1053,7 @@ export default function ColaboradoresModulo({ modulo = null }) {
           onClose={() => setUsuarioDe(null)}
         >
           <form onSubmit={guardarUsuario}>
+            {puedeGestionarUsuario && (
             <div className="btn-group btn-group-sm mb-3 w-100">
               <button
                 type="button"
@@ -1047,11 +1072,23 @@ export default function ColaboradoresModulo({ modulo = null }) {
                 Vincular usuario existente
               </button>
             </div>
+            )}
 
             {usuarioForm.modo === "crear" ? (
               <div className="row g-3 mb-3">
                 <div className="col-12 small text-secondary">
                   El usuario toma el nombre, apellido y cargo del colaborador.
+                </div>
+                <div className="col-12">
+                  {rolUsuarios ? (
+                    <div className="alert alert-light border py-2 small mb-0">
+                      Se creará con el rol <strong>{rolUsuarios.nombre}</strong> (lo configura el administrador).
+                    </div>
+                  ) : (
+                    <div className="alert alert-warning py-2 small mb-0">
+                      El administrador todavía no ha configurado el rol para los usuarios creados desde Colaboradores.
+                    </div>
+                  )}
                 </div>
                 <div className="col-6">
                   <label className="form-label small fw-medium">
@@ -1149,7 +1186,7 @@ export default function ColaboradoresModulo({ modulo = null }) {
               <button
                 type="submit"
                 className="btn btn-brand btn-brand-verde btn-sm rounded-3"
-                disabled={usuarioSaving}
+                disabled={usuarioSaving || (usuarioForm.modo === "crear" && !rolUsuarios)}
               >
                 {usuarioSaving
                   ? "Guardando..."
@@ -1159,6 +1196,52 @@ export default function ColaboradoresModulo({ modulo = null }) {
               </button>
             </div>
           </form>
+        </ModalShell>
+      )}
+
+      {configRol && (
+        <ModalShell title="Rol de los usuarios creados desde Colaboradores" onClose={() => setConfigRol(null)}>
+          <p className="small text-secondary">
+            Quien puede editar colaboradores podrá crearles un usuario, que quedará solo con este rol. Elige un rol con los permisos justos.
+          </p>
+          <select
+            className="form-select form-select-sm rounded-3 mb-2"
+            value={configRol.rolUuid}
+            onChange={(e) => setConfigRol((c) => ({ ...c, rolUuid: e.target.value }))}
+          >
+            <option value="">Sin configurar (no se pueden crear usuarios)</option>
+            {configRol.roles.map((rol) => (
+              <option key={rol.uuid} value={rol.uuid}>
+                {rol.nombre}
+              </option>
+            ))}
+          </select>
+          {configRol.roles.find((rol) => rol.uuid === configRol.rolUuid)?.nombre === "Administrador" && (
+            <div className="alert alert-warning py-2 small">Ojo: con este rol, quien edita colaboradores podría crear administradores.</div>
+          )}
+          {configRol.error && <div className="alert alert-danger py-2 small">{configRol.error}</div>}
+          <div className="d-flex justify-content-end gap-2">
+            <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setConfigRol(null)}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn btn-brand btn-sm rounded-3"
+              disabled={configRol.guardando}
+              onClick={async () => {
+                setConfigRol((c) => ({ ...c, guardando: true, error: "" }));
+                try {
+                  const d = await apiFetch("/colaboradores/config/rol-usuarios", { method: "PUT", body: JSON.stringify({ rolUuid: configRol.rolUuid || null }) });
+                  setRolUsuarios(d?.rol || null);
+                  setConfigRol(null);
+                } catch (err) {
+                  setConfigRol((c) => ({ ...c, guardando: false, error: err.message }));
+                }
+              }}
+            >
+              {configRol.guardando ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
         </ModalShell>
       )}
 
