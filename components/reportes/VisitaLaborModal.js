@@ -381,7 +381,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
 
           {visita.checklistObservacion && (
             <section className="mb-4">
-              <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Observaciones y/o plan de acción</div>
+              <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Observación general de la visita</div>
               <p className="small text-secondary" style={{ whiteSpace: "pre-wrap" }}>
                 {visita.checklistObservacion}
               </p>
