@@ -34,6 +34,7 @@ function emptyForm() {
     fechaIngreso: "",
     vacacionesPrevias: "",
     pilotoCertificado: false,
+    fincasAsignadas: [],
     email: "",
     cargo: "",
     ubicacion: "",
@@ -258,6 +259,7 @@ export default function ColaboradoresModulo({ modulo = null }) {
       fechaIngreso: colaborador.fechaIngreso ? String(colaborador.fechaIngreso).slice(0, 10) : "",
       vacacionesPrevias: colaborador.vacacionesPrevias ? String(Number(colaborador.vacacionesPrevias)) : "",
       pilotoCertificado: Boolean(colaborador.pilotoCertificado),
+      fincasAsignadas: fincas.filter((f) => (colaborador.fincasPrecipitacion || []).map(Number).includes(Number(f.id))).map((f) => f.uuid),
       email: colaborador.email || "",
       cargo: colaborador.cargo || "",
       modulo: colaborador.modulo || "GENERAL",
@@ -296,6 +298,7 @@ export default function ColaboradoresModulo({ modulo = null }) {
         lugarUuid: null,
         ...aParametros(form.ubicacion),
         estado: form.estado,
+        ...(editing ? { fincasPrecipitacionUuids: form.fincasAsignadas || [] } : {}),
         labores: form.labores.map((l) => ({
           laborUuid: l.laborUuid,
           calificacion: l.calificacion,
@@ -1022,6 +1025,42 @@ export default function ColaboradoresModulo({ modulo = null }) {
                 Certificado como piloto de dron
               </label>
             </div>
+
+            {/* Fincas asignadas: en la app móvil, el usuario vinculado a este colaborador ve y aprueba la precipitación diaria
+                solo de estas fincas (independiente de las fincas del usuario en Maestros → Usuarios). Ninguna = todas. */}
+            {editing && (
+              <div className="mb-3">
+                <label className="form-label small fw-medium mb-1">Fincas asignadas</label>
+                <div className="small text-secondary mb-2">
+                  En la app móvil, su usuario verá y aprobará la precipitación diaria solo de estas fincas. Sin ninguna marcada, ve todas.
+                </div>
+                <div className="border rounded-3 p-2" style={{ maxHeight: 180, overflowY: "auto" }}>
+                  <div className="row g-1">
+                    {fincas.map((f) => (
+                      <div key={f.uuid} className="col-6 col-md-4">
+                        <div className="form-check mb-0">
+                          <input
+                            type="checkbox"
+                            className="form-check-input"
+                            id={`fa-${f.uuid}`}
+                            checked={(form.fincasAsignadas || []).includes(f.uuid)}
+                            onChange={(e) =>
+                              setForm((x) => ({
+                                ...x,
+                                fincasAsignadas: e.target.checked ? [...(x.fincasAsignadas || []), f.uuid] : (x.fincasAsignadas || []).filter((u) => u !== f.uuid),
+                              }))
+                            }
+                          />
+                          <label className="form-check-label small" htmlFor={`fa-${f.uuid}`}>
+                            {f.nombre}
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {formError && (
               <div className="alert alert-danger py-2 small">{formError}</div>
