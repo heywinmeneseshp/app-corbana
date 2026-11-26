@@ -5,9 +5,6 @@ import { useEffect, useState } from "react";
 import {
   FiCheck,
   FiX,
-  FiDroplet,
-  FiThermometer,
-  FiWind,
   FiFileText,
   FiCheckCircle,
   FiImage,
@@ -60,6 +57,18 @@ function SiNoBadge({ valor, alarmaSi = true }) {
 
 // Detalle de una visita de Sanidad Vegetal / Labor Cultural, mostrado como
 // modal (no como página aparte) desde el listado en ReporteLabores.js.
+// Dato con etiqueta pequeña arriba (mismo estilo que la ventana de la programación de aspersión).
+function Dato({ label, children, ancho = "col-6 col-md" }) {
+  return (
+    <div className={ancho}>
+      <div className="text-secondary" style={{ fontSize: "0.68rem" }}>
+        {label}
+      </div>
+      <div className="fw-medium small">{children ?? "—"}</div>
+    </div>
+  );
+}
+
 export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
   const [visita, setVisita] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -107,12 +116,20 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
     };
   }, [visita?.fotos]);
 
+  // «Ver PDF»: lo abre en otra pestaña. La pestaña se abre de una vez (con el clic) para que el navegador no la bloquee y
+  // luego se le carga el PDF ya generado.
   const handleExportarPdf = async () => {
     setGenerandoPdf(true);
+    const pestana = window.open("", "_blank");
     try {
-      const { downloadVisitaLaborPdf } = await import("@/lib/visitaLaborExport");
-      await downloadVisitaLaborPdf(visita);
+      const { generarVisitaLaborPdfBlob } = await import("@/lib/visitaLaborExport");
+      const { blob } = await generarVisitaLaborPdfBlob(visita);
+      const url = URL.createObjectURL(blob);
+      if (pestana) pestana.location.href = url;
+      else window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (err) {
+      pestana?.close();
       setError(err.message);
     } finally {
       setGenerandoPdf(false);
@@ -209,7 +226,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
                 onClick={handleExportarPdf}
                 disabled={generandoPdf}
               >
-                <FiFileText /> {generandoPdf ? "Generando..." : "Exportar PDF"}
+                <FiFileText /> {generandoPdf ? "Generando..." : "Ver PDF"}
               </button>
               <button
                 type="button"
@@ -222,29 +239,40 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
             </div>
           </div>
 
+          <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>
+            Visita
+          </div>
+          <div className="row g-2 mb-4">
+            <Dato label="Finca">{visita.fincaNombre}</Dato>
+            <Dato label="Semana">{visita.semanaCodigo}</Dato>
+            <Dato label="Fecha">{visita.fecha}</Dato>
+            <Dato label="Responsable">{visita.usuarioNombre}</Dato>
+            <Dato label="Estado">
+              {visita.revisadoEn ? (
+                <span className="badge rounded-pill" style={{ backgroundColor: "#dcfce7", color: "#166534" }}>
+                  Aprobada · {visita.revisadoPorNombre || ""}
+                </span>
+              ) : (
+                <span className="badge rounded-pill" style={{ backgroundColor: "#fef3c7", color: "#92400e" }}>
+                  Pendiente de revisión
+                </span>
+              )}
+            </Dato>
+          </div>
+
           {visita.clima && (
             <section className="mb-4">
-              <h3 className="h6 fw-semibold mb-2">Condiciones climáticas</h3>
-              <div className="d-flex gap-4 flex-wrap">
-                <span className="d-flex align-items-center gap-2 small">
-                  <FiDroplet className="text-primary" /> {visita.clima.mm} mm
-                </span>
-                {visita.clima.temperatura != null && (
-                  <span className="d-flex align-items-center gap-2 small">
-                    <FiThermometer className="text-danger" /> {visita.clima.temperatura} °C
-                  </span>
-                )}
-                {visita.clima.humedadRelativa != null && (
-                  <span className="d-flex align-items-center gap-2 small">
-                    <FiWind className="text-info" /> {visita.clima.humedadRelativa}% HR
-                  </span>
-                )}
+              <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Condiciones climáticas</div>
+              <div className="row g-2">
+                <Dato label="Lluvia">{`${visita.clima.mm} mm`}</Dato>
+                <Dato label="Temperatura">{visita.clima.temperatura != null ? `${visita.clima.temperatura} °C` : "—"}</Dato>
+                <Dato label="Humedad relativa">{visita.clima.humedadRelativa != null ? `${visita.clima.humedadRelativa} %` : "—"}</Dato>
               </div>
             </section>
           )}
 
           <section className="mb-4">
-            <h3 className="h6 fw-semibold mb-2">Estado fitosanitario por lote</h3>
+            <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Estado fitosanitario por lote</div>
             <div className="table-responsive">
               <table className="table table-sm align-middle">
                 <thead>
@@ -302,7 +330,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
           </section>
 
           <section className="mb-4">
-            <h3 className="h6 fw-semibold mb-2">Hallazgos</h3>
+            <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Hallazgos</div>
             <div className="row g-3">
               <div className="col-md-6 d-flex">
                 <div className="border rounded-3 p-3 w-100">
@@ -334,7 +362,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
           </section>
 
           <section className="mb-4">
-            <h3 className="h6 fw-semibold mb-2">Cumplimiento de protocolos de bioseguridad</h3>
+            <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Cumplimiento de protocolos de bioseguridad</div>
             <div className="row g-3">
               <div className="col-md-6">
                 <div className="border rounded-3 p-3 d-flex justify-content-between align-items-center">
@@ -353,7 +381,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
 
           {visita.checklistObservacion && (
             <section className="mb-4">
-              <h3 className="h6 fw-semibold mb-2">Observaciones y/o plan de acción</h3>
+              <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Observaciones y/o plan de acción</div>
               <p className="small text-secondary" style={{ whiteSpace: "pre-wrap" }}>
                 {visita.checklistObservacion}
               </p>
@@ -362,9 +390,9 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
 
           {visita.fotos?.length > 0 && (
             <section>
-              <h3 className="h6 fw-semibold mb-2 d-flex align-items-center gap-2">
+              <div className="fw-semibold small mb-2 d-flex align-items-center gap-2" style={{ color: "#166534" }}>
                 <FiImage /> Fotos
-              </h3>
+              </div>
               <div className="d-flex flex-wrap gap-2">
                 {visita.fotos.map((foto, i) =>
                   fotoUrls[foto.uuid] ? (
