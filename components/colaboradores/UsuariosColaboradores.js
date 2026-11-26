@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FiPlus, FiUser } from "react-icons/fi";
+import { FiEdit2, FiPlus, FiUser } from "react-icons/fi";
 import { apiFetch, apiFetchTodos } from "@/lib/api";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import BotonConfiguracion from "@/components/BotonConfiguracion";
@@ -107,6 +107,22 @@ export default function UsuariosColaboradores({ modulo = null }) {
     }
   }
 
+  const [editar, setEditar] = useState(null); // { uuid, nombre, usuario, email, password, guardando, error }
+  async function guardarEdicion(e) {
+    e.preventDefault();
+    setEditar((x) => ({ ...x, guardando: true, error: "" }));
+    try {
+      await apiFetch(`/colaboradores/${editar.uuid}/usuario`, {
+        method: "PATCH",
+        body: JSON.stringify({ usuario: editar.usuario, email: editar.email, ...(editar.password ? { password: editar.password } : {}) }),
+      });
+      setEditar(null);
+      cargar();
+    } catch (err) {
+      setEditar((x) => ({ ...x, guardando: false, error: err.message }));
+    }
+  }
+
   const elegido = nuevo ? colaboradores.find((c) => c.uuid === nuevo.colaboradorUuid) : null;
 
   return (
@@ -154,7 +170,6 @@ export default function UsuariosColaboradores({ modulo = null }) {
                   <th>Usuario</th>
                   <th>Correo</th>
                   <th>Cargo</th>
-                  <th>Estado</th>
                   {puedeCrear && <th className="pe-3 text-end"></th>}
                 </tr>
               </thead>
@@ -170,16 +185,17 @@ export default function UsuariosColaboradores({ modulo = null }) {
                     <td className="fw-semibold">{c.usuario.usuario}</td>
                     <td className="small">{c.usuario.email || "—"}</td>
                     <td className="small">{c.cargo || "—"}</td>
-                    <td>
-                      {c.usuario.estado === false ? (
-                        <span className="badge rounded-pill text-bg-secondary">Inactivo</span>
-                      ) : (
-                        <span className="badge rounded-pill text-bg-success">Activo</span>
-                      )}
-                    </td>
                     {puedeCrear && (
-                      <td className="pe-3 text-end">
-                        <div className="form-check form-switch d-inline-block mb-0" title={c.usuario.estado === false ? "Activar usuario" : "Desactivar usuario"}>
+                      <td className="pe-3 text-end text-nowrap">
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm p-0 me-3 text-secondary align-middle"
+                          title="Editar usuario"
+                          onClick={() => setEditar({ uuid: c.uuid, nombre: nombre(c), usuario: c.usuario.usuario, email: c.usuario.email || "", password: "", guardando: false, error: "" })}
+                        >
+                          <FiEdit2 />
+                        </button>
+                        <div className="form-check form-switch d-inline-block mb-0 align-middle" title={c.usuario.estado === false ? "Activar usuario" : "Desactivar usuario"}>
                           <input
                             type="checkbox"
                             role="switch"
@@ -229,6 +245,63 @@ export default function UsuariosColaboradores({ modulo = null }) {
               {configRol.guardando ? "Guardando..." : "Guardar"}
             </button>
           </div>
+        </ModalShell>
+      )}
+
+      {editar && (
+        <ModalShell title={`Editar usuario · ${editar.nombre}`} onClose={() => setEditar(null)}>
+          <form onSubmit={guardarEdicion}>
+            <div className="row g-3 mb-3">
+              <div className="col-6">
+                <label className="form-label small fw-medium">
+                  Usuario <span className="text-danger">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-control form-control-sm rounded-3"
+                  required
+                  minLength={3}
+                  maxLength={50}
+                  value={editar.usuario}
+                  onChange={(e) => setEditar((x) => ({ ...x, usuario: e.target.value.replace(/[^a-zA-Z0-9]/g, "") }))}
+                />
+              </div>
+              <div className="col-6">
+                <label className="form-label small fw-medium">Nueva contraseña</label>
+                <input
+                  type="password"
+                  className="form-control form-control-sm rounded-3"
+                  minLength={8}
+                  autoComplete="new-password"
+                  placeholder="Déjala vacía para no cambiarla"
+                  value={editar.password}
+                  onChange={(e) => setEditar((x) => ({ ...x, password: e.target.value }))}
+                />
+                <div className="small text-secondary">Mínimo 8, con letras y números.</div>
+              </div>
+              <div className="col-12">
+                <label className="form-label small fw-medium">
+                  Correo <span className="text-danger">*</span>
+                </label>
+                <input
+                  type="email"
+                  className="form-control form-control-sm rounded-3"
+                  required
+                  value={editar.email}
+                  onChange={(e) => setEditar((x) => ({ ...x, email: e.target.value }))}
+                />
+              </div>
+            </div>
+            {editar.error && <div className="alert alert-danger py-2 small">{editar.error}</div>}
+            <div className="d-flex justify-content-end gap-2">
+              <button type="button" className="btn btn-outline-secondary btn-sm rounded-3" onClick={() => setEditar(null)}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn btn-brand btn-sm rounded-3" disabled={editar.guardando}>
+                {editar.guardando ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </form>
         </ModalShell>
       )}
 
