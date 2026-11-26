@@ -404,7 +404,19 @@ export default function IndicadoresEvaluaciones() {
               <MiniCard
                 icono={<FiBarChart2 size={15} />}
                 etiqueta="Suma bruta"
-                valor={resumen.promedios.sumaBruta != null ? resumen.promedios.sumaBruta.toFixed(2) : "—"}
+                // Hoja 3 y hoja 5, igual que la gráfica «Promedio de Suma Bruta por Hoja» para esta semana.
+                valor={
+                  <span className="d-flex flex-column gap-1" style={{ fontSize: 20 }}>
+                    <span>
+                      <span className="fw-semibold" style={{ fontSize: 12, color: "#2563eb" }}>H3 </span>
+                      {resumen.promedios.sumaBrutaH3 != null ? resumen.promedios.sumaBrutaH3.toFixed(2) : "—"}
+                    </span>
+                    <span>
+                      <span className="fw-semibold" style={{ fontSize: 12, color: "#f59e0b" }}>H5 </span>
+                      {resumen.promedios.sumaBrutaH5 != null ? resumen.promedios.sumaBrutaH5.toFixed(2) : "—"}
+                    </span>
+                  </span>
+                }
                 unidad=""
                 n={resumen.porTipo["Suma Bruta"] || 0}
                 estilo={ESTILO_SUMA}
