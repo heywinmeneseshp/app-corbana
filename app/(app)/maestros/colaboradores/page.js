@@ -4,6 +4,7 @@ import { useState } from "react";
 import RequirePermission from "@/components/RequirePermission";
 import ColaboradoresModulo from "@/components/colaboradores/ColaboradoresModulo";
 import NovedadesAsistencia from "@/components/asistencia/NovedadesAsistencia";
+import UsuariosColaboradores from "@/components/colaboradores/UsuariosColaboradores";
 import { hasPermission } from "@/lib/auth";
 
 // Maestros → Colaboradores: todos los colaboradores (con columna y filtro de módulo) y sus novedades de asistencia (vacaciones,
@@ -14,9 +15,13 @@ export default function ColaboradoresPage() {
   return (
     <RequirePermission code="menu.maestros.colaboradores">
       <div className="p-4 p-md-5">
-        {veNovedades && (
-          <ul className="nav nav-tabs mb-3">
-            {[["colaboradores", "Colaboradores"], ["novedades", "Ausencias y permisos"], ["saldos", "Vacaciones y compensatorios"]].map(([key, label]) => (
+        <ul className="nav nav-tabs mb-3">
+            {[
+              ["colaboradores", "Colaboradores"],
+              // Usuarios de los colaboradores: listar y crear (con el rol configurado por el administrador).
+              ["usuarios", "Usuarios"],
+              ...(veNovedades ? [["novedades", "Ausencias y permisos"], ["saldos", "Vacaciones y compensatorios"]] : []),
+            ].map(([key, label]) => (
               <li key={key} className="nav-item">
                 <button type="button" className={`nav-link ${tab === key ? "active fw-semibold" : "text-secondary"}`} onClick={() => setTab(key)}>
                   {label}
@@ -24,8 +29,13 @@ export default function ColaboradoresPage() {
               </li>
             ))}
           </ul>
+        {tab === "usuarios" ? (
+          <UsuariosColaboradores />
+        ) : (tab === "novedades" || tab === "saldos") && veNovedades ? (
+          <NovedadesAsistencia key={tab} vistaFija={tab === "saldos" ? "saldos" : "registro"} />
+        ) : (
+          <ColaboradoresModulo />
         )}
-        {(tab === "novedades" || tab === "saldos") && veNovedades ? <NovedadesAsistencia key={tab} vistaFija={tab === "saldos" ? "saldos" : "registro"} /> : <ColaboradoresModulo />}
       </div>
     </RequirePermission>
   );
