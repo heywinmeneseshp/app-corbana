@@ -61,10 +61,47 @@ function SiNoBadge({ valor, alarmaSi = true }) {
 function Dato({ label, children, ancho = "col-6 col-md" }) {
   return (
     <div className={ancho}>
-      <div className="text-secondary" style={{ fontSize: "0.68rem" }}>
-        {label}
+      <div className="border rounded-3 overflow-hidden h-100 text-center">
+        <div className="fw-bold text-uppercase py-1" style={{ fontSize: "0.62rem", backgroundColor: "#f0fdf4", color: "#166534", letterSpacing: "0.03em" }}>
+          {label}
+        </div>
+        <div className="fw-semibold small py-2 px-1">{children ?? "—"}</div>
       </div>
-      <div className="fw-medium small">{children ?? "—"}</div>
+    </div>
+  );
+}
+
+// Título de sección en franja verde (como el PDF).
+function Seccion({ children }) {
+  return (
+    <div className="fw-bold text-uppercase text-white rounded-2 px-2 py-1 mb-2 d-flex align-items-center gap-2" style={{ backgroundColor: "#166534", fontSize: "0.72rem", letterSpacing: "0.03em" }}>
+      {children}
+    </div>
+  );
+}
+
+// Firma (PNG) guardada en el perfil del usuario; sin firma queda el espacio en blanco sobre la línea.
+function FirmaPerfil({ userUuid }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!userUuid) return undefined;
+    let actual = null;
+    let cancelado = false;
+    apiFetchBlob(`/auth/firmas/${userUuid}`)
+      .then((blob) => {
+        if (cancelado) return;
+        actual = URL.createObjectURL(blob);
+        setUrl(actual);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+      if (actual) URL.revokeObjectURL(actual);
+    };
+  }, [userUuid]);
+  return (
+    <div style={{ height: 60 }} className="d-flex align-items-end justify-content-center">
+      {url && userUuid ? <img src={url} alt="Firma" style={{ maxHeight: 58, maxWidth: "100%" }} /> : null}
     </div>
   );
 }
@@ -199,16 +236,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
         <p className="text-secondary">Cargando...</p>
       ) : visita ? (
         <div>
-          <div className="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4 pb-3 border-bottom">
-            <div className="d-flex align-items-start gap-3">
-              <AppLogo size={36} color="#198754" />
-              <div>
-                <h2 className="fw-bold h5 mb-1">Visita Sanidad y Vegetal — {visita.fincaNombre}</h2>
-                <p className="text-secondary small mb-0">
-                  Semana {visita.semanaCodigo} · {visita.fecha}
-                </p>
-              </div>
-            </div>
+          <div className="d-flex justify-content-end flex-wrap gap-2 mb-2">
             <div className="d-flex gap-2 flex-wrap">
               {!visita.revisadoEn && (
                 <button
@@ -239,10 +267,21 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
             </div>
           </div>
 
-          <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>
-            Visita
+          {/* Franja verde del encabezado, como el PDF y el comprobante de aspersión. */}
+          <div className="d-flex align-items-center gap-3 rounded-3 px-3 py-2 mb-2 text-white" style={{ backgroundColor: "#166534" }}>
+            <div className="bg-white rounded-2 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 40, height: 40 }}>
+              <AppLogo size={30} color="#166534" />
+            </div>
+            <div className="flex-grow-1">
+              <div className="fw-bold">VISITA DE SANIDAD VEGETAL — {String(visita.fincaNombre || "").toUpperCase()}</div>
+              <div style={{ fontSize: "0.72rem" }}>EVALUACIÓN DE LABORES</div>
+            </div>
+            <div className="text-end">
+              <div style={{ fontSize: "0.68rem" }}>{visita.revisadoEn ? "APROBADA" : "PENDIENTE DE REVISIÓN"}</div>
+              <div className="fw-bold small">{visita.semanaCodigo}</div>
+            </div>
           </div>
-          <div className="row g-2 mb-4">
+          <div className="row g-2 mb-3">
             <Dato label="Finca">{visita.fincaNombre}</Dato>
             <Dato label="Semana">{visita.semanaCodigo}</Dato>
             <Dato label="Fecha">{visita.fecha}</Dato>
@@ -262,7 +301,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
 
           {visita.clima && (
             <section className="mb-4">
-              <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Condiciones climáticas</div>
+              <Seccion>Condiciones climáticas</Seccion>
               <div className="row g-2">
                 <Dato label="Lluvia">{`${visita.clima.mm} mm`}</Dato>
                 <Dato label="Temperatura">{visita.clima.temperatura != null ? `${visita.clima.temperatura} °C` : "—"}</Dato>
@@ -272,10 +311,10 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
           )}
 
           <section className="mb-4">
-            <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Estado fitosanitario por lote</div>
+            <Seccion>Estado fitosanitario por lote</Seccion>
             <div className="table-responsive">
               <table className="table table-sm align-middle">
-                <thead>
+                <thead style={{ backgroundColor: "#f0fdf4" }}>
                   <tr className="text-secondary small">
                     <th>Lote</th>
                     {COLUMNAS.map((c) => (
@@ -305,7 +344,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
                   .filter((l) => l.observacion)
                   .map((l) => (
                     <div key={l.uuid} className="small mb-3">
-                      <div className="fw-semibold text-success border-bottom pb-1 mb-2">Lote {l.loteNombre}</div>
+                      <div className="fw-bold small rounded-2 px-2 py-1 mb-2" style={{ backgroundColor: "#f0fdf4", color: "#166534" }}>LOTE {l.loteNombre}</div>
                       {/* Párrafos separados, títulos en negrita y viñetas con sangría (mismo formato que el PDF). */}
                       {bloquesObservacion(l.observacion).map((b, i) =>
                         b.tipo === "titulo" ? (
@@ -330,7 +369,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
           </section>
 
           <section className="mb-4">
-            <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Hallazgos</div>
+            <Seccion>Hallazgos</Seccion>
             <div className="row g-3">
               <div className="col-md-6 d-flex">
                 <div className="border rounded-3 p-3 w-100">
@@ -362,7 +401,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
           </section>
 
           <section className="mb-4">
-            <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Cumplimiento de protocolos de bioseguridad</div>
+            <Seccion>Cumplimiento de protocolos de bioseguridad</Seccion>
             <div className="row g-3">
               <div className="col-md-6">
                 <div className="border rounded-3 p-3 d-flex justify-content-between align-items-center">
@@ -381,7 +420,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
 
           {visita.checklistObservacion && (
             <section className="mb-4">
-              <div className="fw-semibold small mb-2" style={{ color: "#166534" }}>Observación general de la visita</div>
+              <Seccion>Observación general de la visita</Seccion>
               <p className="small text-secondary" style={{ whiteSpace: "pre-wrap" }}>
                 {visita.checklistObservacion}
               </p>
@@ -390,9 +429,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
 
           {visita.fotos?.length > 0 && (
             <section>
-              <div className="fw-semibold small mb-2 d-flex align-items-center gap-2" style={{ color: "#166534" }}>
-                <FiImage /> Fotos
-              </div>
+              <Seccion><FiImage /> Fotos</Seccion>
               <div className="d-flex flex-wrap gap-2">
                 {visita.fotos.map((foto, i) =>
                   fotoUrls[foto.uuid] ? (
@@ -424,28 +461,23 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
             </section>
           )}
 
-          <section className="mt-5 pt-4 border-top">
+          <section className="mt-5">
             <div className="row g-4">
-              <div className="col-md-6">
-                <div className="text-center">
-                  <p className="mb-4">&nbsp;</p>
-                  <p className="border-top d-inline-block px-4 mb-1 pt-1 small fw-semibold">
-                    {visita.revisadoEn ? visita.revisadoPorNombre || "—" : "Pendiente de revisión"}
-                  </p>
-                  <p className="small text-secondary mb-0">
-                    {visita.revisadoEn ? visita.revisadoPorCargo || "Revisor" : ""}
-                  </p>
+              {[
+                { uuid: visita.revisadoEn ? visita.revisadoPorUuid : null, nombre: visita.revisadoEn ? visita.revisadoPorNombre || "—" : "Pendiente de revisión", cargo: visita.revisadoEn ? visita.revisadoPorCargo || "Revisor" : "", rotulo: "REVISÓ" },
+                { uuid: visita.usuarioUuid, nombre: visita.usuarioNombre || "—", cargo: visita.usuarioCargo || "Responsable", rotulo: "REGISTRÓ" },
+              ].map((f) => (
+                <div key={f.rotulo} className="col-md-6">
+                  <div className="text-center mx-auto" style={{ maxWidth: 300 }}>
+                    <FirmaPerfil userUuid={f.uuid} />
+                    <div className="border-top border-dark pt-1 small fw-semibold">{f.nombre}</div>
+                    <div className="small text-secondary">{f.cargo}</div>
+                    <div className="fw-bold rounded-2 mt-1 py-1" style={{ fontSize: "0.68rem", backgroundColor: "#f0fdf4", color: "#166534" }}>
+                      {f.rotulo}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="col-md-6">
-                <div className="text-center">
-                  <p className="mb-4">&nbsp;</p>
-                  <p className="border-top d-inline-block px-4 mb-1 pt-1 small fw-semibold">
-                    {visita.usuarioNombre || "—"}
-                  </p>
-                  <p className="small text-secondary mb-0">{visita.usuarioCargo || "Responsable"}</p>
-                </div>
-              </div>
+              ))}
             </div>
           </section>
         </div>
