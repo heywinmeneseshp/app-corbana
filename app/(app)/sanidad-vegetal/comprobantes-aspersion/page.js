@@ -1,5 +1,6 @@
 "use client";
 
+import { prepararKmlParaEarth } from "@/lib/kmlEarth";
 import InfoModulo from "@/components/InfoModulo";
 import { useEffect, useState } from "react";
 import { FiEye, FiDownload, FiEdit2, FiRotateCcw, FiSearch, FiFileText, FiXCircle, FiMail, FiTrash2, FiRefreshCcw } from "react-icons/fi";
@@ -309,13 +310,13 @@ Se abrirá la edición para completarlo.`);
       if ((detalle.kmls || []).length) {
         const zip = new JSZip();
         if (detalle.kmls.length === 1) {
-          zip.file("doc.kml", await apiFetchBlob(`/comprobantes-aspersion/${detalle.uuid}/kml/${detalle.kmls[0].uuid}`));
+          zip.file("doc.kml", prepararKmlParaEarth(await (await apiFetchBlob(`/comprobantes-aspersion/${detalle.uuid}/kml/${detalle.kmls[0].uuid}`)).text()));
         } else {
           // Varios recorridos: cada uno en su archivo y un doc.kml que los enlaza (Google Earth los abre todos).
           const enlaces = [];
           for (const [i, k] of detalle.kmls.entries()) {
             const archivo = `recorridos/${i + 1}.kml`;
-            zip.file(archivo, await apiFetchBlob(`/comprobantes-aspersion/${detalle.uuid}/kml/${k.uuid}`));
+            zip.file(archivo, prepararKmlParaEarth(await (await apiFetchBlob(`/comprobantes-aspersion/${detalle.uuid}/kml/${k.uuid}`)).text()));
             const nombreXml = String(k.nombre || archivo).replace(/[<>&"]/g, "");
             enlaces.push(`<NetworkLink><name>${nombreXml}</name><Link><href>${archivo}</href></Link></NetworkLink>`);
           }
