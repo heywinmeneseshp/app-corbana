@@ -90,6 +90,23 @@ export default function UsuariosColaboradores({ modulo = null }) {
     }
   }
 
+  // Activar / desactivar el usuario (al desactivarlo se cierran sus sesiones).
+  const [cambiando, setCambiando] = useState(null);
+  async function cambiarEstado(c) {
+    const activar = c.usuario.estado === false;
+    if (!window.confirm(`¿${activar ? "Activar" : "Desactivar"} el usuario ${c.usuario.usuario} de ${nombre(c)}?${activar ? "" : " Se cerrarán sus sesiones y no podrá ingresar."}`)) return;
+    setCambiando(c.uuid);
+    setError("");
+    try {
+      await apiFetch(`/colaboradores/${c.uuid}/usuario/estado`, { method: "PUT", body: JSON.stringify({ estado: activar }) });
+      await cargar();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCambiando(null);
+    }
+  }
+
   const elegido = nuevo ? colaboradores.find((c) => c.uuid === nuevo.colaboradorUuid) : null;
 
   return (
@@ -137,7 +154,8 @@ export default function UsuariosColaboradores({ modulo = null }) {
                   <th>Usuario</th>
                   <th>Correo</th>
                   <th>Cargo</th>
-                  <th className="pe-3">Estado</th>
+                  <th>Estado</th>
+                  {puedeCrear && <th className="pe-3 text-end"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -152,13 +170,25 @@ export default function UsuariosColaboradores({ modulo = null }) {
                     <td className="fw-semibold">{c.usuario.usuario}</td>
                     <td className="small">{c.usuario.email || "—"}</td>
                     <td className="small">{c.cargo || "—"}</td>
-                    <td className="pe-3">
+                    <td>
                       {c.usuario.estado === false ? (
                         <span className="badge rounded-pill text-bg-secondary">Inactivo</span>
                       ) : (
                         <span className="badge rounded-pill text-bg-success">Activo</span>
                       )}
                     </td>
+                    {puedeCrear && (
+                      <td className="pe-3 text-end">
+                        <button
+                          type="button"
+                          className={`btn btn-link btn-sm p-0 text-decoration-none ${c.usuario.estado === false ? "text-success" : "text-danger"}`}
+                          disabled={cambiando === c.uuid}
+                          onClick={() => cambiarEstado(c)}
+                        >
+                          {cambiando === c.uuid ? "..." : c.usuario.estado === false ? "Activar" : "Desactivar"}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
