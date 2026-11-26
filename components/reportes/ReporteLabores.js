@@ -27,6 +27,7 @@ export default function ReporteLabores() {
   const [usuarioUuid, setUsuarioUuid] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
+  const [estado, setEstado] = useState("");
 
   const [visitas, setVisitas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +69,7 @@ export default function ReporteLabores() {
       if (usuarioUuid) params.set("usuarioUuid", usuarioUuid);
       if (fechaDesde) params.set("fechaDesde", fechaDesde);
       if (fechaHasta) params.set("fechaHasta", fechaHasta);
+      if (estado) params.set("estado", estado);
       const data = await apiFetch(`/labores-culturales/visitas?${params.toString()}`);
       setVisitas(data.items);
     } catch (err) {
@@ -160,6 +162,14 @@ export default function ReporteLabores() {
             <label className="form-label small fw-medium">Hasta</label>
             <input type="date" className="form-control form-control-sm rounded-3" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
           </div>
+          <div className="col-6 col-md">
+            <label className="form-label small fw-medium">Estado</label>
+            <select className="form-select form-select-sm rounded-3" value={estado} onChange={(e) => setEstado(e.target.value)}>
+              <option value="">Todos</option>
+              <option value="PENDIENTE">Pendiente de revisión</option>
+              <option value="APROBADA">Aprobada</option>
+            </select>
+          </div>
           <div className="col-12 col-md-auto">
             <button type="button" className="btn btn-sm btn-brand rounded-3 w-100 d-flex align-items-center justify-content-center gap-1" onClick={loadVisitas}>
               <FiFilter /> Filtrar
@@ -186,6 +196,7 @@ export default function ReporteLabores() {
                   <th>Lotes</th>
                   <th>Responsable</th>
                   <th>Hallazgos</th>
+                  <th>Estado</th>
                   {esAdministrador() && <th className="pe-4 text-end">Acciones</th>}
                   <th className="pe-4"></th>
                 </tr>
@@ -222,6 +233,15 @@ export default function ReporteLabores() {
                         </span>
                       ) : (
                         <span className="badge rounded-pill text-bg-light text-secondary">Sin hallazgos</span>
+                      )}
+                    </td>
+                    <td>
+                      {v.revisadoEn ? (
+                        <span className="badge rounded-pill text-bg-success" title={v.revisadoPorNombre ? `Aprobada por ${v.revisadoPorNombre}` : undefined}>
+                          Aprobada
+                        </span>
+                      ) : (
+                        <span className="badge rounded-pill text-bg-warning">Pendiente</span>
                       )}
                     </td>
                     <td className="pe-4 text-end">
