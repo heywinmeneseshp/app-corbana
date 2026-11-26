@@ -107,7 +107,7 @@ export default function UsuariosColaboradores({ modulo = null }) {
           Rol de los usuarios nuevos: <strong>{rol ? rol.nombre : "sin configurar"}</strong>
         </span>
         <div className="ms-auto d-flex align-items-center gap-2">
-          {esAdmin && <BotonConfiguracion title="Configurar el rol de los usuarios creados desde Colaboradores" onClick={abrirConfig} />}
+          {esAdmin && <BotonConfiguracion soloIcono title="Configurar el rol de los usuarios creados desde Colaboradores" onClick={abrirConfig} />}
           {puedeCrear && (
             <button
               type="button"

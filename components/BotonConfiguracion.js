@@ -9,12 +9,13 @@ import { FiSettings } from "react-icons/fi";
 // - `alto`: altura CSS opcional para alinearlo con inputs de al lado
 //   (ej. "calc(1.5em + 0.5rem + 2px)" = form-control-sm).
 // - `compacto`: versión pequeña para encabezados de tarjetas/gráficos.
-export default function BotonConfiguracion({ onClick, title, label, alto, compacto = false }) {
+// - `soloIcono`: sin fondo, solo el ícono (gris; se resalta al pasar el mouse).
+export default function BotonConfiguracion({ onClick, title, label, alto, compacto = false, soloIcono = false }) {
   const lado = compacto ? 26 : 32;
   return (
     <button
       type="button"
-      className="btn btn-light btn-sm border-0 rounded-3 d-inline-flex align-items-center justify-content-center gap-1 flex-shrink-0"
+      className={`btn ${soloIcono ? "btn-link text-secondary" : "btn-light"} btn-sm border-0 rounded-3 d-inline-flex align-items-center justify-content-center gap-1 flex-shrink-0`}
       style={{ width: label ? undefined : lado, height: alto || lado, padding: label ? "0 0.6rem" : 0 }}
       onClick={onClick}
       title={title}
