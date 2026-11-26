@@ -1,5 +1,6 @@
 "use client";
 
+import BotonConfiguracion from "@/components/BotonConfiguracion";
 import { useEffect, useState } from "react";
 import {
   FiPlus,
@@ -505,20 +506,17 @@ export default function ColaboradoresModulo({ modulo = null }) {
               Solicitudes de rostro
             </button>
           )}
+          {/* Tuerca (solo el administrador): rol con el que se crean los usuarios desde Colaboradores. */}
           {esAdmin && (
-            <button
-              type="button"
-              className="btn btn-outline-secondary btn-sm rounded-3"
-              title="Rol con el que se crean los usuarios desde Colaboradores"
+            <BotonConfiguracion
+              title="Configurar el rol de los usuarios creados desde Colaboradores"
               onClick={() => {
                 setConfigRol({ roles: [], rolUuid: rolUsuarios?.uuid || "", guardando: false, error: "" });
                 apiFetch("/roles?limit=100")
                   .then((d) => setConfigRol((c) => (c ? { ...c, roles: d.items || [] } : c)))
                   .catch((err) => setConfigRol((c) => (c ? { ...c, error: err.message } : c)));
               }}
-            >
-              Rol de usuarios
-            </button>
+            />
           )}
           {hasPermission(P.crear) && (
             <button

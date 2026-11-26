@@ -8,7 +8,7 @@ import ModalShell from "@/components/ModalShell";
 
 // Usuarios de los colaboradores (Maestros → Colaboradores; sin `modulo`, de todos los módulos): lista los que tienen usuario y permite
 // crear el usuario de uno que no tiene. El usuario queda vinculado al colaborador y SOLO con el rol que configuró el
-// administrador (Colaboradores → «Rol de usuarios»); basta con poder editar colaboradores.
+// administrador (tuerca de la pestaña Colaboradores); basta con poder editar colaboradores.
 const P = {
   SANIDAD_VEGETAL: "sanidad_vegetal.colaboradores.editar",
   GENERAL: "colaborador.editar",
@@ -92,7 +92,7 @@ export default function UsuariosColaboradores({ modulo = null }) {
               type="button"
               className="btn btn-brand btn-sm rounded-3 d-flex align-items-center gap-2"
               disabled={!rol}
-              title={rol ? "Crear el usuario de un colaborador" : "El administrador todavía no configuró el rol (Colaboradores → Rol de usuarios)"}
+              title={rol ? "Crear el usuario de un colaborador" : "El administrador todavía no configuró el rol (tuerca ⚙ de la pestaña Colaboradores)"}
               onClick={() => setNuevo({ colaboradorUuid: "", usuario: "", password: "", email: "", guardando: false, error: "" })}
             >
               <FiPlus /> Nuevo usuario
