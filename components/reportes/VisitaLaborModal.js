@@ -1,5 +1,6 @@
 "use client";
 
+import { cargarFirmaRecortada } from "@/lib/firmaRecortada";
 import { bloquesObservacion } from "@/lib/textoObservacion";
 import { useEffect, useState } from "react";
 import {
@@ -85,18 +86,12 @@ function FirmaPerfil({ userUuid }) {
   const [url, setUrl] = useState(null);
   useEffect(() => {
     if (!userUuid) return undefined;
-    let actual = null;
     let cancelado = false;
-    apiFetchBlob(`/auth/firmas/${userUuid}`)
-      .then((blob) => {
-        if (cancelado) return;
-        actual = URL.createObjectURL(blob);
-        setUrl(actual);
-      })
-      .catch(() => {});
+    cargarFirmaRecortada(`/auth/firmas/${userUuid}`).then((f) => {
+      if (!cancelado && f) setUrl(f.dataUrl);
+    });
     return () => {
       cancelado = true;
-      if (actual) URL.revokeObjectURL(actual);
     };
   }, [userUuid]);
   return (
