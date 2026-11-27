@@ -295,6 +295,9 @@ function RevisorConfigModal({ onClose }) {
   const [ccUsuarios, setCcUsuarios] = useState([]);
   const [guardandoCc, setGuardandoCc] = useState(false);
   const [ccGuardado, setCcGuardado] = useState(false);
+  // Tercera firma del documento de la visita (esquina derecha).
+  const [terceraFirma, setTerceraFirma] = useState("");
+  const [terceraGuardada, setTerceraGuardada] = useState(false);
 
   function labelRol(r) {
     return `${r.nombre} (${r.uuid})`;
@@ -310,6 +313,9 @@ function RevisorConfigModal({ onClose }) {
         apiFetch("/labores-culturales/revisor-config"),
         apiFetch("/labores-culturales/revisor-cc"),
       ]);
+      apiFetch("/labores-culturales/tercera-firma")
+        .then((t) => setTerceraFirma(t?.usuario?.uuid || ""))
+        .catch(() => {});
       setRoles(todosLosRoles);
       setUsuariosDisponibles(todosLosUsuarios);
       setConfigs(configsActuales);
@@ -354,6 +360,18 @@ function RevisorConfigModal({ onClose }) {
       setError(err.message);
     } finally {
       setGuardandoCc(false);
+    }
+  }
+
+  async function guardarTerceraFirma(uuid) {
+    setTerceraFirma(uuid);
+    setTerceraGuardada(false);
+    setError("");
+    try {
+      await apiFetch("/labores-culturales/tercera-firma", { method: "PUT", body: JSON.stringify({ usuarioUuid: uuid || null }) });
+      setTerceraGuardada(true);
+    } catch (err) {
+      setError(err.message);
     }
   }
 
@@ -539,6 +557,22 @@ function RevisorConfigModal({ onClose }) {
         </button>
         {ccGuardado && <p className="small text-success mb-0 mt-1">Guardado.</p>}
       </form>
+
+      <div className="mt-3 pt-3 border-top">
+        <label className="form-label small fw-medium">Tercera firma del documento</label>
+        <select className="form-select form-select-sm rounded-3" value={terceraFirma} onChange={(e) => guardarTerceraFirma(e.target.value)}>
+          <option value="">Sin tercera firma</option>
+          {usuariosDisponibles.map((u) => (
+            <option key={u.uuid} value={u.uuid}>
+              {nombreCompleto(u)}
+            </option>
+          ))}
+        </select>
+        <p className="form-text small text-secondary mb-0">
+          Su firma, nombre y cargo salen en la esquina derecha del documento de cada visita. Se guarda al elegirlo.
+        </p>
+        {terceraGuardada && <p className="small text-success mb-0 mt-1">Guardado.</p>}
+      </div>
 
       <div className="d-flex mt-3">
         <button type="button" className="btn btn-outline-secondary btn-sm rounded-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1" onClick={onClose}>
