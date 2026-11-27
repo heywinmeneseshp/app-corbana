@@ -134,7 +134,6 @@ export default function RolesPage() {
                     <td className="text-secondary small">{rol.descripcion || "—"}</td>
                     <td className="text-center">
                       <div className="d-flex justify-content-around flex-nowrap">
-                        {rol.nombre === "Administrador" && <span className="small text-secondary">—</span>}
                         {rol.nombre !== "Administrador" && hasPermission("roles.editar") && (
                           <button
                             type="button"
@@ -146,11 +145,11 @@ export default function RolesPage() {
                             <FiEdit2 size={15} /> Editar
                           </button>
                         )}
-                        {rol.nombre !== "Administrador" && hasPermission("roles.asignar_permiso") && (
+                        {hasPermission("roles.asignar_permiso") && (
                           <button
                             type="button"
                             className="btn btn-sm btn-link p-1 d-inline-flex align-items-center gap-1 text-nowrap text-decoration-none"
-                            title="Permisos"
+                            title={rol.nombre === "Administrador" ? "Notificaciones del Administrador" : "Permisos"}
                             style={{ color: "#16a34a" }}
                             onClick={() => setPermisosModal(rol)}
                           >
@@ -366,6 +365,27 @@ function PermisosModal({ rol, onClose, onVerComo }) {
     }
   }
 
+  // Administrador: lo único que se edita son las notificaciones (permisos «.notificar»), una a una y al instante.
+  const notificaciones = catalogo ? Object.entries(catalogo.permisos || {}).filter(([c]) => c.endsWith(".notificar")) : [];
+  const [cambiandoNotif, setCambiandoNotif] = useState(null);
+  async function alternarNotificacion(codigo, permiso) {
+    setCambiandoNotif(codigo);
+    setError("");
+    try {
+      if (seleccion.has(codigo)) await apiFetch(`/roles/${rol.uuid}/permisos/${permiso.uuid}`, { method: "DELETE" });
+      else await apiFetch(`/roles/${rol.uuid}/permisos`, { method: "POST", body: JSON.stringify({ permisoUuid: permiso.uuid }) });
+      const n = new Set(seleccion);
+      if (n.has(codigo)) n.delete(codigo);
+      else n.add(codigo);
+      setSeleccion(n);
+      setOriginal(n);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCambiandoNotif(null);
+    }
+  }
+
   const cerrar = () => {
     if (cambios > 0 && !window.confirm(`Tienes ${cambios} cambio(s) sin guardar. ¿Cerrar sin guardar?`)) return;
     onClose();
@@ -376,9 +396,35 @@ function PermisosModal({ rol, onClose, onVerComo }) {
       {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
       {esAdmin ? (
-        <div className="alert alert-success small mb-0">
-          El rol <strong>Administrador</strong> tiene siempre todos los permisos, incluidos los que se creen en el futuro. No se editan.
-        </div>
+        <>
+          <div className="alert alert-success small">
+            El rol <strong>Administrador</strong> tiene siempre todos los permisos, incluidos los que se creen en el futuro. No se editan. Solo
+            se pueden activar o desactivar sus notificaciones en la app móvil.
+          </div>
+          <h6 className="fw-semibold small mb-2">Notificaciones</h6>
+          {loading ? (
+            <p className="text-secondary small mb-0">Cargando...</p>
+          ) : notificaciones.length === 0 ? (
+            <p className="text-secondary small mb-0">No hay notificaciones configurables.</p>
+          ) : (
+            notificaciones.map(([codigo, permiso]) => (
+              <div key={codigo} className="form-check form-switch mb-2">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  className="form-check-input"
+                  id={`notif-${codigo}`}
+                  checked={seleccion.has(codigo)}
+                  disabled={cambiandoNotif === codigo}
+                  onChange={() => alternarNotificacion(codigo, permiso)}
+                />
+                <label className="form-check-label small" htmlFor={`notif-${codigo}`}>
+                  {permiso.nombre || codigo}
+                </label>
+              </div>
+            ))
+          )}
+        </>
       ) : loading ? (
         <p className="text-center text-secondary small py-4 mb-0">Cargando permisos...</p>
       ) : catalogo ? (
