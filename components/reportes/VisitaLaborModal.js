@@ -280,7 +280,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
             <Dato label="Finca">{visita.fincaNombre}</Dato>
             <Dato label="Semana">{visita.semanaCodigo}</Dato>
             <Dato label="Fecha">{visita.fecha}</Dato>
-            <Dato label="Responsable">{visita.usuarioNombre}</Dato>
+            <Dato label="Evaluador">{visita.usuarioNombre}</Dato>
             <Dato label="Estado">
               {visita.revisadoEn ? (
                 <span className="badge rounded-pill" style={{ backgroundColor: "#dcfce7", color: "#166534" }}>
