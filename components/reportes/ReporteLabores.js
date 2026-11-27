@@ -517,7 +517,7 @@ function RevisorConfigModal({ onClose }) {
             placeholder="Buscar rol para agregar en copia..."
           />
           <p className="form-text small text-secondary mb-0">
-            Cualquier usuario con este rol recibe copia, sin importar la finca.
+            Los usuarios con este rol reciben copia solo de las fincas que tienen asignadas (sin fincas asignadas, de todas).
           </p>
         </div>
 
