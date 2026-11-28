@@ -460,7 +460,7 @@ export default function VisitaLaborModal({ visitaUuid, onClose, onChanged }) {
             <div className="row g-4">
               {[
                 { uuid: visita.revisadoEn ? visita.revisadoPorUuid : null, nombre: visita.revisadoEn ? visita.revisadoPorNombre || "—" : "Pendiente de revisión", cargo: visita.revisadoEn ? visita.revisadoPorCargo || "Revisor" : "", rotulo: "REVISÓ" },
-                { uuid: visita.usuarioUuid, nombre: visita.usuarioNombre || "—", cargo: visita.usuarioCargo || "Responsable", rotulo: "REGISTRÓ" },
+                { uuid: visita.usuarioUuid, nombre: visita.usuarioNombre || "—", cargo: visita.usuarioCargo || "Evaluador", rotulo: "REGISTRÓ" },
                 // Tercera firma (configurada por el administrador), en la esquina derecha.
                 ...(visita.terceraFirma ? [{ uuid: visita.terceraFirma.uuid, nombre: visita.terceraFirma.nombre || "—", cargo: visita.terceraFirma.cargo || "", rotulo: "VO. BO." }] : []),
               ].map((f) => (
